@@ -1,33 +1,28 @@
-# models.py
 import uuid
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+import random
+import string
 
 
 def generate_unique_code(length=8):
     """تولید کد یکتا برای کوییز"""
-    import random
-    import string
     characters = string.ascii_uppercase + string.digits
     while True:
         code = ''.join(random.choices(characters, k=length))
-        # اطمینان از یکتایی کد
-        if not Quiz.objects.filter(code=code).exists():
-            return code
+        # بررسی یکتایی - اینجا نمی‌توانیم از دیتابیس کوئری بزنیم
+        # پس در متد save چک می‌کنیم
+        return code
 
 
 def generate_session_code(length=6):
     """تولید کد یکتا برای جلسه"""
-    import random
-    import string
     characters = string.ascii_uppercase + string.digits
     while True:
         code = ''.join(random.choices(characters, k=length))
-        # اطمینان از یکتایی کد
-        if not QuizSession.objects.filter(code=code).exists():
-            return code
+        return code
 
 
 class Quiz(models.Model):
@@ -79,6 +74,13 @@ class Quiz(models.Model):
             raise ValidationError("عنوان کوییز باید حداقل ۲ کاراکتر باشد")
 
     def save(self, *args, **kwargs):
+        """ذخیره با بررسی یکتایی کد"""
+        if not self.code:
+            self.code = generate_unique_code()
+            # بررسی یکتایی کد
+            while Quiz.objects.filter(code=self.code).exclude(pk=self.pk).exists():
+                self.code = generate_unique_code()
+
         self.clean()
         super().save(*args, **kwargs)
 
@@ -224,11 +226,12 @@ class Slide(models.Model):
         """آیا این سوال پاسخ صحیح دارد؟"""
         return self.slide_type in ['multiple_choice', 'true_false']
 
-    @property
-    def correct_options(self):
-        """گزینه‌های صحیح"""
+    def get_correct_options(self):
+        """گزینه‌های صحیح - به جای property از متد استفاده می‌کنیم"""
         if self.has_correct_answer:
             return self.options.filter(is_correct=True)
+        from django.db.models import QuerySet
+        from .models import SlideOption
         return SlideOption.objects.none()
 
 
@@ -334,6 +337,16 @@ class QuizSession(models.Model):
         """اعتبارسنجی جلسه"""
         if self.finished_at and self.started_at and self.finished_at < self.started_at:
             raise ValidationError("زمان پایان نمی‌تواند قبل از زمان شروع باشد")
+
+    def save(self, *args, **kwargs):
+        """ذخیره با بررسی یکتایی کد جلسه"""
+        if not self.code:
+            self.code = generate_session_code()
+            while QuizSession.objects.filter(code=self.code).exclude(pk=self.pk).exists():
+                self.code = generate_session_code()
+
+        self.clean()
+        super().save(*args, **kwargs)
 
     @property
     def duration(self):

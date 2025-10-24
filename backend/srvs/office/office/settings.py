@@ -29,7 +29,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'django_filters',
     'corsheaders',
-    'backend.srvs.office.office',
+    'office',
 ]
 
 MIDDLEWARE = [
