@@ -7,9 +7,11 @@ env.read_env()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Security
-SECRET_KEY = env.str("SECRET_KEY", default='django-insecure-82s@p*pkocb%%s6cvx_irf%=8bpa2_xgge825ixjf(jro%84%q')
+SECRET_KEY = env.str(
+    "SECRET_KEY", default='django-insecure-82s@p*pkocb%%s6cvx_irf%=8bpa2_xgge825ixjf(jro%84%q')
 DEBUG = env.bool("DEBUG", default=True)
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default="127.0.0.1,0.0.0.0,localhost")
+ALLOWED_HOSTS = env.list(
+    "ALLOWED_HOSTS", default="127.0.0.1,0.0.0.0,localhost")
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default="127.0.0.1")
 
 # Application definition
@@ -22,6 +24,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'backend.srvs.office.office',
     'corsheaders',
+    'rest_framework',
+    'django_filters',
 ]
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -81,6 +85,23 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
+}
 
 ROOT_URLCONF = 'backend.srvs.office.office.urls'
 WSGI_APPLICATION = 'backend.srvs.office.office.wsgi.application'
