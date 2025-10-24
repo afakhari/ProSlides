@@ -1,7 +1,6 @@
 from django.apps import AppConfig
 
 
-class OfficeConfig(AppConfig):
+class ApiConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'office'
-    verbose_name = 'Office'
+    name = 'backend.srvs.office.office'
