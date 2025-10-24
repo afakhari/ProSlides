@@ -56,7 +56,7 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 }
-
+/* 
 a {
   font-weight: 500;
   color: #646cff;
@@ -72,14 +72,14 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
-}
+} */
 
-h1 {
+/* h1 {
   font-size: 3.2em;
   line-height: 1.1;
-}
+} */
 
-button {
+/* button {
   border-radius: 8px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
@@ -89,14 +89,14 @@ button {
   background-color: #1a1a1a;
   cursor: pointer;
   transition: border-color 0.25s;
-}
-button:hover {
+} */
+/* button:hover {
   border-color: #646cff;
 }
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
-}
+} */
 
 @media (prefers-color-scheme: light) {
   :root {
@@ -182,7 +182,7 @@ button:focus-visible {
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }
-
+/* 
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -195,8 +195,8 @@ button:focus-visible {
 html,
 body,
 #root {
-  height: 100%; /* پر کردن کل ارتفاع */
+  height: 100%; 
   width: 100%;
   margin: 0;
   padding: 0;
-}
+} */
