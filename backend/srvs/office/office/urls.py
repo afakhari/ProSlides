@@ -8,9 +8,6 @@ router.register(r'quizzes', views.QuizViewSet, basename='quiz')
 # Routes nested برای quiz
 quiz_router = DefaultRouter()
 quiz_router.register(r'slides', views.SlideViewSet, basename='quiz-slides')
-quiz_router.register(r'players', views.PlayerViewSet, basename='quiz-players')
-quiz_router.register(r'leaderboard', views.LeaderboardViewSet,
-                     basename='quiz-leaderboard')
 
 # Routes nested برای slide
 slide_router = DefaultRouter()
