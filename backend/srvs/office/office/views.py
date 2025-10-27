@@ -11,19 +11,22 @@ from .serializers import (
 
 class QuizViewSet(viewsets.ModelViewSet):
     serializer_class = QuizSerializer
-
-    def get_queryset(self):
-        # فعلاً همه کوئیزها قابل مشاهده هستند (برای تست فرانت)
-        return Quiz.objects.all()
+    queryset = Quiz.objects.all()
 
     def perform_create(self, serializer):
-        # برای تست، اولین کاربر را به عنوان ایجادکننده قرار می‌دهیم
         from django.contrib.auth.models import User
-        user = User.objects.first()
-        if not user:
-            # اگر کاربری وجود ندارد، یک کاربر تستی ایجاد کن
-            user = User.objects.create_user(
-                username='testuser', password='testpass123')
+        user, created = User.objects.get_or_create(
+            username='default_user',
+            defaults={
+                'email': 'default@quiz.com',
+                'is_active': True,
+                'is_staff': True,
+                'is_superuser': True
+            }
+        )
+        if created:
+            user.set_password('default_password')
+            user.save()
         serializer.save(created_by=user)
 
 

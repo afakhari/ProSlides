@@ -5,18 +5,30 @@ from . import views
 router = DefaultRouter()
 router.register(r'quizzes', views.QuizViewSet, basename='quiz')
 
-# Routes nested برای quiz
-quiz_router = DefaultRouter()
-quiz_router.register(r'slides', views.SlideViewSet, basename='quiz-slides')
-
-# Routes nested برای slide
-slide_router = DefaultRouter()
-slide_router.register(r'questions', views.QuestionViewSet,
-                      basename='slide-questions')
-
 urlpatterns = [
     path('api/', include(router.urls)),
-    path('api/quizzes/<int:quiz_pk>/', include(quiz_router.urls)),
-    path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/',
-         include(slide_router.urls)),
+
+    path('api/quizzes/<int:quiz_pk>/slides/', views.SlideViewSet.as_view({
+        'get': 'list',
+        'post': 'create'
+    }), name='quiz-slides'),
+
+    path('api/quizzes/<int:quiz_pk>/slides/<int:pk>/', views.SlideViewSet.as_view({
+        'get': 'retrieve',
+        'put': 'update',
+        'patch': 'partial_update',
+        'delete': 'destroy'
+    }), name='quiz-slide-detail'),
+
+    path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/questions/', views.QuestionViewSet.as_view({
+        'get': 'list',
+        'post': 'create'
+    }), name='slide-questions'),
+
+    path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/questions/<int:pk>/', views.QuestionViewSet.as_view({
+        'get': 'retrieve',
+        'put': 'update',
+        'patch': 'partial_update',
+        'delete': 'destroy'
+    }), name='slide-question-detail'),
 ]

@@ -13,7 +13,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = ['id', 'text', 'question_type', 'options']
+        fields = ['id', 'text', 'options']
 
 
 class SlideSerializer(serializers.ModelSerializer):
