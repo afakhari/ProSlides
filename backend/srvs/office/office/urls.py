@@ -8,27 +8,29 @@ router.register(r'quizzes', views.QuizViewSet, basename='quiz')
 urlpatterns = [
     path('api/', include(router.urls)),
 
-    path('api/quizzes/<int:quiz_pk>/slides/', views.SlideViewSet.as_view({
+    # سوالات چندگزینه‌ای
+    path('api/quizzes/<int:quiz_pk>/questions/', views.PickAnswerQuestionViewSet.as_view({
         'get': 'list',
         'post': 'create'
-    }), name='quiz-slides'),
+    }), name='quiz-questions'),
 
-    path('api/quizzes/<int:quiz_pk>/slides/<int:pk>/', views.SlideViewSet.as_view({
+    path('api/quizzes/<int:quiz_pk>/questions/<int:pk>/', views.PickAnswerQuestionViewSet.as_view({
         'get': 'retrieve',
         'put': 'update',
         'patch': 'partial_update',
         'delete': 'destroy'
-    }), name='quiz-slide-detail'),
+    }), name='quiz-question-detail'),
 
-    path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/questions/', views.QuestionViewSet.as_view({
+    # گزینه‌ها
+    path('api/quizzes/<int:quiz_pk>/questions/<int:question_pk>/options/', views.OptionViewSet.as_view({
         'get': 'list',
         'post': 'create'
-    }), name='slide-questions'),
+    }), name='question-options'),
 
-    path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/questions/<int:pk>/', views.QuestionViewSet.as_view({
+    path('api/quizzes/<int:quiz_pk>/questions/<int:question_pk>/options/<int:pk>/', views.OptionViewSet.as_view({
         'get': 'retrieve',
         'put': 'update',
         'patch': 'partial_update',
         'delete': 'destroy'
-    }), name='slide-question-detail'),
+    }), name='question-option-detail'),
 ]
