@@ -171,7 +171,7 @@ export default function JoinPage2() {
   }, [User_adding.Users.length, previousUserCount]);
 
   return (
-    <body className="bg-[#f8a8c3]">
+    <div className="bg-[#f8a8c3]">
       <div className="w-full pt-16! sm:pt-36 md:pt-40 pb-24 px-4 sm:px-3 flex justify-center">
         {/* Top bar */}
         <div className="fixed left-0 right-0 top-0 h-14 bg-pink-200 flex items-center justify-between px-5 z-50">
@@ -302,6 +302,6 @@ export default function JoinPage2() {
           </div>
         </div>
       </div>
-    </body>
+    </div>
   );
 }
