@@ -1,4 +1,8 @@
 import { useState, useEffect } from "react";
+import TopBar from "../components/TopBar";
+import QRSidebar from "../components/QRSidebar";
+import Footer from "../components/Footer";
+import LeaderboardModal from "../components/LeaderboardModal";
 // import { useLocation, useNavigate } from "react-router-dom";
 
 export default function PollPage() {
@@ -11,6 +15,9 @@ export default function PollPage() {
   const [showResults, setShowResults] = useState(false);
   const [timer, setTimer] = useState(5);
   const [votes, setVotes] = useState([12, 8, 5, 3]);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const gameCode = "ZH4NJ";
   // const navigate = useNavigate();
 
   // تایمر 5 ثانیه‌ای
@@ -37,53 +44,71 @@ export default function PollPage() {
   // };
 
   return (
-    <div className="min-h-screen flex flex-col justify-around items-center bg-pink-100 font-sans ">
-      <h1 className="text-6xl font-bold text-pink-700 mb-10 mt-12">
-        Quiz Question{" "}
-      </h1>
+    <div className="min-h-screen flex flex-col justify-around items-center bg-pink-100 font-sans">
+      <TopBar
+        gameCode={gameCode}
+        showQRButton={true}
+        onQRToggle={setShowQRModal}
+        isQROpen={showQRModal}
+      />
 
-      {/* تایمر */}
-      {!showResults && (
-        <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-pink-700">
-          {timer}
-        </div>
-      )}
-      {/* absolute inset-0 flex items-center justify-center */}
-      {/* نمودار */}
-      <div className="flex justify-around items-end w-full h-[700px] mb-10 px-4">
-        {options.map((opt, index) => {
-          const isCorrect = index === correctIndex;
-          const isSelected = index === selected;
-          const totalVotes = Math.max(...votes);
-          const height = showResults ? (votes[index] / totalVotes) * 100 : 0;
-          // const height = showResults ? resultPercentages[index] : 0; // قبل از پایان تایمر ستون‌ها صفر هستن
+      <QRSidebar
+        gameCode={gameCode}
+        isOpen={showQRModal}
+        onClose={() => setShowQRModal(false)}
+      />
 
-          return (
-            <div
-              key={index}
-              className="flex flex-col items-center justify-end w-1/5 h-full"
-            >
-              {showResults && (
-                <div className="mb-2 text-center text-4xl text-gray-700 font-semibold">
-                  {votes[index]}
-                </div>
-              )}
+      <div
+        className={` min-h-screen flex flex-col justify-around items-center transition-all duration-300 pt-20 ${
+          showQRModal ? "ml-[20%] w-[80%]" : "ml-0 w-full"
+        }`}
+      >
+        <h1 className="text-6xl font-bold text-pink-700 mb-10 mt-12">
+          Quiz Question{" "}
+        </h1>
+
+        {/* تایمر */}
+        {!showResults && (
+          <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-pink-700">
+            {timer}
+          </div>
+        )}
+        {/* absolute inset-0 flex items-center justify-center */}
+        {/* نمودار */}
+        <div className="flex justify-around items-end w-full h-[700px] mb-10 px-4">
+          {options.map((opt, index) => {
+            const isCorrect = index === correctIndex;
+            const isSelected = index === selected;
+            const totalVotes = Math.max(...votes);
+            const height = showResults ? (votes[index] / totalVotes) * 100 : 0;
+            // const height = showResults ? resultPercentages[index] : 0; // قبل از پایان تایمر ستون‌ها صفر هستن
+
+            return (
               <div
-                className={`w-3/4 rounded-t-lg transition-all duration-1000
+                key={index}
+                className="flex flex-col items-center justify-end w-1/5 h-full"
+              >
+                {showResults && (
+                  <div className="mb-2 text-center text-4xl text-gray-700 font-semibold">
+                    {votes[index]}
+                  </div>
+                )}
+                <div
+                  className={`w-3/4 rounded-t-lg transition-all duration-1000
                   ${isCorrect ? "bg-green-500" : "bg-pink-600"}
                   ${isSelected && !isCorrect ? "ring-2 ring-pink-800" : ""}`}
-                style={{ height: `${height}%` }}
-              ></div>
-              <p className="mt-5 text-neutral-700 text-3xl font-semibold text-center">
-                {opt}
-              </p>
-            </div>
-          );
-        })}
-      </div>
+                  style={{ height: `${height}%` }}
+                ></div>
+                <p className="mt-5 text-neutral-700 text-3xl font-semibold text-center">
+                  {opt}
+                </p>
+              </div>
+            );
+          })}
+        </div>
 
-      {/* دکمه‌های رأی دادن */}
-      {/* {!voted && !showResults && (
+        {/* دکمه‌های رأی دادن */}
+        {/* {!voted && !showResults && (
         <div className="flex flex-wrap justify-center gap-4">
           {options.map((opt, index) => (
             <button
@@ -97,11 +122,34 @@ export default function PollPage() {
         </div>
       )} */}
 
-      {voted && !showResults && (
-        <p className="mt-6 text-pink-700 font-medium">
-          You voted for <b>{options[selected]}</b>
-        </p>
-      )}
+        {voted && !showResults && (
+          <p className="mt-6 text-pink-700 font-medium">
+            You voted for <b>{options[selected]}</b>
+          </p>
+        )}
+      </div>
+
+      <Footer
+        currentSlide={1}
+        totalSlides={3}
+        stats={{
+          hearts: 1,
+          happy: 3,
+          star: 3,
+          thumbsUp: 7,
+          players: { current: 0, max: 50 },
+        }}
+        showQRButton={true}
+        onQRToggle={setShowQRModal}
+        isQROpen={showQRModal}
+        onShowLeaderboard={() => setShowLeaderboard(true)}
+      />
+
+      <LeaderboardModal
+        isOpen={showLeaderboard}
+        onClose={() => setShowLeaderboard(false)}
+        players={[]}
+      />
     </div>
   );
 }
