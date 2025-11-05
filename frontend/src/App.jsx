@@ -1,11 +1,12 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { useState, useEffect } from "react";
-import JoinPage2 from "./pages/JoinPage2";
-import JoinPage from "./pages/JoinPage";
-import GamePage from "./pages/GamePage";
-import PickAnswerQuestion from "./pages/pickAnswerQuestion";
-import LeaderBoard from "./pages/LeaderBoard";
-import PollPage from "./pages/manager_question";
+import ManagerJoinPage from "./pages/presentation/manager/JoinPage";
+import ManagerPickAnswerQuestion from "./pages/presentation/manager/PickAnswerQuestion";
+import ManagerLeaderBoard from "./pages/presentation/manager/LeaderBoard";
+import PlayerJoinPage from "./pages/presentation/player/JoinPage";
+import PlayerGamePage from "./pages/presentation/player/GamePage";
+import PlayerPickAnswerQuestion from "./pages/presentation/player/PickAnswerQuestion";
+import PlayerLeaderBoard from "./pages/presentation/player/LeaderBoard";
 import DataWatcher from "./DataWatcher";
 import "./App.css";
 
@@ -55,33 +56,48 @@ data = {
 data = { type: "join" };
 function PageRenderer({ type }) {
   switch (type) {
-    case "game":
-      return <JoinPage />;
-    case "join":
-      return <JoinPage2 />;
-    case "question":
-      return <PickAnswerQuestion />;
-    case "leaderboard":
-      return <LeaderBoard />;
-    case "pollpage":
-      return <PollPage />;
+    case "ManagerJoinPage":
+      return <ManagerJoinPage />;
+    case "ManagerPickAnswerQuestion":
+      return <ManagerPickAnswerQuestion />;
+    case "ManagerLeaderBoard":
+      return <ManagerLeaderBoard />;
+    case "PlayerJoinPage":
+      return <PlayerJoinPage />;
+    case "PlayerGamePage":
+      return <PlayerGamePage />;
+    case "PlayerPickAnswerQuestion":
+      return <PlayerPickAnswerQuestion />;
+    case "PlayerLeaderBoard":
+      return <PlayerLeaderBoard />;
     default:
-      return <GamePage />;
+      return <PlayerJoinPage />;
   }
 }
 
 export default function App() {
-  // const [data, setData] = useState({ type: "game" });
+  const [data, setData] = useState({ type: "game" });
 
-  // useEffect(() => {
-  //   // شبیه‌سازی داده زنده (مثلاً از WebSocket)
-  //   const interval = setInterval(() => {
-  //     const types = ["game", "question", "leaderboard", "PollPage"];
-  //     const randomType = types[Math.floor(Math.random() * types.length)];
-  //     setData({ type: randomType });
-  //   }, 5000);
-  //   return () => clearInterval(interval);
-  // }, []);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const types = [
+        // "ManagerJoinPage",
+        // "ManagerPickAnswerQuestion",
+        // "ManagerLeaderBoard",
+        "PlayerJoinPage",
+        // "PlayerGamePage",
+        "PlayerPickAnswerQuestion",
+        "PlayerLeaderBoard",
+      ];
+      const randomType = types[Math.floor(Math.random() * types.length)];
+      // setData({ type: "PlayerPickAnswerQuestion" });
+      // setData({ type: "PlayerJoinPage" });
+      // setData({ type: "PlayerJoinPage" });
+      // setData({ type: "PlayerLeaderBoard" });
+      setData({ type: randomType });
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div>
@@ -89,3 +105,45 @@ export default function App() {
     </div>
   );
 }
+
+// export default function App() {
+//   const [data, setData] = useState(null);
+//   const [loading, setLoading] = useState(true);
+//   const [error, setError] = useState(null);
+
+//   useEffect(() => {
+//     async function fetchData() {
+//       try {
+//         setLoading(true);
+//         setError(null);
+
+//         const res = await fetch("https://your-backend.com/api/status"); // ✅ آدرس API واقعی تو
+//         if (!res.ok) throw new Error("خطا در پاسخ سرور");
+//         const result = await res.json();
+
+//         setData(result);
+//       } catch (err) {
+//         console.error(err);
+//         setError(err.message);
+//       } finally {
+//         setLoading(false);
+//       }
+//     }
+
+//     // اولین بار اجرا کن
+//     fetchData();
+
+//     // هر چند ثانیه یک بار رفرش کن (مثلاً هر ۵ ثانیه)
+//     const interval = setInterval(fetchData, 5000);
+//     return () => clearInterval(interval);
+//   }, []);
+
+//   if (loading && !data) return <div>در حال بارگذاری...</div>;
+//   if (error) return <div>⚠️ خطا در ارتباط با سرور: {error}</div>;
+
+//   return (
+//     <div>
+//       <PageRenderer data={data} />
+//     </div>
+//   );
+// }

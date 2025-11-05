@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 // import { useLocation, useNavigate } from "react-router-dom";
 
-export default function PollPage() {
+export default function ManagerPickAnswerQuestion() {
   const options = ["Option A", "Option B", "Option C", "Option D"];
   const correctIndex = 1;
   // const resultPercentages = [10, 50, 30, 10];
