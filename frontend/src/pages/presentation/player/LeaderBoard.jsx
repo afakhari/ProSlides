@@ -96,7 +96,10 @@ function PlayerLeaderBoard() {
   }, []);
 
   return (
-    <div className="bg-pink-300 min-h-screen">
+    <div
+      className="h-screen bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}
+    >
       <header>
         <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
           <div className="shrink-0">
@@ -129,7 +132,7 @@ function PlayerLeaderBoard() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ type: "spring", stiffness: 120, damping: 18 }}
-                    className="flex justify-start items-center relative w-[90%] max-w-3xl"
+                    className="flex justify-start items-center relative w-[90%] max-w-2xl"
                     onMouseEnter={() => setHovered(p.rank)}
                     onMouseLeave={() => setHovered(null)}
                   >
@@ -193,7 +196,7 @@ function PlayerLeaderBoard() {
                     </div>
 
                     {/* Score */}
-                    <div className="relative w-[10%] text-white font-semibold ml-3">
+                    <div className="relative w-[15%] text-white font-semibold ml-3">
                       {p.total_points}p{" "}
                       <span className="text-white/60 text-sm">
                         +{p.new_points}
