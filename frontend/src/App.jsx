@@ -7,6 +7,7 @@ import PlayerJoinPage from "./pages/presentation/player/JoinPage";
 import PlayerGamePage from "./pages/presentation/player/GamePage";
 import PlayerPickAnswerQuestion from "./pages/presentation/player/PickAnswerQuestion";
 import PlayerLeaderBoard from "./pages/presentation/player/LeaderBoard";
+import Waiting from "./pages/loading/LoadingPage";
 import DataWatcher from "./DataWatcher";
 import "./App.css";
 
@@ -70,8 +71,10 @@ function PageRenderer({ type }) {
       return <PlayerPickAnswerQuestion />;
     case "PlayerLeaderBoard":
       return <PlayerLeaderBoard />;
+    case "Waiting":
+      return <Waiting />;
     default:
-      return <PlayerJoinPage />;
+      return <Waiting />;
   }
 }
 
@@ -88,13 +91,15 @@ export default function App() {
         // "PlayerGamePage",
         "PlayerPickAnswerQuestion",
         "PlayerLeaderBoard",
+        "Waiting",
       ];
       const randomType = types[Math.floor(Math.random() * types.length)];
-      // setData({ type: "PlayerPickAnswerQuestion" });
+      setData({ type: "PlayerPickAnswerQuestion" });
       // setData({ type: "PlayerJoinPage" });
       // setData({ type: "PlayerJoinPage" });
       // setData({ type: "PlayerLeaderBoard" });
       setData({ type: randomType });
+      // setData({ type: "Waiting" });
     }, 2000);
     return () => clearInterval(interval);
   }, []);

@@ -7,7 +7,10 @@ const question = {
   options: [
     { option_id: 47, option_text: "Denmark 🇩🇰" },
     { option_id: 48, option_text: "Sweden 🇸🇪" },
-    { option_id: 49, option_text: "United Kingdom 🇬🇧" },
+    {
+      option_id: 49,
+      option_text: "United Kingdom 🇬🇧",
+    },
     { option_id: 50, option_text: "France 🇫🇷" },
   ],
   question_time: 10,
@@ -73,7 +76,10 @@ export default function PlayerPickAnswerQuestion(
   const showResults = timeLeft <= -1;
 
   return (
-    <div className="text-white min-h-screen bg-pink-300 font-poppins">
+    <div
+      className="text-white h-screen w-screen bg-cover bg-center bg-no-repeat font-poppins"
+      style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}
+    >
       <header>
         <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
           <div className="shrink-0">
@@ -90,9 +96,9 @@ export default function PlayerPickAnswerQuestion(
             {question.question_text}
           </div>
           {/* Progress Bar */}
-          <div className="min-h-auto">
+          <div className="min-h-auto max-w-2xl">
             <div className="m-2.5 flex flex-col items-stretch gap-[0.5vh]">
-              <div className="flex justify-between items-center text-xl font-semibold text-white px-2 mt-8 opacity-90">
+              <div className="flex justify-between items-center text-xl font-semibold text-white px-2 mt-3 opacity-90">
                 <span>{question.min_point}p</span>
                 <span>{question.max_point}p</span>
               </div>
