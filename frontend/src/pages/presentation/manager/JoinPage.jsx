@@ -32,7 +32,7 @@ function calculatePlayersReady({ type, Users }) {
   }
 }
 
-export default function JoinPage2() {
+export default function ManagerJoinPage() {
   const [page, setPage] = useState("lobby"); // 'lobby' | 'quiz'
   const [newUserId, setNewUserId] = useState(null);
   const [previousUserCount, setPreviousUserCount] = useState(

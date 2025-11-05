@@ -16,7 +16,7 @@ export default function GamePage() {
 
 import { useLocation, useNavigate } from "react-router-dom";
 
-export default function GamePage() {
+export default function PlayerGamePage() {
   // const location = useLocation();
   // const navigate = useNavigate();
   const player = location.state; // Data from the Join page

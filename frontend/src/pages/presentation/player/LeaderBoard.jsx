@@ -50,7 +50,7 @@ const players = [
   },
 ];
 
-function LeaderBoard() {
+function PlayerLeaderBoard() {
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
   const [displayedPlayers, setDisplayedPlayers] = useState([]);
@@ -98,23 +98,18 @@ function LeaderBoard() {
   return (
     <div className="bg-pink-300 min-h-screen">
       <header>
-        <div className="flex items-center justify-between bg-[rgba(229,160,171,0.7)] backdrop-blur-sm text-white px-6 py-2 rounded-t-xl">
-          <p className="text-center flex-1">To join, go to:</p>
+        <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
           <div className="shrink-0">
-            <a href="#">
-              <p className="text-3xl">Proslides</p>
-            </a>
+            <p className="text-3xl">Proslides</p>
           </div>
         </div>
       </header>
 
-      <main>
-        <section className="p-4">
+      <div className="mt-7">
+        <section>
           {/* Title and player count */}
           <div className="text-center">
-            <h1 className="text-5xl text-white border p-4  rounded-xl">
-              Leaderboard
-            </h1>
+            <h1 className="text-white px-4 text-5xl font-bold">Leaderboard</h1>
             <p className="text-white/70 text-lg mt-2">
               {players.length} players
             </p>
@@ -210,15 +205,9 @@ function LeaderBoard() {
             </AnimatePresence>
           </ul>
         </section>
-        <button
-          className="mt-[25px] mx-[10px] w-[calc(100%-20px)] p-[14px] border-none rounded-[10px]  font-bold cursor-pointer transition-all duration-300 text-2xl bg-white text-[#6c2bd9] disabled:opacity-60 disabled:cursor-not-allowed"
-          onClick={() => navigate("/PollPage")}
-        >
-          leader board
-        </button>
-      </main>
+      </div>
     </div>
   );
 }
 
-export default LeaderBoard;
+export default PlayerLeaderBoard;
