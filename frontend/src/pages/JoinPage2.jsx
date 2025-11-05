@@ -4,7 +4,7 @@ const User_adding = {
   type: 13,
   Users: [
     // { user_id: 1, name: "ali", character: "@" },
-    { user_id: 2, name: "ahmad", character: "😊" },
+    // { user_id: 2, name: "ahmad", character: "😊" },
     // { user_id: 4, name: "mike", character: "⭐" },
     // { user_id: 5, name: "mike", character: "⭐" },
     // { user_id: 6, name: "mike", character: "⭐" },
@@ -41,7 +41,22 @@ export default function JoinPage2() {
   const [layoutType, setLayoutType] = useState("circle"); // 'circle', 'diagonalCircle', 'triangle', 'scatter'
   const [centerOffset, setCenterOffset] = useState({ x: 0, y: 0 });
   const [hiddenUsers, setHiddenUsers] = useState(new Set()); // Track which users have been clicked
+  const [showQRModal, setShowQRModal] = useState(false); // State for QR modal
+  const [isMuted, setIsMuted] = useState(true); // State for sound
+  const [copiedLink, setCopiedLink] = useState(false); // State for copy feedback
   const playersReady = calculatePlayersReady(User_adding);
+
+  // Game code (you can make this dynamic)
+  const gameCode = "ZH4NJ";
+  const joinUrl = `ahaslides.com/${gameCode}`;
+
+  // Function to copy link to clipboard
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(`https://${joinUrl}`).then(() => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    });
+  };
 
   // List of 10 vibrant colors for user names
   const colorList = [
@@ -171,28 +186,81 @@ export default function JoinPage2() {
   }, [User_adding.Users.length, previousUserCount]);
 
   return (
-    <div className="bg-[#f8a8c3]">
-      <div className="w-full pt-16! sm:pt-36 md:pt-40 pb-24 px-4 sm:px-3 flex justify-center">
+    <div className="bg-[#f8a8c3] min-h-screen">
+      <div
+        className={`w-full pt-16! sm:pt-36 md:pt-40 pb-24 px-4 sm:px-3 flex ${
+          showQRModal ? "justify-end" : "justify-center"
+        } transition-all duration-300`}
+      >
         {/* Top bar */}
-        <div className="fixed left-0 right-0 top-0 h-14 bg-pink-200 flex items-center justify-between px-5 z-50">
-          <div className="flex items-center gap-2 flex-wrap">
+        <div
+          className={`fixed ${
+            showQRModal ? "left-[20%] right-0" : "left-0 right-0"
+          } top-0 h-14 bg-pink-200 flex items-center justify-between px-5 z-50 transition-all duration-300`}
+        >
+          <div className="flex items-center gap-2">
             <button
-              className="w-9 h-9 bg-black/15 rounded-full flex items-center justify-center text-white cursor-pointer border-none text-base"
-              aria-label="Sound"
+              className="w-9 h-9 bg-black/15  pb-1 rounded-full flex items-center justify-center text-white cursor-pointer border-none text-base hover:bg-black/25 transition-colors"
+              aria-label="Back"
             >
-              🔇
+              ←
             </button>
-            <div className="text-white font-medium text-[15px] flex items-center gap-2 whitespace-nowrap overflow-hidden text-ellipsis hidden sm:flex">
-              To join, go to: <strong>ahaslides.com/MP362</strong> 📱
-            </div>
+            <button
+              onClick={() => setIsMuted(!isMuted)}
+              className="w-9 h-9 bg-black/15 rounded-full flex items-center justify-center text-white cursor-pointer border-none text-base hover:bg-black/25 transition-colors"
+              aria-label={isMuted ? "Unmute" : "Mute"}
+            >
+              {isMuted ? "🔇" : "🔊"}
+            </button>
           </div>
+
+          {/* Center section with link and QR */}
+          <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-2">
+            <div className="text-white font-medium text-[25px] flex items-center gap-2 whitespace-nowrap">
+              To join, go to:{" "}
+              <strong
+                onClick={copyToClipboard}
+                className="cursor-pointer hover:text-blue-200 transition-colors relative"
+                title="Click to copy"
+              >
+                ahaslides.com/{gameCode}
+                {copiedLink && (
+                  <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                    Copied!
+                  </div>
+                )}
+              </strong>
+            </div>
+            <button
+              onClick={() => setShowQRModal(!showQRModal)}
+              className="w-7 h-7 bg-white/90 rounded flex items-center justify-center cursor-pointer border-none hover:bg-white transition-colors p-0.5"
+              aria-label={showQRModal ? "Close QR Code" : "Show QR Code"}
+            >
+              {showQRModal ? (
+                <span className="text-gray-700 text-2xl font-bold leading-none">
+                  ✖️
+                </span>
+              ) : (
+                <img
+                  src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxyZWN0IHdpZHRoPSI1IiBoZWlnaHQ9IjUiIHg9IjMiIHk9IjMiIHJ4PSIxIi8+PHJlY3Qgd2lkdGg9IjUiIGhlaWdodD0iNSIgeD0iMTYiIHk9IjMiIHJ4PSIxIi8+PHJlY3Qgd2lkdGg9IjUiIGhlaWdodD0iNSIgeD0iMyIgeT0iMTYiIHJ4PSIxIi8+PHBhdGggZD0iTTIxIDEzdjN2M3YzIi8+PHBhdGggZD0iTTE4IDIxaDNoMyIvPjxwYXRoIGQ9Ik0xMyAyMUgxMyIvPjxwYXRoIGQ9Ik0xMyAxOEgxMyIvPjxwYXRoIGQ9Ik0xMyAxNkgxMyIvPjxwYXRoIGQ9Ik0xMyAxM0gxMyIvPjxwYXRoIGQ9Ik0yMSAyMVYyMSIvPjwvc3ZnPg=="
+                  alt="QR Code"
+                  className="w-full h-full"
+                />
+              )}
+            </button>
+          </div>
+
           <div className="text-white font-semibold text-base flex items-center gap-1.5 before:content-['✱'] before:text-xl">
             ProSlides
           </div>
         </div>
 
         {/* Main stage */}
-        <main className="w-[88%] max-w-[2000px] bg-gray-800 rounded-2xl lg:rounded-2xl md:rounded-xl sm:rounded-xl pt-4! pb-20! md:pt-8 md:pb-12 lg:pb-18 px-4 sm:px-4 md:px-16 lg:px-72! text-white shadow-2xl relative">
+        <main
+          className={`${
+            showQRModal ? "w-[78%] mr-4" : "w-[88%]"
+          } max-w-[2000px] bg-gray-800 rounded-2xl lg:rounded-2xl md:rounded-xl sm:rounded-xl pt-4! pb-20! md:pt-8 md:pb-12 lg:pb-18 px-4 sm:px-4 md:px-16 lg:px-72! text-white shadow-2xl relative transition-all duration-300`}
+        >
           <div className="flex flex-col items-center gap-1.5">
             <div className="text-xl md:text-2xl lg:text-3xl font-semibold">
               {page === "lobby" ? "Quiz question 1 of 3" : "Quiz"}
@@ -233,7 +301,7 @@ export default function JoinPage2() {
                         <div
                           key={user.user_id}
                           className={`absolute flex flex-col items-center gap-2 min-w-[120px] transition-all duration-1000 ease-out cursor-pointer ${
-                            isNewUser ? "z-10 opacity-100" : "z-[1] opacity-90"
+                            isNewUser ? "z-10 opacity-100" : "z-1 opacity-90"
                           }`}
                           style={{
                             transform: `
@@ -293,7 +361,11 @@ export default function JoinPage2() {
         </main>
 
         {/* Footer left stats */}
-        <div className="fixed left-7 bottom-4 flex items-center gap-2.5">
+        <div
+          className={`fixed ${
+            showQRModal ? "left-[calc(20%+1.75rem)]" : "left-7"
+          } bottom-4 flex items-center gap-2.5 transition-all duration-300 z-50`}
+        >
           <div className="bg-black/25 px-3.5! py-2.5! rounded-full text-white text-sm font-medium flex items-center gap-1.5">
             5
           </div>
@@ -301,6 +373,43 @@ export default function JoinPage2() {
             {playersReady}/50
           </div>
         </div>
+
+        {/* QR Code Sidebar */}
+        {showQRModal && (
+          <div className="fixed left-0 top-0 bottom-0 w-[20%] bg-gray-700 flex flex-col items-center justify-center gap-6 p-8 z-40 shadow-2xl">
+            <button
+              onClick={() => setShowQRModal(false)}
+              className=" absolute top-2.5 right-4 w-9 h-9 pb-1 bg-gray-600 hover:bg-gray-500 rounded-full text-white text-2xl flex items-center justify-center border-none cursor-pointer transition-colors"
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <div className="bg-white p-4 rounded-lg">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+                  "https://" + joinUrl
+                )}`}
+                alt="QR Code"
+                className="w-[200px] h-[200px]"
+              />
+            </div>
+            <div className="text-white text-center">
+              <div className="text-lg font-semibold mb-2">Join at:</div>
+              <div
+                onClick={copyToClipboard}
+                className="text-2xl font-bold break-words cursor-pointer hover:text-blue-300 transition-colors relative"
+                title="Click to copy"
+              >
+                {joinUrl}
+                {copiedLink && (
+                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-sm px-3 py-1 rounded whitespace-nowrap">
+                    Copied!
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
