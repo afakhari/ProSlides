@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import TopBar from "../components/TopBar";
-import QRSidebar from "../components/QRSidebar";
-import Footer from "../components/Footer";
-import LeaderboardModal from "../components/LeaderboardModal";
+import TopBar from "../../../components/TopBar";
+import QRSidebar from "../../../components/QRSidebar";
+import Footer from "../../../components/Footer";
+import LeaderboardModal from "../../../components/LeaderboardModal";
 import {
   User_adding,
   QuizSetup,
@@ -10,7 +10,7 @@ import {
   DefaultGameCode,
   UserColorList,
   DefaultFooterStats,
-} from "../data/mockData";
+} from "../../../data/mockData";
 // Calculate players ready based on the User_adding.type
 function calculatePlayersReady({ type, Users }) {
   // Extendable rule-set; for now, type 1 => count all users
@@ -21,7 +21,7 @@ function calculatePlayersReady({ type, Users }) {
   }
 }
 
-export default function JoinPage2({
+export default function ManagerJoinPage({
   onNext,
   onPrevious,
   currentSlide = 1,

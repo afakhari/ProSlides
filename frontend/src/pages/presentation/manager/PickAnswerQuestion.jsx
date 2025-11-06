@@ -1,17 +1,17 @@
 import { useState, useEffect } from "react";
-import TopBar from "../components/TopBar";
-import QRSidebar from "../components/QRSidebar";
-import Footer from "../components/Footer";
-import LeaderboardModal from "../components/LeaderboardModal";
+import TopBar from "../../../components/TopBar";
+import QRSidebar from "../../../components/QRSidebar";
+import Footer from "../../../components/Footer";
+import LeaderboardModal from "../../../components/LeaderboardModal";
 import {
   QuizSetup,
   createNextPrevious,
   DefaultGameCode,
   DefaultFooterStats,
-} from "../data/mockData";
+} from "../../../data/mockData";
 // import { useLocation, useNavigate } from "react-router-dom";
 
-export default function PollPage({
+export default function ManagerPickAnswerQuestion({
   onNext,
   onPrevious,
   currentSlide = 1,
@@ -157,7 +157,7 @@ export default function PollPage({
         </div>
 
         {/* دکمه‌های رأی دادن */}
-        {!voted && !showResults && (
+        {/* {!voted && !showResults && (
           <div className="flex flex-wrap justify-center gap-4">
             {options.map((opt, index) => (
               <button
@@ -169,7 +169,7 @@ export default function PollPage({
               </button>
             ))}
           </div>
-        )}
+        )} */}
 
         {voted && !showResults && (
           <p className="mt-6 text-pink-700 font-medium">

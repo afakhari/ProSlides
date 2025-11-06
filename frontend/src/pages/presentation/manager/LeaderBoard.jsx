@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
-import TopBar from "../components/TopBar";
-import QRSidebar from "../components/QRSidebar";
-import Footer from "../components/Footer";
-import LeaderboardModal from "../components/LeaderboardModal";
+import TopBar from "../../../components/TopBar";
+import QRSidebar from "../../../components/QRSidebar";
+import Footer from "../../../components/Footer";
+import LeaderboardModal from "../../../components/LeaderboardModal";
 import {
   QuizSetup,
   createNextPrevious,
@@ -12,9 +12,9 @@ import {
   DefaultGameCode,
   DefaultFooterStats,
   User_adding,
-} from "../data/mockData";
+} from "../../../data/mockData";
 
-function LeaderBoard({
+function ManagerLeaderBoard({
   onNext,
   onPrevious,
   currentSlide = 1,
@@ -272,4 +272,4 @@ function LeaderBoard({
   );
 }
 
-export default LeaderBoard;
+export default ManagerLeaderBoard;
