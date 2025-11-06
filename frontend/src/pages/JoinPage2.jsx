@@ -3,30 +3,14 @@ import TopBar from "../components/TopBar";
 import QRSidebar from "../components/QRSidebar";
 import Footer from "../components/Footer";
 import LeaderboardModal from "../components/LeaderboardModal";
-
-// Source data for lobby and players
-const User_adding = {
-  type: 13,
-  Users: [
-    // { user_id: 1, name: "ali", character: "@" },
-    // { user_id: 2, name: "ahmad", character: "😊" },
-    // { user_id: 4, name: "mike", character: "⭐" },
-    // { user_id: 5, name: "mike", character: "⭐" },
-    // { user_id: 6, name: "mike", character: "⭐" },
-    // { user_id: 7, name: "mike", character: "⭐" },
-    // { user_id: 8, name: "mike", character: "⭐" },
-    // { user_id: 9, name: "mike", character: "😁" },
-    // { user_id: 10, name: "mike", character: "⭐" },
-    // { user_id: 11, name: "mike", character: "⭐" },
-    // { user_id: 12, name: "mike", character: "⭐" },
-    // { user_id: 13, name: "mike", character: "💕" },
-    // { user_id: 14, name: "mike", character: "⭐" },
-    // { user_id: 15, name: "mike", character: "⭐" },
-    // { user_id: 16, name: "mike", character: "⭐" },
-    // { user_id: 17, name: "mike", character: "⭐" },
-  ],
-};
-
+import {
+  User_adding,
+  QuizSetup,
+  createNextPrevious,
+  DefaultGameCode,
+  UserColorList,
+  DefaultFooterStats,
+} from "../data/mockData";
 // Calculate players ready based on the User_adding.type
 function calculatePlayersReady({ type, Users }) {
   // Extendable rule-set; for now, type 1 => count all users
@@ -37,7 +21,12 @@ function calculatePlayersReady({ type, Users }) {
   }
 }
 
-export default function JoinPage2() {
+export default function JoinPage2({
+  onNext,
+  onPrevious,
+  currentSlide = 1,
+  totalSlides = 3,
+}) {
   const [page, setPage] = useState("lobby"); // 'lobby' | 'quiz'
   const [newUserId, setNewUserId] = useState(null);
   const [previousUserCount, setPreviousUserCount] = useState(
@@ -48,24 +37,22 @@ export default function JoinPage2() {
   const [hiddenUsers, setHiddenUsers] = useState(new Set()); // Track which users have been clicked
   const [showQRModal, setShowQRModal] = useState(false); // State for QR modal
   const [showLeaderboard, setShowLeaderboard] = useState(false); // State for leaderboard modal
+  const [_navigationData, setNavigationData] = useState(
+    createNextPrevious(5, null, null)
+  ); // State for tracking navigation (to be sent to server)
+  const [_userCount, setUserCount] = useState(User_adding.Users.length); // Track user count for reactivity
   const playersReady = calculatePlayersReady(User_adding);
 
   // Game code (you can make this dynamic)
-  const gameCode = "ZH4NJ";
+  const gameCode = DefaultGameCode;
+
+  // Calculate current question number and details from currentSlide
+  const currentQuestionIndex = Math.floor(currentSlide / 2);
+  const questionNumber = currentQuestionIndex + 1;
+  const totalQuestions = QuizSetup.slides.length;
 
   // List of 10 vibrant colors for user names
-  const colorList = [
-    "#FF6B6B", // Red
-    "#4ECDC4", // Teal
-    "#45B7D1", // Blue
-    "#FFA07A", // Light Salmon
-    "#98D8C8", // Mint
-    "#F7DC6F", // Yellow
-    "#BB8FCE", // Purple
-    "#85C1E2", // Sky Blue
-    "#F8B739", // Orange
-    "#EC7063", // Coral
-  ];
+  const colorList = UserColorList;
 
   // Function to get color for a user based on their user_id
   const getUserColor = (userId) => {
@@ -94,6 +81,53 @@ export default function JoinPage2() {
       return user.character + "*****";
     }
     return user.character + user.name;
+  };
+
+  // Handle navigation and update server data
+  const handleNext = () => {
+    const newNavigationData = createNextPrevious(
+      5,
+      "next",
+      currentQuestionIndex
+    );
+    setNavigationData(newNavigationData);
+    console.log(
+      "[JoinPage2] Navigation data to send to server:",
+      newNavigationData
+    );
+    // TODO: Send newNavigationData to server when connected
+    if (onNext) onNext();
+  };
+
+  const handlePrevious = () => {
+    const newNavigationData = createNextPrevious(
+      5,
+      "previous",
+      currentQuestionIndex
+    );
+    setNavigationData(newNavigationData);
+    console.log(
+      "[JoinPage2] Navigation data to send to server:",
+      newNavigationData
+    );
+    // TODO: Send newNavigationData to server when connected
+    if (onPrevious) onPrevious();
+  };
+
+  const handleStart = () => {
+    const newNavigationData = createNextPrevious(
+      5,
+      "start",
+      currentQuestionIndex
+    );
+    setNavigationData(newNavigationData);
+    setPage("quiz");
+    console.log(
+      "[JoinPage2] Starting quiz, navigation data to send to server:",
+      newNavigationData
+    );
+    // TODO: Send newNavigationData to server when connected
+    if (onNext) onNext();
   };
 
   // Calculate position based on layout type
@@ -137,6 +171,7 @@ export default function JoinPage2() {
   // Detect when a new user is added
   useEffect(() => {
     const currentUserCount = User_adding.Users.length;
+    setUserCount(currentUserCount);
 
     if (currentUserCount > previousUserCount) {
       // Get the newly added user (last in the array)
@@ -178,7 +213,7 @@ export default function JoinPage2() {
     }
 
     setPreviousUserCount(currentUserCount);
-  }, [User_adding.Users.length, previousUserCount]);
+  }, [previousUserCount]);
 
   return (
     <div className="bg-[#f8a8c3] min-h-screen!">
@@ -203,7 +238,9 @@ export default function JoinPage2() {
         >
           <div className="flex flex-col items-center gap-1.5">
             <div className="text-xl md:text-2xl lg:text-3xl font-semibold">
-              {page === "lobby" ? "Quiz question 1 of 3" : "Quiz"}
+              {page === "lobby"
+                ? `Quiz question ${questionNumber} of ${totalQuestions}`
+                : "Quiz"}
             </div>
             <div className="text-xs md:text-sm text-white/60">
               {playersReady} players ready
@@ -283,8 +320,8 @@ export default function JoinPage2() {
                 )}
                 <div className="flex justify-center">
                   <button
-                    className="inline-flex items-center gap-1.5 bg-gradient-to-br from-purple-800 to-purple-600 text-white px-8! py-3! rounded-lg border-none cursor-pointer font-semibold text-base shadow-lg shadow-purple-600/40 transition-all duration-150 hover:-translate-y-1 hover:scale-110 hover:shadow-xl hover:shadow-purple-600/50 after:content-['⏵'] after:text-sm after:ml-1"
-                    onClick={() => setPage("quiz")}
+                    className="inline-flex items-center gap-1.5 bg-linear-to-br from-purple-800 to-purple-600 text-white px-8! py-3! rounded-lg border-none cursor-pointer font-semibold text-base shadow-lg shadow-purple-600/40 transition-all duration-150 hover:-translate-y-1 hover:scale-110 hover:shadow-xl hover:shadow-purple-600/50 after:content-['⏵'] after:text-sm after:ml-1"
+                    onClick={handleStart}
                   >
                     Start
                   </button>
@@ -303,19 +340,18 @@ export default function JoinPage2() {
         {/* Footer */}
 
         <Footer
-          currentSlide={1}
-          totalSlides={3}
+          currentSlide={currentSlide}
+          totalSlides={totalSlides}
           stats={{
-            hearts: 1,
-            happy: 3,
-            star: 3,
-            thumbsUp: 7,
+            ...DefaultFooterStats,
             players: { current: playersReady, max: 50 },
           }}
           showQRButton={true}
           onQRToggle={setShowQRModal}
           isQROpen={showQRModal}
           onShowLeaderboard={() => setShowLeaderboard(true)}
+          onNext={handleNext}
+          onPrevious={handlePrevious}
         />
 
         {/* QR Code Sidebar */}

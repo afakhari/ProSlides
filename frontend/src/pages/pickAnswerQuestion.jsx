@@ -1,29 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-const question = {
-  type: 2,
-  question_id: 45,
-  question_text: "Which country has the highest population?",
-  options: [
-    { option_id: 47, option_text: "Denmark 🇩🇰" },
-    { option_id: 48, option_text: "Sweden 🇸🇪" },
-    { option_id: 49, option_text: "United Kingdom 🇬🇧" },
-    { option_id: 50, option_text: "France 🇫🇷" },
-  ],
-  question_time: 10,
-  min_point: 0,
-  max_point: 50,
-};
-const result = {
-  type: 3,
-  question_id: 45,
-  optionsResult: [
-    { option_id: 47, answer: false },
-    { option_id: 48, answer: false },
-    { option_id: 49, answer: true },
-    { option_id: 50, answer: false },
-  ],
-};
+import {
+  PickAnswerQuestion_EN,
+  PickAnswerResult_EN,
+  createUserAnswer,
+} from "../data/mockData";
+
+const question = PickAnswerQuestion_EN;
+const result = PickAnswerResult_EN;
 
 export default function PickAnswerQuestion(
   {
@@ -59,12 +43,11 @@ export default function PickAnswerQuestion(
   const handleSubmit = () => {
     if (selectedOptions.length > 0) setSubmitted(true);
     const finished = timeLeft + 1;
-    const output = {
-      type: 4,
-      question_id: question.question_id,
-      optins_selected: selectedOptions.map((item) => item.option_id),
-      time_left: finished,
-    };
+    const output = createUserAnswer(
+      question.question_id,
+      selectedOptions.map((item) => item.option_id),
+      finished
+    );
     console.log(output);
   };
 

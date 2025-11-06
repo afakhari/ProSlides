@@ -1,16 +1,11 @@
 import React from "react";
+import { DefaultModalPlayers } from "../data/mockData";
 
 export default function LeaderboardModal({ isOpen, onClose, players = [] }) {
   if (!isOpen) return null;
 
   // Sample players if none provided
-  const defaultPlayers = [
-    { id: 1, name: "Chloe", character: "👑", points: 213, color: "#ec4899" },
-    { id: 2, name: "Trang", character: "🌸", points: 123, color: "#10b981" },
-    { id: 3, name: "Alex", character: "🐱", points: 109, color: "#f97316" },
-    { id: 4, name: "Hesam3", character: "👯", points: 44, color: "#6366f1" },
-    { id: 5, name: "hesam2", character: "🧑", points: 0, color: "#8b5cf6" },
-  ];
+  const defaultPlayers = DefaultModalPlayers;
 
   const displayPlayers = players.length > 0 ? players : defaultPlayers;
   const sortedPlayers = [...displayPlayers].sort((a, b) => b.points - a.points);

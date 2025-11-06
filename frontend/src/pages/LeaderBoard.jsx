@@ -5,109 +5,71 @@ import TopBar from "../components/TopBar";
 import QRSidebar from "../components/QRSidebar";
 import Footer from "../components/Footer";
 import LeaderboardModal from "../components/LeaderboardModal";
+import {
+  QuizSetup,
+  createNextPrevious,
+  LeaderboardPlayers,
+  DefaultGameCode,
+  DefaultFooterStats,
+  User_adding,
+} from "../data/mockData";
 
-const players = [
-  {
-    user_id: 1,
-    name: "Chloe",
-    character: "👑",
-    color: "#db2777",
-    rank: 1,
-    total_points: 153,
-    new_points: 61,
-  },
-  {
-    user_id: 2,
-    name: "Trang",
-    character: "🌸",
-    color: "#059669",
-    rank: 2,
-    total_points: 149,
-    new_points: 49,
-  },
-  {
-    user_id: 3,
-    name: "Alex",
-    character: "🐱",
-    color: "#65a30d",
-    rank: 3,
-    total_points: 34,
-    new_points: 34,
-  },
-  {
-    user_id: 4,
-    name: "Jenny",
-    character: "🧁",
-    color: "#2563eb",
-    rank: 5,
-    total_points: 0,
-    new_points: 0,
-  },
-  {
-    user_id: 5,
-    name: "Kian",
-    character: "😂",
-    color: "#4563bb",
-    rank: 4,
-    total_points: 20,
-    new_points: 20,
-  },
-  {
-    user_id: 6,
-    name: "Chloghje",
-    character: "👑",
-    color: "#db9869",
-    rank: 1,
-    total_points: 1053,
-    new_points: 61,
-  },
-  // {
-  // //   user_id: 7,
-  // //   name: "Trang",
-  // //   character: "🌸",
-  // //   color: "#059669",
-  // //   rank: 2,
-  // //   total_points: 149,
-  // //   new_points: 49,
-  // // },
-  // {
-  //   user_id: 8,
-  //   name: "Alex",
-  //   character: "🐱",
-  //   color: "#65a30d",
-  //   rank: 3,
-  //   total_points: 34,
-  //   new_points: 34,
-  // },
-  // {
-  //   user_id: 9,
-  //   name: "Jenny",
-  //   character: "🧁",
-  //   color: "#2563eb",
-  //   rank: 5,
-  //   total_points: 0,
-  //   new_points: 0,
-  // },
-  // {
-  //   user_id: 10,
-  //   name: "Kian",
-  //   character: "😂",
-  //   color: "#4563bb",
-  //   rank: 4,
-  //   total_points: 20,
-  //   new_points: 20,
-  // },
-];
+function LeaderBoard({
+  onNext,
+  onPrevious,
+  currentSlide = 1,
+  totalSlides = 3,
+}) {
+  // Use imported players data
+  const players = LeaderboardPlayers;
 
-function LeaderBoard() {
+  // Calculate current question number and details from currentSlide
+  const currentQuestionIndex = Math.floor(currentSlide / 2);
+  const questionNumber = currentQuestionIndex + 1;
+  const totalQuestions = QuizSetup.slides.length;
+
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
   const [displayedPlayers, setDisplayedPlayers] = useState([]);
   const [animateBars, setAnimateBars] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
-  const gameCode = "ZH4NJ";
+  const [_navigationData, setNavigationData] = useState(
+    createNextPrevious(5, null, null)
+  ); // State for tracking navigation (to be sent to server)
+  const gameCode = DefaultGameCode;
   // const navigate = useNavigate();
+
+  // Handle navigation and update server data
+  const handleNext = () => {
+    const newNavigationData = createNextPrevious(
+      5,
+      "next",
+      currentQuestionIndex
+    );
+    setNavigationData(newNavigationData);
+    console.log(
+      "[LeaderBoard] Navigation data to send to server:",
+      newNavigationData
+    );
+    // TODO: Send newNavigationData to server when connected
+    if (onNext) onNext();
+  };
+
+  const handlePrevious = () => {
+    const newNavigationData = createNextPrevious(
+      5,
+      "previous",
+      currentQuestionIndex
+    );
+    setNavigationData(newNavigationData);
+    console.log(
+      "[LeaderBoard] Navigation data to send to server:",
+      newNavigationData
+    );
+    // TODO: Send newNavigationData to server when connected
+    if (onPrevious) onPrevious();
+  };
 
   const handleToggleBlur = (id) => {
     setHiddenNames((prev) =>
@@ -145,6 +107,7 @@ function LeaderBoard() {
     }, 1200);
 
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -172,7 +135,7 @@ function LeaderBoard() {
             {/* Title and player count */}
             <div className="text-center">
               <h1 className="text-5xl text-white border p-4  rounded-xl">
-                Leaderboard
+                Leaderboard - Question {questionNumber} of {totalQuestions}
               </h1>
               <p className="text-white/70 text-lg mt-2">
                 {players.length} players
@@ -282,19 +245,15 @@ function LeaderBoard() {
         </main>
 
         <Footer
-          currentSlide={1}
-          totalSlides={3}
-          stats={{
-            hearts: 1,
-            happy: 3,
-            star: 3,
-            thumbsUp: 7,
-            players: { current: players.length, max: 50 },
-          }}
+          currentSlide={currentSlide}
+          totalSlides={totalSlides}
+          stats={DefaultFooterStats}
           showQRButton={true}
           onQRToggle={setShowQRModal}
           isQROpen={showQRModal}
           onShowLeaderboard={() => setShowLeaderboardModal(true)}
+          onNext={handleNext}
+          onPrevious={handlePrevious}
         />
 
         <LeaderboardModal

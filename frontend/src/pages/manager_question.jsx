@@ -3,9 +3,24 @@ import TopBar from "../components/TopBar";
 import QRSidebar from "../components/QRSidebar";
 import Footer from "../components/Footer";
 import LeaderboardModal from "../components/LeaderboardModal";
+import {
+  QuizSetup,
+  createNextPrevious,
+  DefaultGameCode,
+  DefaultFooterStats,
+} from "../data/mockData";
 // import { useLocation, useNavigate } from "react-router-dom";
 
-export default function PollPage() {
+export default function PollPage({
+  onNext,
+  onPrevious,
+  currentSlide = 1,
+  totalSlides = 3,
+}) {
+  // Calculate current question number and details from currentSlide
+  const currentQuestionIndex = Math.floor(currentSlide / 2);
+  const questionNumber = currentQuestionIndex + 1;
+  const totalQuestions = QuizSetup.slides.length;
   const options = ["Option A", "Option B", "Option C", "Option D"];
   const correctIndex = 1;
   // const resultPercentages = [10, 50, 30, 10];
@@ -17,8 +32,42 @@ export default function PollPage() {
   const [votes, setVotes] = useState([12, 8, 5, 3]);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const gameCode = "ZH4NJ";
+  const [_navigationData, setNavigationData] = useState(
+    createNextPrevious(5, null, null)
+  ); // State for tracking navigation (to be sent to server)
+  const gameCode = DefaultGameCode;
   // const navigate = useNavigate();
+
+  // Handle navigation and update server data
+  const handleNext = () => {
+    const newNavigationData = createNextPrevious(
+      5,
+      "next",
+      currentQuestionIndex
+    );
+    setNavigationData(newNavigationData);
+    console.log(
+      "[PollPage] Navigation data to send to server:",
+      newNavigationData
+    );
+    // TODO: Send newNavigationData to server when connected
+    if (onNext) onNext();
+  };
+
+  const handlePrevious = () => {
+    const newNavigationData = createNextPrevious(
+      5,
+      "previous",
+      currentQuestionIndex
+    );
+    setNavigationData(newNavigationData);
+    console.log(
+      "[PollPage] Navigation data to send to server:",
+      newNavigationData
+    );
+    // TODO: Send newNavigationData to server when connected
+    if (onPrevious) onPrevious();
+  };
 
   // تایمر 5 ثانیه‌ای
   useEffect(() => {
@@ -37,11 +86,11 @@ export default function PollPage() {
     return () => clearInterval(interval);
   }, [showResults]);
 
-  // const handleVote = (index) => {
-  //   if (voted) return;
-  //   setSelected(index);
-  //   setVoted(true);
-  // };
+  const handleVote = (index) => {
+    if (voted) return;
+    setSelected(index);
+    setVoted(true);
+  };
 
   return (
     <div className="min-h-screen flex flex-col justify-around items-center bg-pink-100 font-sans">
@@ -64,7 +113,7 @@ export default function PollPage() {
         }`}
       >
         <h1 className="text-6xl font-bold text-pink-700 mb-10 mt-12">
-          Quiz Question{" "}
+          Quiz Question {questionNumber} of {totalQuestions}
         </h1>
 
         {/* تایمر */}
@@ -108,19 +157,19 @@ export default function PollPage() {
         </div>
 
         {/* دکمه‌های رأی دادن */}
-        {/* {!voted && !showResults && (
-        <div className="flex flex-wrap justify-center gap-4">
-          {options.map((opt, index) => (
-            <button
-              key={index}
-              onClick={() => handleVote(index)}
-              className="bg-pink-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-pink-600 transition shadow-md"
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )} */}
+        {!voted && !showResults && (
+          <div className="flex flex-wrap justify-center gap-4">
+            {options.map((opt, index) => (
+              <button
+                key={index}
+                onClick={() => handleVote(index)}
+                className="bg-pink-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-pink-600 transition shadow-md"
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
 
         {voted && !showResults && (
           <p className="mt-6 text-pink-700 font-medium">
@@ -130,19 +179,15 @@ export default function PollPage() {
       </div>
 
       <Footer
-        currentSlide={1}
-        totalSlides={3}
-        stats={{
-          hearts: 1,
-          happy: 3,
-          star: 3,
-          thumbsUp: 7,
-          players: { current: 0, max: 50 },
-        }}
+        currentSlide={currentSlide}
+        totalSlides={totalSlides}
+        stats={DefaultFooterStats}
         showQRButton={true}
         onQRToggle={setShowQRModal}
         isQROpen={showQRModal}
         onShowLeaderboard={() => setShowLeaderboard(true)}
+        onNext={handleNext}
+        onPrevious={handlePrevious}
       />
 
       <LeaderboardModal

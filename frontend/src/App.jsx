@@ -1,91 +1,88 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import JoinPage2 from "./pages/JoinPage2";
-import JoinPage from "./pages/JoinPage";
-import GamePage from "./pages/GamePage";
-import PickAnswerQuestion from "./pages/pickAnswerQuestion";
 import LeaderBoard from "./pages/LeaderBoard";
 import PollPage from "./pages/manager_question";
-import DataWatcher from "./DataWatcher";
 import "./App.css";
 
-// export default function App() {
-let data = { type: "leaderboard" };
-
-data = {
-  type: "question",
-  question_id: 45,
-  question_text: "Which country has the highest population?",
-  options: [
-    { option_id: 47, option_text: "Denmark 🇩🇰" },
-    { option_id: 48, option_text: "Sweden 🇸🇪" },
-    { option_id: 49, option_text: "United Kingdom 🇬🇧" },
-    { option_id: 50, option_text: "France 🇫🇷" },
-  ],
-  question_time: 10,
-  min_point: 0,
-  max_point: 50,
-};
-
-//   return (
-//     <Router>
-//       <DataWatcher data={data} />
-//       <Routes>
-//         <Route path="" element={<JoinPage />} />
-//         <Route path="/join" element={<JoinPage2 />} />
-//         <Route path="/game" element={<GamePage />} />
-//         <Route
-//           path="/question"
-//           element={<PickAnswerQuestion /*question={data}*/ />}
-//         />
-//         <Route path="/leaderboard" element={<LeaderBoard />} />
-//         <Route path="/PollPage" element={<PollPage />} />
-//       </Routes>
-//     </Router>
-//   );
-// }
-
-// import { useState, useEffect } from "react";
-// import JoinPage from "./pages/JoinPage";
-// import GamePage from "./pages/GamePage";
-// import PickAnswerQuestion from "./pages/pickAnswerQuestion";
-// import LeaderBoard from "./pages/LeaderBoard";
-// import PollPage from "./pages/manager_question";
-
-data = { type: "join" };
-function PageRenderer({ type }) {
-  switch (type) {
-    case "game":
-      return <JoinPage />;
-    case "join":
-      return <JoinPage2 />;
-    case "question":
-      return <PickAnswerQuestion />;
-    case "leaderboard":
-      return <LeaderBoard />;
-    case "pollpage":
-      return <PollPage />;
-    default:
-      return <GamePage />;
-  }
-}
+// Page flow state machine
+// join -> pollpage (no slide increment) -> leaderboard (slide +1) -> join (slide +1)
+// Navigation rules:
+// - From join: Start/> goes to pollpage (slide stays same)
+// - From pollpage: > goes to leaderboard (slide +1)
+// - From leaderboard: > goes to join (slide +1)
+// - < button: goes back and decrements slide when appropriate
 
 export default function App() {
-  // const [data, setData] = useState({ type: "game" });
+  const [currentPage, setCurrentPage] = useState("join"); // join | pollpage | leaderboard
+  const [currentSlide, setCurrentSlide] = useState(1);
+  const [totalSlides] = useState(3);
 
-  // useEffect(() => {
-  //   // شبیه‌سازی داده زنده (مثلاً از WebSocket)
-  //   const interval = setInterval(() => {
-  //     const types = ["game", "question", "leaderboard", "PollPage"];
-  //     const randomType = types[Math.floor(Math.random() * types.length)];
-  //     setData({ type: randomType });
-  //   }, 5000);
-  //   return () => clearInterval(interval);
-  // }, []);
+  // Handle next navigation
+  const handleNext = () => {
+    if (currentPage === "join") {
+      // Join -> PollPage (no slide increment)
+      setCurrentPage("pollpage");
+    } else if (currentPage === "pollpage") {
+      // PollPage -> Leaderboard (slide +1)
+      setCurrentPage("leaderboard");
+      setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
+    } else if (currentPage === "leaderboard") {
+      // Leaderboard -> Join (slide +1)
+      setCurrentPage("join");
+      setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
+    }
+  };
 
-  return (
-    <div>
-      <PageRenderer type={data.type} />
-    </div>
-  );
+  // Handle previous navigation
+  const handlePrevious = () => {
+    if (currentPage === "join") {
+      // Join -> Leaderboard (slide -1)
+      setCurrentPage("leaderboard");
+      setCurrentSlide((prev) => Math.max(prev - 1, 1));
+    } else if (currentPage === "pollpage") {
+      // PollPage -> Join (no slide decrement)
+      setCurrentPage("join");
+    } else if (currentPage === "leaderboard") {
+      // Leaderboard -> PollPage (slide -1)
+      setCurrentPage("pollpage");
+      setCurrentSlide((prev) => Math.max(prev - 1, 1));
+    }
+  };
+
+  // Render appropriate page
+  const renderPage = () => {
+    switch (currentPage) {
+      case "join":
+        return (
+          <JoinPage2
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            currentSlide={currentSlide}
+            totalSlides={totalSlides}
+          />
+        );
+      case "pollpage":
+        return (
+          <PollPage
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            currentSlide={currentSlide}
+            totalSlides={totalSlides}
+          />
+        );
+      case "leaderboard":
+        return (
+          <LeaderBoard
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            currentSlide={currentSlide}
+            totalSlides={totalSlides}
+          />
+        );
+      default:
+        return <JoinPage2 onNext={handleNext} onPrevious={handlePrevious} />;
+    }
+  };
+
+  return <div>{renderPage()}</div>;
 }

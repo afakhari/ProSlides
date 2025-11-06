@@ -1,50 +1,32 @@
 import React, { useState } from "react";
+import {
+  DefaultFooterStats,
+  DefaultChatMessages,
+  FooterMenuItems,
+  KeyboardShortcuts,
+  Reactions,
+} from "../data/mockData";
 
 export default function Footer({
   currentSlide = 1,
   totalSlides = 3,
-  stats = {
-    hearts: 1,
-    happy: 3,
-    star: 3,
-    thumbsUp: 7,
-    players: { current: 0, max: 50 },
-  },
+  stats = DefaultFooterStats,
   showQRButton = true,
   onQRToggle = null,
   isQROpen = false,
   onShowLeaderboard = null,
+  onNext = null,
+  onPrevious = null,
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
-  const [chatMessages] = useState([
+  const [chatMessages] = useState(DefaultChatMessages);
 
-    { user: "hesam Azmoun", message: "s", avatar: "👤" },
-  ]);
-
-  const menuItems = [
-    { icon: "✖️", label: "Stop presenting", action: "stop" },
-    { icon: "📱", label: "Open Remote Control", action: "remote" },
-    { icon: "⛶", label: "Switch to full screen", action: "fullscreen" },
-    { icon: "❄️", label: "Allow profanity", action: "profanity" },
-    { icon: "▦", label: "Show QR code", action: "qr" },
-    { icon: "ℹ️", label: "Hide instruction bar", action: "instruction" },
-    { icon: "🌐", label: "Public\nSwitch to Private", action: "privacy" },
-    { icon: "↻", label: "Reset this slide", action: "reset" },
-  ];
-
-  const shortcuts = [
-    { label: "Back to Editor", key: "ESC" },
-    { label: "Show / Hide QR Code", key: "Q" },
-  ];
-
-  const reactions = [
-    { icon: "🎊", label: "Confetti", key: "C" },
-    { icon: "👏", label: "Applause", key: "A" },
-    { icon: "🥁", label: "Drumroll", key: "D" },
-  ];
+  const menuItems = FooterMenuItems;
+  const shortcuts = KeyboardShortcuts;
+  const reactions = Reactions;
 
   const qrOpen = onQRToggle ? isQROpen : false;
 
@@ -71,7 +53,10 @@ export default function Footer({
             </button>
           </div>
 
-          <button className="w-8 h-8 hover:bg-white/30 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors">
+          <button
+            onClick={() => onPrevious && onPrevious()}
+            className="w-8 h-8 hover:bg-white/30 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors"
+          >
             {"<"}
           </button>
 
@@ -79,7 +64,10 @@ export default function Footer({
             {currentSlide}
           </div>
 
-          <button className="w-8 h-8 hover:bg-white/20 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors">
+          <button
+            onClick={() => onNext && onNext()}
+            className="w-8 h-8 hover:bg-white/20 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors"
+          >
             {">"}
           </button>
 
@@ -240,7 +228,9 @@ export default function Footer({
       {/* Reactions Menu - Opens on Hover */}
       {showReactions && (
         <div
-          className="fixed left-80 bottom-16 bg-gray-900 rounded-lg shadow-2xl z-50 p-3 min-w-56"
+          className={`fixed ${
+            qrOpen ? "left-[33%]" : "left-50"
+          } bottom-14 bg-gray-900 rounded-lg shadow-2xl z-50 p-3 min-w-56`}
           onMouseEnter={() => setShowReactions(true)}
           onMouseLeave={() => setShowReactions(false)}
         >
