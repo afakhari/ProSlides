@@ -12,23 +12,6 @@ import DataWatcher from "./DataWatcher";
 import "./App.css";
 
 // export default function App() {
-let data = { type: "leaderboard" };
-
-data = {
-  type: "question",
-  question_id: 45,
-  question_text: "Which country has the highest population?",
-  options: [
-    { option_id: 47, option_text: "Denmark 🇩🇰" },
-    { option_id: 48, option_text: "Sweden 🇸🇪" },
-    { option_id: 49, option_text: "United Kingdom 🇬🇧" },
-    { option_id: 50, option_text: "France 🇫🇷" },
-  ],
-  question_time: 10,
-  min_point: 0,
-  max_point: 50,
-};
-
 //   return (
 //     <Router>
 //       <DataWatcher data={data} />
@@ -47,66 +30,202 @@ data = {
 //   );
 // }
 
-// import { useState, useEffect } from "react";
-// import JoinPage from "./pages/JoinPage";
-// import GamePage from "./pages/GamePage";
-// import PickAnswerQuestion from "./pages/pickAnswerQuestion";
-// import LeaderBoard from "./pages/LeaderBoard";
-// import PollPage from "./pages/manager_question";
-
-data = { type: "join" };
-function PageRenderer({ type }) {
-  switch (type) {
-    case "ManagerJoinPage":
-      return <ManagerJoinPage />;
-    case "ManagerPickAnswerQuestion":
-      return <ManagerPickAnswerQuestion />;
-    case "ManagerLeaderBoard":
-      return <ManagerLeaderBoard />;
-    case "PlayerJoinPage":
-      return <PlayerJoinPage />;
-    case "PlayerGamePage":
-      return <PlayerGamePage />;
-    case "PlayerPickAnswerQuestion":
-      return <PlayerPickAnswerQuestion />;
-    case "PlayerLeaderBoard":
-      return <PlayerLeaderBoard />;
-    case "Waiting":
-      return <Waiting />;
-    default:
-      return <Waiting />;
-  }
-}
-
 export default function App() {
-  const [data, setData] = useState({ type: "game" });
+  // for pick answer question
+  const [data, setData] = useState({ type: "PlayerJoinPage" });
+  const [currentPage, setCurrentPage] = useState("join"); // join | pollpage | leaderboard
+  const [currentSlide, setCurrentSlide] = useState(1);
+  const [totalSlides] = useState(3);
+
+  // Handle next navigation
+  const handleNext = () => {
+    if (data.type === "ManagerJoinPage") {
+      // Join -> PollPage (no slide increment)
+      setData({ type: "ManagerPickAnswerQuestion" });
+    } else if (data.type === "ManagerPickAnswerQuestion") {
+      // PollPage -> Leaderboard (slide +1)
+      setData({ type: "ManagerLeaderBoard" });
+      setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
+    } else if (data.type === "ManagerLeaderBoard") {
+      // Leaderboard -> Join (slide +1)
+      setData({ type: "ManagerJoinPage" });
+      setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
+    }
+  };
+
+  // Handle previous navigation
+  const handlePrevious = () => {
+    if (data.type === "ManagerJoinPage") {
+      // Join -> Leaderboard (slide -1)
+      setData({ type: "ManagerLeaderBoard" });
+      setCurrentSlide((prev) => Math.max(prev - 1, 1));
+    } else if (data.type === "ManagerPickAnswerQuestion") {
+      // PollPage -> Join (no slide decrement)
+      setData({ type: "ManagerJoinPage" });
+    } else if (data.type === "ManagerLeaderBoard") {
+      // Leaderboard -> PollPage (slide -1)
+      setData({ type: "ManagerPickAnswerQuestion" });
+      setCurrentSlide((prev) => Math.max(prev - 1, 1));
+    }
+  };
+
+  function PageRenderer({ data }) {
+    const type = data.type;
+    switch (type) {
+      case "ManagerJoinPage":
+        return (
+          <ManagerJoinPage
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            currentSlide={currentSlide}
+            totalSlides={totalSlides}
+          />
+        );
+      case "ManagerPickAnswerQuestion":
+        return (
+          <ManagerPickAnswerQuestion
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            currentSlide={currentSlide}
+            totalSlides={totalSlides}
+          />
+        );
+      case "ManagerLeaderBoard":
+        return (
+          <ManagerLeaderBoard
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            currentSlide={currentSlide}
+            totalSlides={totalSlides}
+          />
+        );
+      case "PlayerJoinPage":
+        return <PlayerJoinPage />;
+      case "PlayerGamePage":
+        return <PlayerGamePage />;
+      case "PlayerPickAnswerQuestion":
+        return <PlayerPickAnswerQuestion question={data} />;
+      case "PlayerLeaderBoard":
+        return <PlayerLeaderBoard players={data.results} />;
+      case "Waiting":
+        return <Waiting />;
+      default:
+        return <Waiting />;
+    }
+  }
+
+  // // for quetsion
+  // const [data, setData] = useState({
+  //   type: "PlayerPickAnswerQuestion",
+  //   question_id: 45,
+  //   question_text: "Which country has the highest population?",
+  //   options: [
+  //     { option_id: 47, option_text: "Denmark 🇩🇰" },
+  //     { option_id: 48, option_text: "Sweden 🇸🇪" },
+  //     { option_id: 49, option_text: "United Kingdom 🇬🇧" },
+  //     { option_id: 50, option_text: "France 🇫🇷" },
+  //   ],
+  //   question_time: 10,
+  //   min_point: 0,
+  //   max_point: 50,
+  // });
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const types = [
-        // "ManagerJoinPage",
-        // "ManagerPickAnswerQuestion",
-        // "ManagerLeaderBoard",
-        "PlayerJoinPage",
-        // "PlayerGamePage",
-        "PlayerPickAnswerQuestion",
-        "PlayerLeaderBoard",
-        "Waiting",
-      ];
-      const randomType = types[Math.floor(Math.random() * types.length)];
-      setData({ type: "PlayerPickAnswerQuestion" });
+      // for leaderboard data
+      setData({
+        type: "PlayerLeaderBoard",
+        results: [
+          {
+            user_id: 1,
+            name: "Chloe",
+            character: "👑",
+            color: "#db2777",
+            rank: 1,
+            total_points: 153,
+            new_points: 61,
+          },
+          {
+            user_id: 2,
+            name: "Trang",
+            character: "🌸",
+            color: "#059669",
+            rank: 3,
+            total_points: 149,
+            new_points: 49,
+          },
+          {
+            user_id: 3,
+            name: "Alex",
+            character: "🐱",
+            color: "#65a30d",
+            rank: 4,
+            total_points: 34,
+            new_points: 34,
+          },
+          {
+            user_id: 4,
+            name: "Jenny",
+            character: "🧁",
+            color: "#2563eb",
+            rank: 6,
+            total_points: 0,
+            new_points: 0,
+          },
+          {
+            user_id: 5,
+            name: "Kian",
+            character: "😂",
+            color: "#4563bb",
+            rank: 5,
+            total_points: 20,
+            new_points: 20,
+          },
+          {
+            user_id: 6,
+            name: "ALireza",
+            character: "🫠",
+            color: "#120854",
+            rank: 2,
+            total_points: 150,
+            new_points: 88,
+          },
+        ],
+      });
+
+      // for join page
       // setData({ type: "PlayerJoinPage" });
-      // setData({ type: "PlayerJoinPage" });
-      // setData({ type: "PlayerLeaderBoard" });
-      setData({ type: randomType });
-      // setData({ type: "Waiting" });
     }, 2000);
     return () => clearInterval(interval);
   }, []);
 
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     const types = [
+  //       // "ManagerJoinPage",
+  //       // "ManagerPickAnswerQuestion",
+  //       // "ManagerLeaderBoard",
+  //       "PlayerJoinPage",
+  //       // "PlayerGamePage",
+  //       "PlayerPickAnswerQuestion",
+  //       "PlayerLeaderBoard",
+  //       "Waiting",
+  //     ];
+  //     const randomType = types[Math.floor(Math.random() * types.length)];
+  //     // setData({ type: "PlayerPickAnswerQuestion" });
+  //     // setData({ type: "PlayerJoinPage" });
+  //     // setData({ type: "PlayerJoinPage" });
+  //     // setData({ type: "PlayerLeaderBoard" });
+  //     setData({ type: randomType });
+  //     // setData({ type: "Waiting" });
+  //   }, 2000);
+  //   return () => clearInterval(interval);
+  // }, []);
+
+
   return (
     <div>
-      <PageRenderer type={data.type} />
+      <PageRenderer data={data} />
     </div>
   );
 }
@@ -151,4 +270,44 @@ export default function App() {
 //       <PageRenderer data={data} />
 //     </div>
 //   );
+// }
+
+// export default function App() {
+
+// Render appropriate page
+//   const renderPage = () => {
+//     switch (currentPage) {
+//       case "join":
+//         return (
+//           <ManagerJoinPage
+//             onNext={handleNext}
+//             onPrevious={handlePrevious}
+//             currentSlide={currentSlide}
+//             totalSlides={totalSlides}
+//           />
+//         );
+//       case "pollpage":
+//         return (
+//           <ManagerPickAnswerQuestion
+//             onNext={handleNext}
+//             onPrevious={handlePrevious}
+//             currentSlide={currentSlide}
+//             totalSlides={totalSlides}
+//           />
+//         );
+//       case "leaderboard":
+//         return (
+//           <ManagerLeaderBoard
+//             onNext={handleNext}
+//             onPrevious={handlePrevious}
+//             currentSlide={currentSlide}
+//             totalSlides={totalSlides}
+//           />
+//         );
+//       default:
+//         return <JoinPage2 onNext={handleNext} onPrevious={handlePrevious} />;
+//     }
+//   };
+
+//   return <div>{renderPage()}</div>;
 // }

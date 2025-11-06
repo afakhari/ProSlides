@@ -28,11 +28,8 @@ const result = {
   ],
 };
 
-export default function PlayerPickAnswerQuestion(
-  {
-    /* question /*result*/
-  }
-) {
+export default function PlayerPickAnswerQuestion({ question /*result*/ }) {
+
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(question.question_time);

@@ -14,8 +14,6 @@ export default function GamePage() {
 }
 */
 
-import { useLocation, useNavigate } from "react-router-dom";
-
 export default function PlayerGamePage() {
   // const location = useLocation();
   // const navigate = useNavigate();
@@ -53,10 +51,8 @@ export default function PlayerGamePage() {
 
       <h3 className="text-white mb-6">the question will start soon.</h3>
 
-      <button
-        onClick={() => navigate("/question")}
-        className="mt-6 bg-purple-700 text-white px-8 py-3 rounded-lg hover:bg-purple-800 transition"
-      >
+      <button className="mt-6 bg-purple-700 text-white px-8 py-3 rounded-lg hover:bg-purple-800 transition">
+
         start Game
       </button>
     </div>

@@ -2,55 +2,56 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
 
-const players = [
-  {
-    user_id: 1,
-    name: "Chloe",
-    character: "👑",
-    color: "#db2777",
-    rank: 1,
-    total_points: 153,
-    new_points: 61,
-  },
-  {
-    user_id: 2,
-    name: "Trang",
-    character: "🌸",
-    color: "#059669",
-    rank: 2,
-    total_points: 149,
-    new_points: 49,
-  },
-  {
-    user_id: 3,
-    name: "Alex",
-    character: "🐱",
-    color: "#65a30d",
-    rank: 3,
-    total_points: 34,
-    new_points: 34,
-  },
-  {
-    user_id: 4,
-    name: "Jenny",
-    character: "🧁",
-    color: "#2563eb",
-    rank: 5,
-    total_points: 0,
-    new_points: 0,
-  },
-  {
-    user_id: 5,
-    name: "Kian",
-    character: "😂",
-    color: "#4563bb",
-    rank: 4,
-    total_points: 20,
-    new_points: 20,
-  },
-];
+// const players = [
+//   {
+//     user_id: 1,
+//     name: "Chloe",
+//     character: "👑",
+//     color: "#db2777",
+//     rank: 1,
+//     total_points: 153,
+//     new_points: 61,
+//   },
+//   {
+//     user_id: 2,
+//     name: "Trang",
+//     character: "🌸",
+//     color: "#059669",
+//     rank: 2,
+//     total_points: 149,
+//     new_points: 49,
+//   },
+//   {
+//     user_id: 3,
+//     name: "Alex",
+//     character: "🐱",
+//     color: "#65a30d",
+//     rank: 3,
+//     total_points: 34,
+//     new_points: 34,
+//   },
+//   {
+//     user_id: 4,
+//     name: "Jenny",
+//     character: "🧁",
+//     color: "#2563eb",
+//     rank: 5,
+//     total_points: 0,
+//     new_points: 0,
+//   },
+//   {
+//     user_id: 5,
+//     name: "Kian",
+//     character: "😂",
+//     color: "#4563bb",
+//     rank: 4,
+//     total_points: 20,
+//     new_points: 20,
+//   },
+// ];
 
-function PlayerLeaderBoard() {
+function PlayerLeaderBoard({ players }) {
+
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
   const [displayedPlayers, setDisplayedPlayers] = useState([]);
