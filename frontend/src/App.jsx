@@ -9,7 +9,7 @@ import PlayerPickAnswerQuestion from "./pages/presentation/player/PickAnswerQues
 import PlayerLeaderBoard from "./pages/presentation/player/LeaderBoard";
 import Waiting from "./pages/loading/LoadingPage";
 import DataWatcher from "./DataWatcher";
-import "./App.css";
+// import "./App.css";
 
 // export default function App() {
 //   return (
@@ -32,7 +32,7 @@ import "./App.css";
 
 export default function App() {
   // for pick answer question
-  const [data, setData] = useState({ type: "PlayerJoinPage" });
+  const [data, setData] = useState({ type: "ManagerJoinPage" });
   const [currentPage, setCurrentPage] = useState("join"); // join | pollpage | leaderboard
   const [currentSlide, setCurrentSlide] = useState(1);
   const [totalSlides] = useState(3);
@@ -130,74 +130,74 @@ export default function App() {
   //   max_point: 50,
   // });
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // for leaderboard data
-      setData({
-        type: "PlayerLeaderBoard",
-        results: [
-          {
-            user_id: 1,
-            name: "Chloe",
-            character: "👑",
-            color: "#db2777",
-            rank: 1,
-            total_points: 153,
-            new_points: 61,
-          },
-          {
-            user_id: 2,
-            name: "Trang",
-            character: "🌸",
-            color: "#059669",
-            rank: 3,
-            total_points: 149,
-            new_points: 49,
-          },
-          {
-            user_id: 3,
-            name: "Alex",
-            character: "🐱",
-            color: "#65a30d",
-            rank: 4,
-            total_points: 34,
-            new_points: 34,
-          },
-          {
-            user_id: 4,
-            name: "Jenny",
-            character: "🧁",
-            color: "#2563eb",
-            rank: 6,
-            total_points: 0,
-            new_points: 0,
-          },
-          {
-            user_id: 5,
-            name: "Kian",
-            character: "😂",
-            color: "#4563bb",
-            rank: 5,
-            total_points: 20,
-            new_points: 20,
-          },
-          {
-            user_id: 6,
-            name: "ALireza",
-            character: "🫠",
-            color: "#120854",
-            rank: 2,
-            total_points: 150,
-            new_points: 88,
-          },
-        ],
-      });
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     // for leaderboard data
+  //     setData({
+  //       type: "PlayerLeaderBoard",
+  //       results: [
+  //         {
+  //           user_id: 1,
+  //           name: "Chloe",
+  //           character: "👑",
+  //           color: "#db2777",
+  //           rank: 1,
+  //           total_points: 153,
+  //           new_points: 61,
+  //         },
+  //         {
+  //           user_id: 2,
+  //           name: "Trang",
+  //           character: "🌸",
+  //           color: "#059669",
+  //           rank: 3,
+  //           total_points: 149,
+  //           new_points: 49,
+  //         },
+  //         {
+  //           user_id: 3,
+  //           name: "Alex",
+  //           character: "🐱",
+  //           color: "#65a30d",
+  //           rank: 4,
+  //           total_points: 34,
+  //           new_points: 34,
+  //         },
+  //         {
+  //           user_id: 4,
+  //           name: "Jenny",
+  //           character: "🧁",
+  //           color: "#2563eb",
+  //           rank: 6,
+  //           total_points: 0,
+  //           new_points: 0,
+  //         },
+  //         {
+  //           user_id: 5,
+  //           name: "Kian",
+  //           character: "😂",
+  //           color: "#4563bb",
+  //           rank: 5,
+  //           total_points: 20,
+  //           new_points: 20,
+  //         },
+  //         {
+  //           user_id: 6,
+  //           name: "ALireza",
+  //           character: "🫠",
+  //           color: "#120854",
+  //           rank: 2,
+  //           total_points: 150,
+  //           new_points: 88,
+  //         },
+  //       ],
+  //     });
 
-      // for join page
-      // setData({ type: "PlayerJoinPage" });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
+  //     // for join page
+  //     // setData({ type: "PlayerJoinPage" });
+  //   }, 2000);
+  //   return () => clearInterval(interval);
+  // }, []);
 
   // useEffect(() => {
   //   const interval = setInterval(() => {
@@ -221,7 +221,6 @@ export default function App() {
   //   }, 2000);
   //   return () => clearInterval(interval);
   // }, []);
-
 
   return (
     <div>

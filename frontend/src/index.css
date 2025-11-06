@@ -69,3 +69,16 @@ h1 {
   background-color: #f8a8c3;
   height: 100vh;
 } */
+@keyframes customPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+}
+
+.animate-custom-pulse {
+  animation: customPulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
