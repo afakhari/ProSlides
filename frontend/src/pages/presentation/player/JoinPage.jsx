@@ -8,6 +8,7 @@ export default function PlayerJoinPage(inp) {
   const [avatar, setAvatar] = useState("🧙");
   const [showPicker, setShowPicker] = useState(false);
   const [joined, setJoined] = useState(false);
+
   // const navigate = useNavigate();
 
   // Loading from localStorage
@@ -41,6 +42,7 @@ export default function PlayerJoinPage(inp) {
   };
   console.log(inp);
   return !joined ? (
+
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat"
       style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}
@@ -53,7 +55,6 @@ export default function PlayerJoinPage(inp) {
             </div>
           </div>
         </header>
-
         <div className="flex flex-col items-center mt-7 justify-around w-4/5 max-w-2xl">
           {/* Set name */}
           <div className="w-full">

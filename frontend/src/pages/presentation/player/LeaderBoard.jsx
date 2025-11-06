@@ -51,6 +51,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 // ];
 
 function PlayerLeaderBoard({ players }) {
+
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
   const [displayedPlayers, setDisplayedPlayers] = useState([]);

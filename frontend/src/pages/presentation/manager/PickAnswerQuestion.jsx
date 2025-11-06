@@ -21,6 +21,7 @@ export default function ManagerPickAnswerQuestion({
   const currentQuestionIndex = Math.floor(currentSlide / 2);
   const questionNumber = currentQuestionIndex + 1;
   const totalQuestions = QuizSetup.slides.length;
+
   const options = ["Option A", "Option B", "Option C", "Option D"];
   const correctIndex = 1;
   // const resultPercentages = [10, 50, 30, 10];
@@ -195,6 +196,7 @@ export default function ManagerPickAnswerQuestion({
         onClose={() => setShowLeaderboard(false)}
         players={[]}
       />
+
     </div>
   );
 }

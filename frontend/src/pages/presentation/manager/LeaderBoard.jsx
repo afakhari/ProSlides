@@ -27,7 +27,6 @@ function ManagerLeaderBoard({
   const currentQuestionIndex = Math.floor(currentSlide / 2);
   const questionNumber = currentQuestionIndex + 1;
   const totalQuestions = QuizSetup.slides.length;
-
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
   const [displayedPlayers, setDisplayedPlayers] = useState([]);
@@ -71,6 +70,7 @@ function ManagerLeaderBoard({
     if (onPrevious) onPrevious();
   };
 
+
   const handleToggleBlur = (id) => {
     setHiddenNames((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -108,6 +108,7 @@ function ManagerLeaderBoard({
 
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   return (
@@ -237,6 +238,7 @@ function ManagerLeaderBoard({
             </ul>
           </section>
           {/* <button
+
           className="mt-[25px] mx-[10px] w-[calc(100%-20px)] p-[14px] border-none rounded-[10px]  font-bold cursor-pointer transition-all duration-300 text-2xl bg-white text-[#6c2bd9] disabled:opacity-60 disabled:cursor-not-allowed"
           onClick={() => navigate("/PollPage")}
         >
@@ -268,6 +270,7 @@ function ManagerLeaderBoard({
           }))}
         />
       </div>
+
     </div>
   );
 }

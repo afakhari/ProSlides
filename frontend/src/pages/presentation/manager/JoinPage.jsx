@@ -11,6 +11,7 @@ import {
   UserColorList,
   DefaultFooterStats,
 } from "../../../data/mockData";
+
 // Calculate players ready based on the User_adding.type
 function calculatePlayersReady({ type, Users }) {
   // Extendable rule-set; for now, type 1 => count all users
@@ -173,6 +174,7 @@ export default function ManagerJoinPage({
     const currentUserCount = User_adding.Users.length;
     setUserCount(currentUserCount);
 
+
     if (currentUserCount > previousUserCount) {
       // Get the newly added user (last in the array)
       const newUser = User_adding.Users[currentUserCount - 1];
@@ -241,6 +243,7 @@ export default function ManagerJoinPage({
               {page === "lobby"
                 ? `Quiz question ${questionNumber} of ${totalQuestions}`
                 : "Quiz"}
+
             </div>
             <div className="text-xs md:text-sm text-white/60">
               {playersReady} players ready
@@ -279,6 +282,7 @@ export default function ManagerJoinPage({
                           key={user.user_id}
                           className={`absolute flex flex-col items-center gap-2 min-w-[120px] transition-all duration-1000 ease-out cursor-pointer ${
                             isNewUser ? "z-10 opacity-100" : "z-1 opacity-90"
+
                           }`}
                           style={{
                             transform: `
@@ -322,6 +326,7 @@ export default function ManagerJoinPage({
                   <button
                     className="inline-flex items-center gap-1.5 bg-linear-to-br from-purple-800 to-purple-600 text-white px-8! py-3! rounded-lg border-none cursor-pointer font-semibold text-base shadow-lg shadow-purple-600/40 transition-all duration-150 hover:-translate-y-1 hover:scale-110 hover:shadow-xl hover:shadow-purple-600/50 after:content-['⏵'] after:text-sm after:ml-1"
                     onClick={handleStart}
+
                   >
                     Start
                   </button>
@@ -367,6 +372,7 @@ export default function ManagerJoinPage({
           onClose={() => setShowLeaderboard(false)}
           players={[]}
         />
+
       </div>
     </div>
   );
