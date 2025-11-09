@@ -33,7 +33,7 @@ export const LeaderboardPlayers = [
     name: "Chloe",
     character: "👑",
     color: "#db2777",
-    rank: 1,
+    rank: 110,
     total_points: 153,
     new_points: 61,
   },
@@ -75,8 +75,8 @@ export const LeaderboardPlayers = [
   },
   {
     user_id: 6,
-    name: "Chloghje",
-    character: "👑",
+    name: "ali",
+    character: "@",
     color: "#db9869",
     rank: 1,
     total_points: 1053,
@@ -162,6 +162,7 @@ export const PickAnswerResult_FA = {
 };
 
 // Quiz Setup with multiple slides
+// slide_type: 1 = Question, 2 = Leaderboard
 export const QuizSetup = {
   type: 5,
   slides: [
@@ -180,15 +181,41 @@ export const QuizSetup = {
       ],
     },
     {
-      slide_type: 2,
+      slide_type: 2, // Leaderboard after first question
+    },
+    {
+      slide_type: 1,
       question_id: 57,
       question_text: "What is 2 + 2?",
+      question_time: 30,
+      max_point: 80,
+      min_point: 0,
       options: [
         { option_id: "a", option_text: "3", answer: false },
         { option_id: "b", option_text: "4", answer: true },
         { option_id: "c", option_text: "5", answer: false },
         { option_id: "d", option_text: "6", answer: false },
       ],
+    },
+    {
+      slide_type: 2, // Leaderboard after second question
+    },
+    {
+      slide_type: 1,
+      question_id: 58,
+      question_text: "Which planet is known as the Red Planet?",
+      question_time: 25,
+      max_point: 70,
+      min_point: 0,
+      options: [
+        { option_id: "e", option_text: "Venus", answer: false },
+        { option_id: "f", option_text: "Mars", answer: true },
+        { option_id: "g", option_text: "Jupiter", answer: false },
+        { option_id: "h", option_text: "Saturn", answer: false },
+      ],
+    },
+    {
+      slide_type: 2, // Final leaderboard
     },
   ],
 };

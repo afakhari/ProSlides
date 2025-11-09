@@ -15,14 +15,16 @@ export default function ManagerPickAnswerQuestion({
   onNext,
   onPrevious,
   currentSlide = 1,
-  totalSlides = 3,
+  totalSlides = 5,
 }) {
   // Calculate current question number and details from currentSlide
-  const currentQuestionIndex = Math.floor(currentSlide / 2);
-  const questionNumber = currentQuestionIndex + 1;
-  const totalQuestions = QuizSetup.slides.length;
+  const currentQuestionIndex = currentSlide-1;
+  // const questionNumber = currentQuestionIndex + 1;
+  // const totalQuestions = QuizSetup.slides.length;
 
-  const options = ["Option A", "Option B", "Option C", "Option D"];
+  const options = [QuizSetup.slides[currentSlide-1].options[0].option_text, QuizSetup.slides[currentSlide-1].options[1].option_text, QuizSetup.slides[currentSlide-1].options[2].option_text, QuizSetup.slides[currentSlide-1].options[3].option_text];
+  // const options = ["A", "B", "C", "D"];
+
   const correctIndex = 1;
   // const resultPercentages = [10, 50, 30, 10];
 
@@ -94,7 +96,7 @@ export default function ManagerPickAnswerQuestion({
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-around items-center bg-pink-100 font-sans">
+    <div className="min-h-screen flex flex-col justify-around items-center bg-pink-100  font-semibold" style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}>
       <TopBar
         gameCode={gameCode}
         showQRButton={true}
@@ -113,13 +115,13 @@ export default function ManagerPickAnswerQuestion({
           showQRModal ? "ml-[20%] w-[80%]" : "ml-0 w-full"
         }`}
       >
-        <h1 className="text-6xl font-bold text-pink-700 mb-10 mt-12">
-          Quiz Question {questionNumber} of {totalQuestions}
-        </h1>
+        <h2 className="text-6xl font-bold text-white mb-10 mt-12">
+          {QuizSetup.slides[currentSlide-1].question_text}
+        </h2>
 
         {/* تایمر */}
         {!showResults && (
-          <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-pink-700">
+          <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-white">
             {timer}
           </div>
         )}
@@ -139,7 +141,7 @@ export default function ManagerPickAnswerQuestion({
                 className="flex flex-col items-center justify-end w-1/5 h-full"
               >
                 {showResults && (
-                  <div className="mb-2 text-center text-4xl text-gray-700 font-semibold">
+                  <div className="mb-2 text-center text-4xl text-white font-semibold">
                     {votes[index]}
                   </div>
                 )}
@@ -149,7 +151,7 @@ export default function ManagerPickAnswerQuestion({
                   ${isSelected && !isCorrect ? "ring-2 ring-pink-800" : ""}`}
                   style={{ height: `${height}%` }}
                 ></div>
-                <p className="mt-5 text-neutral-700 text-3xl font-semibold text-center">
+                <p className="mt-5 text-gray-700 text-3xl font-semibold text-center">
                   {opt}
                 </p>
               </div>

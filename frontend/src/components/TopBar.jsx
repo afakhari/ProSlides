@@ -35,7 +35,7 @@ export default function TopBar({
     <div
       className={`fixed ${
         qrOpen ? "left-[20%] right-0" : "left-0 right-0"
-      } top-0 h-14 bg-pink-200 flex items-center justify-between px-5 z-50 transition-all duration-300`}
+      } top-0 h-14 bg-pink-300 flex items-center justify-between px-5 z-50 transition-all duration-300`}
     >
       <div className="flex items-center gap-2">
         <button

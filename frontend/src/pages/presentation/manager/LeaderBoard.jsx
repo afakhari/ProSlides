@@ -24,8 +24,8 @@ function ManagerLeaderBoard({
   const players = LeaderboardPlayers;
 
   // Calculate current question number and details from currentSlide
-  const currentQuestionIndex = Math.floor(currentSlide / 2);
-  const questionNumber = currentQuestionIndex + 1;
+  const currentQuestionIndex = currentSlide-1;
+  const questionNumber = currentQuestionIndex - 1;
   const totalQuestions = QuizSetup.slides.length;
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
@@ -112,7 +112,7 @@ function ManagerLeaderBoard({
   }, []);
 
   return (
-    <div className="bg-pink-300 min-h-screen">
+    <div className="bg-pink-300 min-h-screen font-semibold" style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}>
       <TopBar
         gameCode={gameCode}
         showQRButton={true}
@@ -135,7 +135,7 @@ function ManagerLeaderBoard({
           <section className="p-4 pt-20">
             {/* Title and player count */}
             <div className="text-center">
-              <h1 className="text-5xl text-white border p-4  rounded-xl">
+              <h1 className="text-5xl text-white pb-5 rounded-xl">
                 Leaderboard - Question {questionNumber} of {totalQuestions}
               </h1>
               <p className="text-white/70 text-lg mt-2">

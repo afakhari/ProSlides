@@ -218,7 +218,7 @@ export default function ManagerJoinPage({
   }, [previousUserCount]);
 
   return (
-    <div className="bg-[#f8a8c3] min-h-screen!">
+    <div className=" min-h-screen! " style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}>
       <div
         className={`w-full pt-16! sm:pt-36 md:pt-40 pb-24 px-4 sm:px-3 flex ${
           showQRModal ? "justify-end" : "justify-center"
@@ -356,7 +356,7 @@ export default function ManagerJoinPage({
           isQROpen={showQRModal}
           onShowLeaderboard={() => setShowLeaderboard(true)}
           onNext={handleNext}
-          onPrevious={handlePrevious}
+          // onPrevious=null
         />
 
         {/* QR Code Sidebar */}

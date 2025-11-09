@@ -9,6 +9,7 @@ import PlayerPickAnswerQuestion from "./pages/presentation/player/PickAnswerQues
 import PlayerLeaderBoard from "./pages/presentation/player/LeaderBoard";
 import Waiting from "./pages/loading/LoadingPage";
 import DataWatcher from "./DataWatcher";
+import {QuizSetup} from "./data/mockData"
 // import "./App.css";
 
 // export default function App() {
@@ -35,36 +36,39 @@ export default function App() {
   const [data, setData] = useState({ type: "ManagerJoinPage" });
   const [currentPage, setCurrentPage] = useState("join"); // join | pollpage | leaderboard
   const [currentSlide, setCurrentSlide] = useState(1);
-  const [totalSlides] = useState(3);
+  const [totalSlides] = useState(QuizSetup.slides.length);
 
   // Handle next navigation
   const handleNext = () => {
     if (data.type === "ManagerJoinPage") {
       // Join -> PollPage (no slide increment)
       setData({ type: "ManagerPickAnswerQuestion" });
-    } else if (data.type === "ManagerPickAnswerQuestion") {
-      // PollPage -> Leaderboard (slide +1)
-      setData({ type: "ManagerLeaderBoard" });
-      setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
-    } else if (data.type === "ManagerLeaderBoard") {
-      // Leaderboard -> Join (slide +1)
-      setData({ type: "ManagerJoinPage" });
+    }
+    else{
+      if (QuizSetup.slides[currentSlide].slide_type=== 2){
+        setData({ type: "ManagerLeaderBoard" });
+      }
+      else if (QuizSetup.slides[currentSlide].slide_type=== 1){
+        setData({ type: "ManagerPickAnswerQuestion" });
+
+      }
       setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
     }
   };
 
   // Handle previous navigation
   const handlePrevious = () => {
-    if (data.type === "ManagerJoinPage") {
-      // Join -> Leaderboard (slide -1)
-      setData({ type: "ManagerLeaderBoard" });
-      setCurrentSlide((prev) => Math.max(prev - 1, 1));
-    } else if (data.type === "ManagerPickAnswerQuestion") {
-      // PollPage -> Join (no slide decrement)
+    if (data.type === "ManagerPickAnswerQuestion" && currentSlide === 1) {
       setData({ type: "ManagerJoinPage" });
-    } else if (data.type === "ManagerLeaderBoard") {
-      // Leaderboard -> PollPage (slide -1)
-      setData({ type: "ManagerPickAnswerQuestion" });
+
+    } 
+    else{
+      if (QuizSetup.slides[currentSlide-2].slide_type=== 2){
+        setData({ type: "ManagerLeaderBoard" });
+      }
+      else if (QuizSetup.slides[currentSlide-2].slide_type=== 1){
+        setData({ type: "ManagerPickAnswerQuestion" });
+      }
       setCurrentSlide((prev) => Math.max(prev - 1, 1));
     }
   };
