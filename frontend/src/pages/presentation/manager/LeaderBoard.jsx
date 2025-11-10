@@ -5,6 +5,8 @@ import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
 import LeaderboardModal from "../../../components/LeaderboardModal";
+import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useServerData } from "../../../hooks/useServerData";
 import {
   QuizSetup,
   createNextPrevious,
@@ -20,11 +22,21 @@ function ManagerLeaderBoard({
   currentSlide = 1,
   totalSlides = 3,
 }) {
-  // Use imported players data
-  const players = LeaderboardPlayers;
+  const { isConnected, sendNavigation, lastMessage } = useWebSocket();
+  const { leaderboardResults, processMessage } = useServerData();
+
+  // Use leaderboard from server or default
+  const [players, setPlayers] = useState(LeaderboardPlayers);
+
+  // Update players when leaderboardResults changes
+  useEffect(() => {
+    if (leaderboardResults && leaderboardResults.length > 0) {
+      setPlayers(leaderboardResults);
+    }
+  }, [leaderboardResults]);
 
   // Calculate current question number and details from currentSlide
-  const currentQuestionIndex = currentSlide-1;
+  const currentQuestionIndex = currentSlide - 1;
   const questionNumber = currentQuestionIndex - 1;
   const totalQuestions = QuizSetup.slides.length;
   const [hovered, setHovered] = useState(null);
@@ -37,7 +49,55 @@ function ManagerLeaderBoard({
     createNextPrevious(5, null, null)
   ); // State for tracking navigation (to be sent to server)
   const gameCode = DefaultGameCode;
-  // const navigate = useNavigate();
+
+  // Listen for WebSocket messages - Leaderboard updates
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    // Process message through ServerDataContext first
+    processMessage(lastMessage);
+
+    console.log("[LeaderBoard] Received message:", lastMessage);
+
+    // Type 1: Leaderboard Results (from server)
+    if (lastMessage.type === 1 && lastMessage.results) {
+      console.log("[LeaderBoard] Leaderboard updated:", lastMessage.results);
+      const updatedPlayers = lastMessage.results.map((user) => ({
+        user_id: user.user_id,
+        name: user.name,
+        character: user.character,
+        color: user.color || "#6366f1",
+        rank: user.rank,
+        total_points: user.total_points,
+        new_points: user.new_points,
+      }));
+      setPlayers(updatedPlayers);
+    }
+
+    // Type 11: Leaderboard Update (فرضی)
+    if (lastMessage.type === 11 && lastMessage.leaderboard) {
+      console.log(
+        "[LeaderBoard] Leaderboard updated:",
+        lastMessage.leaderboard
+      );
+      setPlayers(lastMessage.leaderboard);
+    }
+
+    // Type 7: if players come with users
+    if (lastMessage.type === 7 && lastMessage.users) {
+      // Convert users to leaderboard format if needed
+      const updatedPlayers = lastMessage.users.map((user, index) => ({
+        user_id: user.user_id,
+        name: user.name,
+        character: user.character,
+        color: user.color || LeaderboardPlayers[index]?.color || "#6366f1",
+        rank: user.rank || index + 1,
+        total_points: user.total_points || 0,
+        new_points: user.new_points || 0,
+      }));
+      setPlayers(updatedPlayers);
+    }
+  }, [lastMessage, processMessage]);
 
   // Handle navigation and update server data
   const handleNext = () => {
@@ -51,7 +111,10 @@ function ManagerLeaderBoard({
       "[LeaderBoard] Navigation data to send to server:",
       newNavigationData
     );
-    // TODO: Send newNavigationData to server when connected
+
+    // Send navigation to WebSocket
+    sendNavigation("next");
+
     if (onNext) onNext();
   };
 
@@ -66,10 +129,12 @@ function ManagerLeaderBoard({
       "[LeaderBoard] Navigation data to send to server:",
       newNavigationData
     );
-    // TODO: Send newNavigationData to server when connected
+
+    // Send navigation to WebSocket
+    sendNavigation("previous");
+
     if (onPrevious) onPrevious();
   };
-
 
   const handleToggleBlur = (id) => {
     setHiddenNames((prev) =>
@@ -97,6 +162,7 @@ function ManagerLeaderBoard({
     }));
     const sortedOld = [...withOld].sort((a, b) => b.oldScore - a.oldScore);
     setDisplayedPlayers(sortedOld);
+    setAnimateBars(false);
 
     const t = setTimeout(() => {
       const sortedNew = [...players].sort(
@@ -107,12 +173,13 @@ function ManagerLeaderBoard({
     }, 1200);
 
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-
-  }, []);
+  }, [players]);
 
   return (
-    <div className="bg-pink-300 min-h-screen font-semibold" style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}>
+    <div
+      className="bg-pink-300 min-h-screen font-semibold"
+      style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}
+    >
       <TopBar
         gameCode={gameCode}
         showQRButton={true}
@@ -132,7 +199,19 @@ function ManagerLeaderBoard({
         }`}
       >
         <main>
-          <section className="p-4 pt-20">
+          <section className="p-4 pt-20 relative">
+            {/* WebSocket Connection Status */}
+            <div className="absolute top-20 right-4 flex items-center gap-2 text-xs z-50">
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  isConnected ? "bg-green-500" : "bg-red-500"
+                }`}
+              ></div>
+              <span className="text-white/80">
+                {isConnected ? "Connected" : "Disconnected"}
+              </span>
+            </div>
+
             {/* Title and player count */}
             <div className="text-center">
               <h1 className="text-5xl text-white pb-5 rounded-xl">
@@ -262,15 +341,15 @@ function ManagerLeaderBoard({
           isOpen={showLeaderboardModal}
           onClose={() => setShowLeaderboardModal(false)}
           players={displayedPlayers.map((p) => ({
-            id: p.user_id,
+            user_id: p.user_id,
             name: p.name,
             character: p.character,
-            points: p.total_points,
+            total_points: p.total_points,
             color: p.color,
+            rank: p.rank,
           }))}
         />
       </div>
-
     </div>
   );
 }

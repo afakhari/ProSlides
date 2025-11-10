@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import ManagerJoinPage from "./pages/presentation/manager/JoinPage";
 import ManagerPickAnswerQuestion from "./pages/presentation/manager/PickAnswerQuestion";
 import ManagerLeaderBoard from "./pages/presentation/manager/LeaderBoard";
@@ -9,7 +9,9 @@ import PlayerPickAnswerQuestion from "./pages/presentation/player/PickAnswerQues
 import PlayerLeaderBoard from "./pages/presentation/player/LeaderBoard";
 import Waiting from "./pages/loading/LoadingPage";
 import DataWatcher from "./DataWatcher";
-import {QuizSetup} from "./data/mockData"
+import { QuizSetup } from "./data/mockData";
+import { WebSocketProvider } from "./contexts/WebSocketContext";
+import { ServerDataProvider } from "./contexts/ServerDataContext";
 // import "./App.css";
 
 // export default function App() {
@@ -43,14 +45,11 @@ export default function App() {
     if (data.type === "ManagerJoinPage") {
       // Join -> PollPage (no slide increment)
       setData({ type: "ManagerPickAnswerQuestion" });
-    }
-    else{
-      if (QuizSetup.slides[currentSlide].slide_type=== 2){
+    } else {
+      if (QuizSetup.slides[currentSlide].slide_type === 2) {
         setData({ type: "ManagerLeaderBoard" });
-      }
-      else if (QuizSetup.slides[currentSlide].slide_type=== 1){
+      } else if (QuizSetup.slides[currentSlide].slide_type === 1) {
         setData({ type: "ManagerPickAnswerQuestion" });
-
       }
       setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
     }
@@ -60,13 +59,10 @@ export default function App() {
   const handlePrevious = () => {
     if (data.type === "ManagerPickAnswerQuestion" && currentSlide === 1) {
       setData({ type: "ManagerJoinPage" });
-
-    } 
-    else{
-      if (QuizSetup.slides[currentSlide-2].slide_type=== 2){
+    } else {
+      if (QuizSetup.slides[currentSlide - 2].slide_type === 2) {
         setData({ type: "ManagerLeaderBoard" });
-      }
-      else if (QuizSetup.slides[currentSlide-2].slide_type=== 1){
+      } else if (QuizSetup.slides[currentSlide - 2].slide_type === 1) {
         setData({ type: "ManagerPickAnswerQuestion" });
       }
       setCurrentSlide((prev) => Math.max(prev - 1, 1));
@@ -227,9 +223,13 @@ export default function App() {
   // }, []);
 
   return (
-    <div>
-      <PageRenderer data={data} />
-    </div>
+    <ServerDataProvider>
+      <WebSocketProvider role="manager">
+        <div>
+          <PageRenderer data={data} />
+        </div>
+      </WebSocketProvider>
+    </ServerDataProvider>
   );
 }
 
