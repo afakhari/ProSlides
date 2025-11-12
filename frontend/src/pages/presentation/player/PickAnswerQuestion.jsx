@@ -1,41 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-const question = {
-  type: 2,
-  question_id: 45,
-  question_text: "Which country has the highest population?",
-  options: [
-    { option_id: 47, option_text: "Denmark 🇩🇰" },
-    { option_id: 48, option_text: "Sweden 🇸🇪" },
-    {
-      option_id: 49,
-      option_text: "United Kingdom 🇬🇧",
-    },
-    { option_id: 50, option_text: "France 🇫🇷" },
-  ],
-  question_time: 10,
-  min_point: 0,
-  max_point: 50,
-};
-const result = {
-  type: 3,
-  question_id: 45,
-  optionsResult: [
-    { option_id: 47, answer: false },
-    { option_id: 48, answer: false },
-    { option_id: 49, answer: true },
-    { option_id: 50, answer: false },
-  ],
-};
+import { useWebSocket } from "../../../hooks/useWebSocket";
+import { createUserAnswer } from "../../../data/mockData";
 
-export default function PlayerPickAnswerQuestion({ question /*result*/ }) {
-
+export default function PlayerPickAnswerQuestion({ question, result }) {
+  // `question` is the primary question object (type 2 incoming message)
+  // `result` is optional and may come from type 8 (question results) or type 3 (options_result)
+  // The ServerDataContext will supply either when available.
+  if (!question) return null;
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(question.question_time);
   // const navigate = useNavigate();
 
-  const options = question.options;
+  const options = question.options || [];
+  const { sendMessage, isConnected } = useWebSocket();
 
   // ⏱ تایمر
   useEffect(() => {
@@ -57,16 +36,41 @@ export default function PlayerPickAnswerQuestion({ question /*result*/ }) {
   };
 
   const handleSubmit = () => {
+    // mark submitted for UI
     if (selectedOptions.length > 0) setSubmitted(true);
+
     const finished = timeLeft + 1;
-    const output = {
-      type: 4,
-      question_id: question.question_id,
-      optins_selected: selectedOptions.map((item) => item.option_id),
-      time_left: finished,
-    };
-    console.log(output);
+
+    // Use helper to create the expected message format (type 4)
+    const output = createUserAnswer(
+      question.question_id,
+      selectedOptions.map((item) => item.option_id),
+      finished
+    );
+
+    console.log("Player submit:", output);
+
+    // Attempt to send via WebSocket; sendMessage returns false if socket not open
+    if (isConnected) {
+      const ok = sendMessage(output);
+      if (!ok) {
+        console.warn("WebSocket not connected - submit not sent yet");
+      }
+    } else {
+      // Demo/fallback: just log if not connected
+      console.log(
+        "Demo mode: answer logged but not sent (WebSocket not connected)"
+      );
+    }
   };
+
+  // Auto-submit when time runs out
+  useEffect(() => {
+    if (timeLeft <= -1 && !submitted) {
+      handleSubmit();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft]);
 
   const progressPercent =
     timeLeft >= 0 ? (timeLeft / question.question_time) * 100 : 0;
@@ -115,15 +119,26 @@ export default function PlayerPickAnswerQuestion({ question /*result*/ }) {
                 let icon = null;
 
                 if (showResults) {
-                  const foundOption = result.optionsResult.find(
+                  // Defensive: result or optionsResult may be undefined when results
+                  // haven't arrived yet or differ in shape. Guard property access.
+                  const foundOption = result?.optionsResult?.find(
                     (option) => option.option_id === goz.option_id
                   );
-                  icon = foundOption.answer ? "✅" : "❌";
 
-                  if (selectedOptions.includes(goz) && submitted) {
-                    optionClass = foundOption.answer
-                      ? "bg-green-600 text-white"
-                      : "bg-red-600 text-white";
+                  // Only set icon if we actually have a result for this option
+                  if (foundOption) {
+                    icon = foundOption.answer ? "✅" : "❌";
+
+                    if (selectedOptions.includes(goz) && submitted) {
+                      optionClass = foundOption.answer
+                        ? "bg-green-600 text-white"
+                        : "bg-red-600 text-white";
+                    }
+                  } else {
+                    // No result for this option yet — show neutral state
+                    if (selectedOptions.includes(goz) && submitted) {
+                      optionClass = "bg-gray-700 text-white";
+                    }
                   }
                 } else if (selectedOptions.includes(goz)) {
                   optionClass = "bg-[#6c2bd9]";
@@ -140,7 +155,7 @@ export default function PlayerPickAnswerQuestion({ question /*result*/ }) {
                                   border-solid border-white border-2 hover:bg-black/30 ${optionClass}`}
                     onClick={() => handleSelect(goz)}
                   >
-                    <span className="w-6 h-6 border-2 border-white rounded-full inline-flex flex-shrink-0 items-center justify-center relative">
+                    <span className="w-6 h-6 border-2 border-white rounded-full inline-flex shrink-0 items-center justify-center relative">
                       {selectedOptions.includes(goz) && !showResults && (
                         <span className="w-[22px] h-[22px] bg-[#393e3a] rounded-full"></span>
                       )}
