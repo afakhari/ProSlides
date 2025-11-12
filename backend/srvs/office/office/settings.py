@@ -20,7 +20,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'backend.srvs.office.office',
+    'backend.srvs.office.office.apps.OfficeConfig',
     'drf_yasg',
     'corsheaders',
     'rest_framework',
