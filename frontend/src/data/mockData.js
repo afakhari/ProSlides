@@ -11,7 +11,7 @@ export const User_adding = {
     // { user_id: 2, name: "ahmad", character: "😊" },
     // { user_id: 4, name: "mike", character: "⭐" },
     // { user_id: 5, name: "mike", character: "⭐" },
-    // { user_id: 6, name: "mike", character: "⭐" },
+    // { user_id: 6, name: "mike", character: "⭐" },s
     // { user_id: 7, name: "mike", character: "⭐" },
     // { user_id: 8, name: "mike", character: "⭐" },
     // { user_id: 9, name: "mike", character: "😁" },
@@ -181,9 +181,6 @@ export const QuizSetup = {
       ],
     },
     {
-      slide_type: 2, // Leaderboard after first question
-    },
-    {
       slide_type: 1,
       question_id: 46,
       question_text: "What is 2 + 2?",
@@ -268,7 +265,7 @@ export const Reactions = [
 // ============================================
 
 // Default game code
-export const DefaultGameCode = "ZH4NJ";
+export const DefaultGameCode = "room1";
 
 // Color list for user names
 export const UserColorList = [

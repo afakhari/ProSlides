@@ -236,7 +236,7 @@ export default function ManagerPickAnswerQuestion({
 
   return (
     <div
-      className="min-h-screen flex flex-col justify-around items-center bg-pink-100  font-semibold"
+      className="min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
       style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}
     >
       <TopBar

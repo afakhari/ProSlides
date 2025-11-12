@@ -7,6 +7,7 @@ export const ServerDataProvider = ({ children }) => {
   const [serverData, setServerData] = useState({
     users: [], // Type 7: لیست بازیکنان
     questionResults: null, // Type 8: نتایج سوال
+    partialQuestionResults: null, // Type 3: partial/result for current question (options_result)
     leaderboardResults: null, // Type 1: نتایج لیدربورد
     currentQuestion: null, // Type 2: سوال فعلی
     lastMessageType: null, // آخرین type دریافتی
@@ -35,6 +36,20 @@ export const ServerDataProvider = ({ children }) => {
     console.log("[ServerData] Question results updated:", results);
   }, []);
 
+  // تابع برای به‌روزرسانی نتایج جزئی (Type 3)
+  const updatePartialQuestionResults = useCallback((results) => {
+    setServerData((prev) => ({
+      ...prev,
+      partialQuestionResults: results,
+      lastMessageType: 3,
+      lastUpdateTime: new Date().toISOString(),
+    }));
+    console.log(
+      "[ServerData] Partial question results (type 3) updated:",
+      results
+    );
+  }, []);
+
   // تابع برای به‌روزرسانی لیدربورد (Type 1)
   const updateLeaderboard = useCallback((results) => {
     setServerData((prev) => ({
@@ -51,6 +66,8 @@ export const ServerDataProvider = ({ children }) => {
     setServerData((prev) => ({
       ...prev,
       currentQuestion: question,
+      // reset any partial results from previous question when a new question arrives
+      partialQuestionResults: null,
       lastMessageType: 2,
       lastUpdateTime: new Date().toISOString(),
     }));
@@ -71,6 +88,16 @@ export const ServerDataProvider = ({ children }) => {
 
         case 2: // New Question
           updateCurrentQuestion(message);
+          break;
+
+        case 3: // Partial question result/update (options_result)
+          // Some servers send type 3 with only options_result (complementary to type 2)
+          // Normalize to { question_id, optionsResult: [...] }
+          updatePartialQuestionResults({
+            question_id: message.question_id,
+            optionsResult:
+              message.options_result || message.optionsResult || [],
+          });
           break;
 
         case 7: // Players List
@@ -103,6 +130,7 @@ export const ServerDataProvider = ({ children }) => {
     setServerData({
       users: [],
       questionResults: null,
+      partialQuestionResults: null,
       leaderboardResults: null,
       currentQuestion: null,
       lastMessageType: null,
@@ -116,6 +144,7 @@ export const ServerDataProvider = ({ children }) => {
     serverData,
     users: serverData.users,
     questionResults: serverData.questionResults,
+    partialQuestionResults: serverData.partialQuestionResults,
     leaderboardResults: serverData.leaderboardResults,
     currentQuestion: serverData.currentQuestion,
     lastMessageType: serverData.lastMessageType,
@@ -124,6 +153,7 @@ export const ServerDataProvider = ({ children }) => {
     // Actions
     updateUsers,
     updateQuestionResults,
+    updatePartialQuestionResults,
     updateLeaderboard,
     updateCurrentQuestion,
     processMessage,

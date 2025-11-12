@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 export default function TopBar({
-  gameCode = "ZH4NJ",
+  gameCode = "1",
   showQRButton = true,
   onQRToggle = null,
   isQROpen = false,
@@ -10,7 +10,7 @@ export default function TopBar({
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
 
-  const joinUrl = `ahaslides.com/${gameCode}`;
+  const joinUrl = `proslides.ir/${gameCode}`;
 
   // Function to copy link to clipboard
   const copyToClipboard = () => {
@@ -62,7 +62,7 @@ export default function TopBar({
             className="cursor-pointer hover:text-blue-200 transition-colors relative"
             title="Click to copy"
           >
-            ahaslides.com/{gameCode}
+            prosildes.ir/{gameCode}
             {copiedLink && (
               <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
                 Copied!
