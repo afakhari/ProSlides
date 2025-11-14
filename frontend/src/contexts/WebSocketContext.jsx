@@ -19,7 +19,7 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
 
     try {
       // const wsUrl = `ws://localhost:8080/ws/${sessionIdInput}/${role}`;
-      const wsUrl = `ws://present.proslides.ir/ws/${sessionIdInput}/${role}`;
+      const wsUrl = `wss://present.proslides.ir/ws/${sessionIdInput}/${role}`;
       console.log(`🔌 Connecting to: ${wsUrl}`);
 
       const ws = new WebSocket(wsUrl);

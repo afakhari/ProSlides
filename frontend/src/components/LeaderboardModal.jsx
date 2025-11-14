@@ -103,7 +103,7 @@ export default function LeaderboardModal({ isOpen, onClose, players = [] }) {
 
                   {/* Points */}
                   <div className="text-white font-bold text-xl shrink-0 w-20 text-right">
-                    {player.total_points}p
+                    {Math.round(player.total_points)}p
                   </div>
                 </div>
               );

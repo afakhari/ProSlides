@@ -168,7 +168,7 @@ export const QuizSetup = {
   slides: [
     {
       slide_type: 1,
-      question_id: 45,
+      question_id: 145,
       question_text: "What is the capital of France?",
       question_time: 4,
       max_point: 100,
@@ -176,22 +176,25 @@ export const QuizSetup = {
       options: [
         { option_id: 72, option_text: "Berlin", answer: false },
         { option_id: 73, option_text: "Madrid", answer: false },
-        { option_id: 58, option_text: "Paris", answer: true },
-        { option_id: 59, option_text: "Rome", answer: false },
+        { option_id: 74, option_text: "Paris", answer: true },
+        { option_id: 75, option_text: "Rome", answer: false },
       ],
     },
     {
+      slide_type: 2, // Final leaderboard
+    },
+    {
       slide_type: 1,
-      question_id: 46,
+      question_id: 146,
       question_text: "What is 2 + 2?",
       question_time: 4,
       max_point: 80,
       min_point: 0,
       options: [
-        { option_id: 58, option_text: "3", answer: false },
-        { option_id: 59, option_text: "4", answer: true },
-        { option_id: 60, option_text: "5", answer: false },
-        { option_id: 61, option_text: "6", answer: false },
+        { option_id: 76, option_text: "3", answer: false },
+        { option_id: 77, option_text: "4", answer: true },
+        { option_id: 78, option_text: "5", answer: false },
+        { option_id: 79, option_text: "6", answer: false },
       ],
     },
     {
@@ -199,16 +202,16 @@ export const QuizSetup = {
     },
     {
       slide_type: 1,
-      question_id: 58,
+      question_id: 147,
       question_text: "Which planet is known as the Red Planet?",
       question_time: 25,
       max_point: 70,
       min_point: 0,
       options: [
-        { option_id: 58, option_text: "Venus", answer: false },
-        { option_id: 59, option_text: "Mars", answer: true },
-        { option_id: 60, option_text: "Jupiter", answer: false },
-        { option_id: 61, option_text: "Saturn", answer: false },
+        { option_id: 80, option_text: "Venus", answer: false },
+        { option_id: 81, option_text: "Mars", answer: true },
+        { option_id: 82, option_text: "Jupiter", answer: false },
+        { option_id: 83, option_text: "Saturn", answer: false },
       ],
     },
     {
@@ -285,7 +288,7 @@ export const UserColorList = [
 // Output/Response Types
 // ============================================
 
-// User answer submission format
+// User answer submission format (no longer used - see PlayerPickAnswerQuestion for the correct format)
 export const createUserAnswer = (questionId, selectedOptions, timeLeft) => ({
   type: 4,
   question_id: questionId,
