@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
-import LeaderboardModal from "../../../components/LeaderboardModal";
+// LeaderboardModal was removed; modal UI now lives on Manager LeaderBoard page
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 import {
@@ -349,11 +349,7 @@ export default function ManagerPickAnswerQuestion({
         onPrevious={handlePrevious}
       />
 
-      <LeaderboardModal
-        isOpen={showLeaderboard}
-        onClose={() => setShowLeaderboard(false)}
-        players={[]}
-      />
+      {/* Leaderboard modal removed - manager LeaderBoard page now contains modal UI */}
     </div>
   );
 }

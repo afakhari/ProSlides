@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
-import LeaderboardModal from "../../../components/LeaderboardModal";
+// LeaderboardModal component was inlined into this page per request
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 import {
@@ -177,7 +177,7 @@ function ManagerLeaderBoard({
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-no-repeat font-semibold"
+      className="min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
       style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}
     >
       <TopBar
@@ -194,12 +194,12 @@ function ManagerLeaderBoard({
       />
 
       <div
-        className={`transition-all duration-300 ${
-          showQRModal ? "ml-[20%]" : "ml-0"
+        className={`min-h-screen flex flex-col justify-around items-center transition-all duration-300 pt-20 pb-20 ${
+          showQRModal ? "ml-[20%] w-[80%]" : "ml-0 w-full"
         }`}
       >
-        <main>
-          <section className="p-4 pt-20 relative">
+        <main className="flex-1 w-full overflow-hidden min-h-0 pb-16">
+          <section className="flex-1 w-full flex flex-col items-center min-h-0 px-4">
             {/* WebSocket Connection Status */}
             <div className="absolute top-20 right-4 flex items-center gap-2 text-xs z-50">
               <div
@@ -213,108 +213,121 @@ function ManagerLeaderBoard({
             </div>
 
             {/* Title and player count */}
-            <div className="text-center">
-              <h1 className="text-5xl text-white pb-5 rounded-xl">
+            <div className="text-center w-full">
+              <h2 className="text-6xl text-white font-bold mb-4">
                 Leaderboard - Question {questionNumber} of {totalQuestions}
-              </h1>
+              </h2>
               <p className="text-white/70 text-lg mt-2">
                 {players.length} players
               </p>
             </div>
 
-            <ul className="mt-6 space-y-4 w-full flex flex-col items-center">
-              <AnimatePresence>
-                {displayedPlayers.map((p) => {
-                  const isHidden = hiddenNames.includes(p.rank);
-                  const widthPercent = calcPercent(p.total_points);
+            {/* Scrollable players list — only this area will scroll when long */}
+            <div className="mt-6 flex-1 w-full max-w-4xl">
+              {/* Scrollable players list — only this area will scroll when long */}
+              <div
+                className="mt-2 flex-1 overflow-auto w-full min-h-0 no-scrollbar"
+                style={{ maxHeight: "calc(100vh - 260px)" }}
+              >
+                <ul className="space-y-4 w-full flex flex-col items-stretch py-2">
+                  <AnimatePresence>
+                    {displayedPlayers.map((p) => {
+                      const isHidden = hiddenNames.includes(p.rank);
+                      const widthPercent = calcPercent(p.total_points);
 
-                  return (
-                    <motion.li
-                      key={p.rank}
-                      layout
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      transition={{
-                        type: "spring",
-                        stiffness: 120,
-                        damping: 18,
-                      }}
-                      className="flex justify-start items-center relative w-[90%] max-w-3xl"
-                      onMouseEnter={() => setHovered(p.rank)}
-                      onMouseLeave={() => setHovered(null)}
-                    >
-                      {/* Rank */}
-                      <div className="text-white/90 text-lg font-semibold w-8 text-center rounded-full bg-white/20 mr-3 py-1">
-                        {p.rank}
-                      </div>
-
-                      {/* Fixed-width translucent track */}
-                      <div className="relative overlay-hidden bg-white/10 w-full h-14 mr-3">
-                        {/* Colored fill */}
-                        <motion.div
-                          className={`absolute left-0 top-0 h-full z-10`}
-                          style={{ backgroundColor: p.color }}
-                          initial={{ width: 0 }}
-                          animate={{
-                            width: animateBars ? `${widthPercent}%` : 0,
+                      return (
+                        <motion.li
+                          key={p.rank}
+                          layout
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 20 }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 120,
+                            damping: 18,
                           }}
-                          transition={{ duration: 1.3, ease: "easeOut" }}
-                        />
-
-                        {/* Content on top */}
-                        <div className="relative z-20 flex items-center px-4 py-3 gap-4">
-                          <div className="player-avatar text-2xl">
-                            {p.character}
+                          className="flex justify-start items-center relative w-[90%] max-w-3xl mx-auto"
+                          onMouseEnter={() => setHovered(p.rank)}
+                          onMouseLeave={() => setHovered(null)}
+                        >
+                          {/* Rank */}
+                          <div className="text-white/90 text-lg font-semibold w-8 text-center rounded-full bg-white/20 mr-3 py-1">
+                            {p.rank}
                           </div>
 
-                          <div className="flex items-center space-x-3">
-                            <div
-                              className={`text-white font-medium transition-all duration-200 ${
-                                isHidden ? "blur-sm select-none" : ""
-                              }`}
-                            >
-                              {isHidden ? "****" : p.name}
-                            </div>
+                          {/* Fixed-width translucent track */}
+                          <div className="relative overlay-hidden bg-white/10 w-full h-14 mr-3">
+                            {/* Colored fill */}
+                            <motion.div
+                              className={`absolute left-0 top-0 h-full z-10`}
+                              style={{ backgroundColor: p.color }}
+                              initial={{ width: 0 }}
+                              animate={{
+                                width: animateBars ? `${widthPercent}%` : 0,
+                              }}
+                              transition={{ duration: 1.3, ease: "easeOut" }}
+                            />
 
-                            {hovered === p.rank && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleToggleBlur(p.rank)}
-                                  className="bg-white/90 text-gray-800 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                >
-                                  👁️
-                                </button>
-                                <button
-                                  onClick={() => handleClick("✏️ Edit", p.name)}
-                                  className="bg-white/90 text-blue-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  onClick={() => handleClick("📞 Call", p.name)}
-                                  className="bg-white/90 text-green-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                >
-                                  📞
-                                </button>
+                            {/* Content on top */}
+                            <div className="relative z-20 flex items-center px-4 py-3 gap-4">
+                              <div className="player-avatar text-2xl">
+                                {p.character}
                               </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
 
-                      {/* Score */}
-                      <div className="relative w-[10%] text-white font-semibold ml-3">
-                        {p.total_points}p{" "}
-                        <span className="text-white/60 text-sm">
-                          +{p.new_points}
-                        </span>
-                      </div>
-                    </motion.li>
-                  );
-                })}
-              </AnimatePresence>
-            </ul>
+                              <div className="flex items-center space-x-3">
+                                <div
+                                  className={`text-white font-medium transition-all duration-200 ${
+                                    isHidden ? "blur-sm select-none" : ""
+                                  }`}
+                                >
+                                  {isHidden ? "****" : p.name}
+                                </div>
+
+                                {hovered === p.rank && (
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => handleToggleBlur(p.rank)}
+                                      className="bg-white/90 text-gray-800 px-2 py-1 rounded-lg text-sm hover:bg-white"
+                                    >
+                                      👁️
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        handleClick("✏️ Edit", p.name)
+                                      }
+                                      className="bg-white/90 text-blue-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
+                                    >
+                                      ✏️
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        handleClick("📞 Call", p.name)
+                                      }
+                                      className="bg-white/90 text-green-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
+                                    >
+                                      📞
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Score */}
+                          <div className="relative w-[10%] text-white font-semibold ml-3">
+                            {Math.round(p.total_points)}p{" "}
+                            <span className="text-white/60 text-sm">
+                              +{Math.round(p.new_points)}
+                            </span>
+                          </div>
+                        </motion.li>
+                      );
+                    })}
+                  </AnimatePresence>
+                </ul>
+              </div>
+            </div>
           </section>
           {/* <button
 
@@ -337,18 +350,93 @@ function ManagerLeaderBoard({
           onPrevious={handlePrevious}
         />
 
-        <LeaderboardModal
-          isOpen={showLeaderboardModal}
-          onClose={() => setShowLeaderboardModal(false)}
-          players={displayedPlayers.map((p) => ({
-            user_id: p.user_id,
-            name: p.name,
-            character: p.character,
-            total_points: p.total_points,
-            color: p.color,
-            rank: p.rank,
-          }))}
-        />
+        {/* Inlined Leaderboard Modal (replaces removed shared component) */}
+        {showLeaderboardModal && (
+          <div
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
+            onClick={() => setShowLeaderboardModal(false)}
+          >
+            <div
+              className="bg-gray-900 rounded-xl p-8 max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto no-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-4xl">🏆</span>
+                  <div>
+                    <h2 className="text-white text-3xl font-bold">
+                      Leaderboard
+                    </h2>
+                    <p className="text-gray-400 text-sm">
+                      {displayedPlayers.length} players
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowLeaderboardModal(false)}
+                  className="text-white hover:text-gray-300 text-3xl border-none bg-transparent cursor-pointer leading-none"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {[...displayedPlayers]
+                  .sort((a, b) => a.rank - b.rank)
+                  .map((player) => {
+                    const maxScore = Math.max(
+                      ...displayedPlayers.map((p) => p.total_points)
+                    );
+                    const minScore = Math.min(
+                      ...displayedPlayers.map((p) => p.total_points)
+                    );
+                    const calcPercent = (score) => {
+                      if (maxScore === minScore) return 100;
+                      const percent =
+                        ((score - minScore) / (maxScore - minScore)) * 99 + 1;
+                      return Math.max(percent, 1);
+                    };
+                    const barWidth = calcPercent(player.total_points);
+
+                    return (
+                      <div
+                        key={player.user_id}
+                        className="flex items-center gap-4 relative"
+                      >
+                        <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-white font-bold shrink-0">
+                          {player.rank}
+                        </div>
+                        <div className="flex-1 relative">
+                          <div
+                            className="rounded-lg h-16 transition-all duration-1000 flex items-center px-4 gap-3"
+                            style={{
+                              backgroundColor: player.color,
+                              width: `${Math.max(barWidth, 15)}%`,
+                            }}
+                          >
+                            <span className="text-2xl">{player.character}</span>
+                            <span className="text-white font-semibold text-lg">
+                              {player.name}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-white font-bold text-xl shrink-0 w-20 text-right">
+                          {Math.round(player.total_points)}p
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {displayedPlayers.length > 5 && (
+                <button className="w-full mt-4 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg border-none cursor-pointer transition-colors flex items-center justify-center gap-2">
+                  <span>▼</span>
+                  <span>Show more</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

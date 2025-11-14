@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import EmojiPicker from "emoji-picker-react";
 import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useServerData } from "../../../hooks/useServerData";
 import { DefaultGameCode } from "../../../data/mockData";
 
 export default function PlayerJoinPage(inp) {
@@ -11,7 +12,8 @@ export default function PlayerJoinPage(inp) {
   const [showPicker, setShowPicker] = useState(false);
   const [joined, setJoined] = useState(false);
   const [joinSent, setJoinSent] = useState(false);
-  const { connect, sendMessage, isConnected } = useWebSocket();
+  const { connect, sendMessage, isConnected, lastMessage } = useWebSocket();
+  const { processMessage } = useServerData();
 
   // const navigate = useNavigate();
 
@@ -59,7 +61,7 @@ export default function PlayerJoinPage(inp) {
     if (joinSent) return;
 
     const msg = {
-      type: 13,
+      type: 6,
       name: name,
       character: avatar,
     };
@@ -68,6 +70,26 @@ export default function PlayerJoinPage(inp) {
     if (ok) setJoinSent(true);
     else console.warn("Join message could not be sent - socket not open yet");
   }, [joined, isConnected, joinSent, name, avatar, sendMessage]);
+
+  // Listen for registration response (type 10) and save user_id to localStorage
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    // Process message through ServerDataContext
+    processMessage(lastMessage);
+
+    // Type 10: Registration confirmation from server
+    if (lastMessage.type === 10) {
+      console.log("[PlayerJoinPage] Registration successful:", lastMessage);
+      localStorage.setItem("user_id", lastMessage.user_id);
+      localStorage.setItem("player_name", lastMessage.name);
+      localStorage.setItem("character", lastMessage.character);
+      console.log(
+        "[PlayerJoinPage] Saved user_id to localStorage:",
+        lastMessage.user_id
+      );
+    }
+  }, [lastMessage, processMessage]);
 
   // Stay on "Get ready to play!" until server sends next command (no auto-exit)
   return !joined ? (

@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useWebSocket } from "../../../hooks/useWebSocket";
-import { createUserAnswer } from "../../../data/mockData";
 
 export default function PlayerPickAnswerQuestion({ question, result }) {
   // `question` is the primary question object (type 2 incoming message)
@@ -11,9 +10,7 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(question.question_time);
-  // const navigate = useNavigate();
-
-  const options = question.options || [];
+  const startTime = useRef(Date.now());
   const { sendMessage, isConnected } = useWebSocket();
 
   // ⏱ تایمر
@@ -39,20 +36,35 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
     // mark submitted for UI
     if (selectedOptions.length > 0) setSubmitted(true);
 
-    const finished = timeLeft + 1;
+    // Get user_id from localStorage (set during registration)
+    let userId = localStorage.getItem("user_id");
+    if (!userId) {
+      console.warn("Player user_id not found in localStorage - using fallback");
+      // Fallback: generate a temporary user_id if not registered
+      userId = "player_" + Math.random().toString(36).substring(2, 11);
+      localStorage.setItem("user_id", userId);
+    }
 
-    // Use helper to create the expected message format (type 4)
-    const output = createUserAnswer(
-      question.question_id,
-      selectedOptions.map((item) => item.option_id),
-      finished
-    );
+    // Calculate submit_time: elapsed time since question started
+    const elapsedSeconds = (Date.now() - startTime.current) / 1000;
 
-    console.log("Player submit:", output);
+    // Build answer payload in exact format required by server
+    const answer = {
+      type: 4,
+      question_id: question.question_id,
+      user_id: userId,
+      submit_time: Math.round(elapsedSeconds * 1000) / 1000, // round to 3 decimals
+      options_result: question.options.map((opt) => ({
+        option_id: opt.option_id,
+        picked: selectedOptions.some((s) => s.option_id === opt.option_id),
+      })),
+    };
+
+    console.log("Player submit:", answer);
 
     // Attempt to send via WebSocket; sendMessage returns false if socket not open
     if (isConnected) {
-      const ok = sendMessage(output);
+      const ok = sendMessage(answer);
       if (!ok) {
         console.warn("WebSocket not connected - submit not sent yet");
       }
@@ -75,6 +87,7 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
   const progressPercent =
     timeLeft >= 0 ? (timeLeft / question.question_time) * 100 : 0;
   const showResults = timeLeft <= -1;
+  const options = question.options || [];
 
   return (
     <div

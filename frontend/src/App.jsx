@@ -7,7 +7,6 @@ import PlayerJoinPage from "./pages/presentation/player/JoinPage";
 import PlayerGamePage from "./pages/presentation/player/GamePage";
 import PlayerPickAnswerQuestion from "./pages/presentation/player/PickAnswerQuestion";
 import PlayerLeaderBoard from "./pages/presentation/player/LeaderBoard";
-import PlayerWSTest from "./pages/presentation/player/PlayerWSTest";
 import Waiting from "./pages/loading/LoadingPage";
 import DataWatcher from "./DataWatcher";
 import { QuizSetup } from "./data/mockData";
@@ -37,102 +36,13 @@ import { useWebSocket } from "./hooks/useWebSocket";
 // }
 
 export default function App() {
-  // for pick answer question
-  // Start the app in the player flow by default for easier player testing
-  const [data, setData] = useState({
-    type: "PlayerPickAnswerQuestion",
-    question_id: 45,
-    question_text: "Which country has the highest population?",
-    options: [
-      { option_id: 47, option_text: "Denmark 🇩🇰" },
-      { option_id: 48, option_text: "Sweden 🇸🇪" },
-      { option_id: 49, option_text: "United Kingdom 🇬🇧" },
-      { option_id: 50, option_text: "France 🇫🇷" },
-    ],
-    question_time: 10,
-    min_point: 0,
-    max_point: 50,
-  });
-  const [demoMode] = useState(false); // Set to false to enable WebSocket mode
+  // Start the app in the manager flow by default
+  const [data, setData] = useState({ type: "PlayerJoinPage" });
   const [currentPage, setCurrentPage] = useState("join"); // join | pollpage | leaderboard
   const [currentSlide, setCurrentSlide] = useState(1);
   const [totalSlides] = useState(QuizSetup.slides.length);
 
-  // Demo mode: cycle through player pages with mock data
-  // useEffect(() => {
-  //   if (!demoMode) return;
-
-  //   const timer = setTimeout(() => {
-  //     setData({
-  //       type: "PlayerPickAnswerQuestion",
-  //       question_id: 45,
-  //       question_text: "Which country has the highest population?",
-  //       options: [
-  //         { option_id: 47, option_text: "Denmark 🇩🇰" },
-  //         { option_id: 48, option_text: "Sweden 🇸🇪" },
-  //         { option_id: 49, option_text: "United Kingdom 🇬🇧" },
-  //         { option_id: 50, option_text: "France 🇫🇷" },
-  //       ],
-  //       question_time: 10,
-  //       min_point: 0,
-  //       max_point: 50,
-  //     });
-  //   }, 3000);
-  // Demo mode: cycle through player pages with mock data
-  // Show leaderboard after question
-  useEffect(() => {
-    if (!demoMode || data.type !== "PlayerPickAnswerQuestion") return;
-
-    const timer = setTimeout(() => {
-      setData({
-        type: "PlayerLeaderBoard",
-        results: [
-          {
-            user_id: 1,
-            name: "Chloe",
-            character: "👑",
-            rank: 1,
-            total_points: 153,
-            new_points: 61,
-          },
-          {
-            user_id: 2,
-            name: "Ali",
-            character: "🧙",
-            rank: 2,
-            total_points: 120,
-            new_points: 50,
-          },
-        ],
-      });
-    }, 15000); // 15s after question starts (10s timer + 5s for results)
-
-    return () => clearTimeout(timer);
-  }, [demoMode, data.type]);
-
-  // Demo: after leaderboard, cycle back to next question
-  useEffect(() => {
-    if (!demoMode || data.type !== "PlayerLeaderBoard") return;
-
-    const timer = setTimeout(() => {
-      setData({
-        type: "PlayerPickAnswerQuestion",
-        question_id: 46,
-        question_text: "What is the capital of France?",
-        options: [
-          { option_id: 72, option_text: "Berlin 🇩🇪" },
-          { option_id: 73, option_text: "Madrid 🇪🇸" },
-          { option_id: 58, option_text: "Paris 🇫🇷" },
-          { option_id: 59, option_text: "Rome 🇮🇹" },
-        ],
-        question_time: 8,
-        min_point: 0,
-        max_point: 50,
-      });
-    }, 5000); // 5s to view leaderboard, then next question
-
-    return () => clearTimeout(timer);
-  }, [demoMode, data.type]);
+  // (Demo mode removed) App now always respects server-driven WebSocket flow.
 
   // Handle next navigation
   const handleNext = () => {
@@ -172,97 +82,63 @@ export default function App() {
       partialQuestionResults,
     } = useServerData();
 
-    // In WebSocket mode (demoMode=false), render based on ServerData
-    if (!demoMode) {
-      if (currentQuestion) {
-        // Pass both the full question and any available results (type 8 preferred, fallback to type 3)
-        const result = questionResults || partialQuestionResults;
-        return (
-          <PlayerPickAnswerQuestion
-            question={currentQuestion}
-            result={result}
-          />
-        );
+    // If the app is currently set to a Manager page, always render manager routes
+    // so the manager header/footer/navigation remain present even when server
+    // messages (like leaderboard or question) arrive.
+    if (type && type.startsWith("Manager")) {
+      switch (type) {
+        case "ManagerJoinPage":
+          return (
+            <ManagerJoinPage
+              onNext={handleNext}
+              onPrevious={handlePrevious}
+              currentSlide={currentSlide}
+              totalSlides={totalSlides}
+            />
+          );
+        case "ManagerPickAnswerQuestion":
+          return (
+            <ManagerPickAnswerQuestion
+              onNext={handleNext}
+              onPrevious={handlePrevious}
+              currentSlide={currentSlide}
+              totalSlides={totalSlides}
+            />
+          );
+        case "ManagerLeaderBoard":
+          return (
+            <ManagerLeaderBoard
+              onNext={handleNext}
+              onPrevious={handlePrevious}
+              currentSlide={currentSlide}
+              totalSlides={totalSlides}
+            />
+          );
+        default:
+          return <Waiting />;
       }
-      if (leaderboardResults) {
-        return (
-          <PlayerLeaderBoard
-            players={leaderboardResults.results || leaderboardResults}
-          />
-        );
-      }
-      // Default to join page while waiting for first question
-      return <PlayerJoinPage />;
     }
 
-    // In demo mode, render directly based on data.type
-    if (type === "PlayerJoinPage") {
-      return <PlayerJoinPage />;
-    }
-    if (type === "PlayerPickAnswerQuestion") {
-      return <PlayerPickAnswerQuestion question={data} />;
-    }
-    if (type === "PlayerLeaderBoard") {
-      return <PlayerLeaderBoard players={data.results || data} />;
-    }
-    if (type === "PlayerWSTest") {
-      return <PlayerWSTest />;
+    // For non-manager flows, prefer server-driven player rendering.
+    if (currentQuestion) {
+      const result = questionResults || partialQuestionResults;
+      return (
+        <PlayerPickAnswerQuestion question={currentQuestion} result={result} />
+      );
     }
 
-    switch (type) {
-      case "ManagerJoinPage":
-        return (
-          <ManagerJoinPage
-            onNext={handleNext}
-            onPrevious={handlePrevious}
-            currentSlide={currentSlide}
-            totalSlides={totalSlides}
-          />
-        );
-      case "ManagerPickAnswerQuestion":
-        return (
-          <ManagerPickAnswerQuestion
-            onNext={handleNext}
-            onPrevious={handlePrevious}
-            currentSlide={currentSlide}
-            totalSlides={totalSlides}
-          />
-        );
-      case "ManagerLeaderBoard":
-        return (
-          <ManagerLeaderBoard
-            onNext={handleNext}
-            onPrevious={handlePrevious}
-            currentSlide={currentSlide}
-            totalSlides={totalSlides}
-          />
-        );
-      case "PlayerJoinPage":
-        return (
-          <PlayerJoinPage onNext={() => setData({ type: "PlayerGamePage" })} />
-        );
-      case "PlayerGamePage":
-        return (
-          <PlayerGamePage
-            onNext={() =>
-              setData({
-                type: "PlayerPickAnswerQuestion",
-                ...QuizSetup.slides[0],
-              })
-            }
-          />
-        );
-      case "PlayerPickAnswerQuestion":
-        return <PlayerPickAnswerQuestion question={data} />;
-      case "PlayerWSTest":
-        return <PlayerWSTest />;
-      case "PlayerLeaderBoard":
-        return <PlayerLeaderBoard players={data.results} />;
-      case "Waiting":
-        return <Waiting />;
-      default:
-        return <Waiting />;
+    if (leaderboardResults) {
+      return (
+        <PlayerLeaderBoard
+          players={leaderboardResults.results || leaderboardResults}
+        />
+      );
     }
+
+    // Default to player join if in player mode, otherwise waiting
+    if (type && type.startsWith("Player")) return <PlayerJoinPage />;
+
+    return <Waiting />;
   }
 
   // // for quetsion
