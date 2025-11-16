@@ -268,7 +268,7 @@ export const Reactions = [
 // ============================================
 
 // Default game code
-export const DefaultGameCode = "room1";
+export const DefaultGameCode = "room3";
 
 // Color list for user names
 export const UserColorList = [

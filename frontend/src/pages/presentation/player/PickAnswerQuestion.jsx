@@ -92,7 +92,7 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
   return (
     <div
       className="text-white h-screen w-screen bg-cover bg-center bg-no-repeat font-poppins"
-      style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}
+      style={{ backgroundImage: "url('/bg.jpg')" }}
     >
       <header>
         <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
