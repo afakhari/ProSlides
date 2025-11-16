@@ -253,7 +253,7 @@ export default function ManagerJoinPage({
   return (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat "
-      style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}
+      style={{ backgroundImage: "url('/bg.jpg')" }}
     >
       <div
         className={`w-full pt-16! sm:pt-36 md:pt-40 pb-24 px-4 sm:px-3 flex ${

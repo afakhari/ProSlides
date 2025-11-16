@@ -95,7 +95,7 @@ export default function PlayerJoinPage(inp) {
   return !joined ? (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}
+      style={{ backgroundImage: "url('/bg.jpg')" }}
     >
       <div className="flex flex-col items-center justify-center">
         <header>

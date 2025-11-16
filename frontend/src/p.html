@@ -20,7 +20,7 @@
   </head>
   <body>
     <h1>Player Client</h1>
-    <label>Session ID: <input id="sessionId" value="room1" /></label>
+    <label>Session ID: <input id="sessionId" value="room2" /></label>
     <label>User ID: <input id="userId" value="5" /></label>
     <button id="connectBtn">Connect</button>
     <h3>Messages:</h3>
@@ -40,7 +40,7 @@
       document.getElementById("connectBtn").onclick = () => {
         const sessionId = document.getElementById("sessionId").value.trim();
         // ws = new WebSocket(`ws://localhost:8080/ws/${sessionId}/player`);
-        ws = new WebSocket(`wss://present.proslides.ir/ws/${sessionId}/player`);
+        ws = new WebSocket(`wss://present.proslides.ir/ws/room2/player`);
 
         ws.onopen = () => {
           const register = {

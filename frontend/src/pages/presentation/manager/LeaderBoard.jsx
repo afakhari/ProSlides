@@ -178,7 +178,7 @@ function ManagerLeaderBoard({
   return (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
-      style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}
+      style={{ backgroundImage: "url('/bg.jpg')" }}
     >
       <TopBar
         gameCode={gameCode}
