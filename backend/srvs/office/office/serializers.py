@@ -1,182 +1,89 @@
-# serializers.py
 from rest_framework import serializers
-from django.core.exceptions import ValidationError
-from .models import Quiz, PickAnswerQuestion, Option, Participant, Answer
+from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard
 
 
 class OptionSerializer(serializers.ModelSerializer):
+    option_id = serializers.IntegerField(source='id', read_only=True)
+
     class Meta:
         model = Option
-        fields = ['id', 'text', 'is_correct', 'order', 'explanation']
-
-    def validate_order(self, value):
-        if value <= 0:
-            raise serializers.ValidationError(
-                "Order must be greater than zero.")
-        return value
+        fields = ['option_id', 'text', 'is_correct', 'votes', 'image_url']
+        read_only_fields = ['option_id', 'votes']
 
 
-class PickAnswerQuestionSerializer(serializers.ModelSerializer):
+class QuestionSerializer(serializers.ModelSerializer):
+    question_id = serializers.IntegerField(source='id', read_only=True)
     options = OptionSerializer(many=True, read_only=True)
-    actual_time_limit = serializers.SerializerMethodField()
 
     class Meta:
-        model = PickAnswerQuestion
-        fields = ['id', 'quiz', 'title', 'order', 'question_text',
-                  'time_limit', 'max_points', 'min_points', 'actual_time_limit', 'options']
-
-    def get_actual_time_limit(self, obj):
-        return obj.get_actual_time_limit()
-
-    def validate_order(self, value):
-        if value <= 0:
-            raise serializers.ValidationError(
-                "Order must be greater than zero.")
-        return value
+        model = Question
+        fields = [
+            'question_id', 'title', 'text', 'question_type', 'min_point',
+            'max_point', 'time_limit', 'image_url', 'faster_answers_more_points',
+            'partial_scoring', 'options'
+        ]
+        read_only_fields = ['question_id']
 
 
-class PickAnswerQuestionCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PickAnswerQuestion
-        fields = ['id', 'title', 'order', 'question_text',
-                  'time_limit', 'max_points', 'min_points']
-
-    def validate_order(self, value):
-        if value <= 0:
-            raise serializers.ValidationError(
-                "Order must be greater than zero.")
-        return value
-
-    def validate(self, data):
-        quiz = self.context.get('quiz')
-        order = data.get('order')
-
-        if quiz and order:
-            existing = PickAnswerQuestion.objects.filter(
-                quiz=quiz, order=order)
-            if self.instance:
-                existing = existing.exclude(pk=self.instance.pk)
-            if existing.exists():
-                raise serializers.ValidationError({
-                    'order': f'A question with order {order} already exists in this quiz.'
-                })
-        return data
-
-
-# سریالایزرهای مخصوص WebSocket مطابق format.json
-class OptionWebSocketSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Option
-        fields = ['id', 'text', 'order']
-
-
-class QuestionWebSocketSerializer(serializers.ModelSerializer):
-    options = OptionWebSocketSerializer(many=True, read_only=True)
-    question_time = serializers.SerializerMethodField()
+class SlideSerializer(serializers.ModelSerializer):
+    slide_id = serializers.IntegerField(source='id', read_only=True)
+    question = QuestionSerializer(read_only=True)
 
     class Meta:
-        model = PickAnswerQuestion
-        fields = ['id', 'title', 'order', 'question_text',
-                  'question_time', 'max_points', 'min_points', 'options']
-
-    def get_question_time(self, obj):
-        return obj.get_actual_time_limit()
-
-
-class ParticipantWebSocketSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Participant
-        fields = ['user_id', 'name', 'avatar',
-                  'is_host', 'total_points', 'joined_at']
-
-
-class QuizWebSocketSerializer(serializers.ModelSerializer):
-    questions = QuestionWebSocketSerializer(many=True, read_only=True)
-    players = serializers.SerializerMethodField()
-    game_settings = serializers.SerializerMethodField()
-    total_questions = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Quiz
-        fields = ['id', 'title', 'session_id', 'total_questions',
-                  'questions', 'players', 'game_settings']
-
-    def get_players(self, obj):
-        participants = Participant.objects.filter(quiz=obj)
-        return ParticipantWebSocketSerializer(participants, many=True).data
-
-    def get_game_settings(self, obj):
-        return obj.get_game_settings()
-
-    def get_total_questions(self, obj):
-        return obj.slides.count()
-
-
-class QuizDetailSerializer(serializers.ModelSerializer):
-    slides = serializers.SerializerMethodField()
-    default_time_per_question = serializers.IntegerField()
-
-    class Meta:
-        model = Quiz
-        fields = ['id', 'title', 'created_by', 'created_at',
-                  'default_time_per_question', 'points_calculation',
-                  'allow_retries', 'slides']
-
-    def get_slides(self, obj):
-        questions = PickAnswerQuestion.objects.filter(
-            quiz=obj).order_by('order')
-        return PickAnswerQuestionSerializer(questions, many=True).data
+        model = Slide
+        fields = [
+            'slide_id', 'slide_type', 'order', 'show_leaderboard_after',
+            'title', 'content_text', 'content_image_url', 'question'
+        ]
+        read_only_fields = ['slide_id']
+        extra_kwargs = {
+            'order': {'required': False},
+            'title': {'required': False},
+            'content_text': {'required': False}
+        }
 
 
 class QuizSerializer(serializers.ModelSerializer):
-    slides_count = serializers.IntegerField(
-        source='slides.count', read_only=True)
-    created_by = serializers.PrimaryKeyRelatedField(read_only=True)
-    default_time_per_question = serializers.IntegerField()
+    quiz_id = serializers.IntegerField(source='id', read_only=True)
+    slides = SlideSerializer(many=True, read_only=True)
 
     class Meta:
         model = Quiz
-        fields = ['id', 'title', 'created_by', 'created_at',
-                  'default_time_per_question', 'points_calculation',
-                  'allow_retries', 'slides_count']
-        read_only_fields = ['created_by', 'created_at']
+        fields = [
+            'quiz_id', 'title', 'created_at', 'author', 'music_url',
+            'background_color', 'background_image_url', 'slides'
+        ]
+        read_only_fields = ['quiz_id', 'created_at']
 
 
-class QuizUpdateSerializer(serializers.ModelSerializer):
+class ExportSerializer(serializers.ModelSerializer):
+    quiz_id = serializers.IntegerField(source='id', read_only=True)
+    slides = SlideSerializer(many=True, read_only=True)
+    background = serializers.SerializerMethodField()
+
     class Meta:
         model = Quiz
-        fields = ['id', 'title', 'default_time_per_question',
-                  'points_calculation', 'allow_retries']
+        fields = ['quiz_id', 'title', 'background', 'music_url', 'slides']
+
+    def get_background(self, obj):
+        return {
+            'color': obj.background_color,
+            'image': obj.background_image_url
+        }
 
 
-class ParticipantSerializer(serializers.ModelSerializer):
+class PlayerSessionSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Participant
-        fields = ['id', 'name', 'avatar', 'joined_at', 'session_id',
-                  'user_id', 'is_host', 'total_points']
-        read_only_fields = ['joined_at', 'session_id', 'user_id']
+        model = PlayerSession
+        fields = ['rust_session_id', 'quiz', 'player_name', 'avatar']
 
 
-class ParticipantCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Participant
-        fields = ['name', 'avatar']
-
-    def validate(self, data):
-        quiz_id = self.context.get('quiz_id')
-        name = data.get('name')
-
-        if quiz_id and name:
-            if Participant.objects.filter(quiz_id=quiz_id, name=name).exists():
-                raise serializers.ValidationError({
-                    'name': 'این نام در این کوئیز قبلاً استفاده شده است.'
-                })
-        return data
+class LeaderboardEntrySerializer(serializers.Serializer):
+    rust_session_id = serializers.CharField()
+    score = serializers.IntegerField()
+    time_taken = serializers.FloatField()
+    rank = serializers.IntegerField()
 
 
-class AnswerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Answer
-        fields = ['id', 'participant', 'question', 'selected_option',
-                  'answered_at', 'submit_time', 'points_earned']
-        read_only_fields = ['answered_at']
+class LeaderboardReceiveSerializer(serializers.Serializer):
+    leaderboard = LeaderboardEntrySerializer(many=True)
