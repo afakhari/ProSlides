@@ -34,12 +34,13 @@ class QuestionSerializer(serializers.ModelSerializer):
 class SlideSerializer(serializers.ModelSerializer):
     slide_id = serializers.IntegerField(source='id', read_only=True)
     question = QuestionSerializer(read_only=True)
+    leaderboard = serializers.SerializerMethodField()  # اضافه شده اینجا
 
     class Meta:
         model = Slide
         fields = [
             'slide_id', 'slide_type', 'order', 'show_leaderboard_after',
-            'title', 'content_text', 'content_image_url', 'question'
+            'title', 'content_text', 'content_image_url', 'question', 'leaderboard'
         ]
         read_only_fields = ['slide_id']
         extra_kwargs = {
@@ -47,6 +48,20 @@ class SlideSerializer(serializers.ModelSerializer):
             'title': {'required': False},
             'content_text': {'required': False}
         }
+
+    def get_leaderboard(self, obj):
+        """دریافت لیدربرد برای اسلایدهای سوال"""
+        if obj.slide_type == 1 and hasattr(obj, 'question'):  # فقط برای اسلایدهای سوال
+            try:
+                leaderboard_entries = Leaderboard.objects.filter(
+                    question=obj.question).order_by('rank')
+                serializer = LeaderboardEntrySerializer(
+                    leaderboard_entries, many=True)
+                return serializer.data
+            except Exception as e:
+                print(f"Error in get_leaderboard: {e}")
+                return []
+        return []
 
 
 class QuizSerializer(serializers.ModelSerializer):
@@ -84,12 +99,13 @@ class PlayerSessionSerializer(serializers.ModelSerializer):
         fields = ['rust_session_id', 'quiz', 'player_name', 'avatar']
 
 
-class LeaderboardEntrySerializer(serializers.Serializer):
-    rust_session_id = serializers.CharField(
-        help_text="شناسه سشن بازیکن از Rust")
-    score = serializers.IntegerField(help_text="امتیاز کسب شده")
-    time_taken = serializers.FloatField(help_text="زمان پاسخگویی (ثانیه)")
-    rank = serializers.IntegerField(help_text="رتبه در لیدربرد")
+class LeaderboardEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Leaderboard
+        fields = ['rust_session_id', 'player_name',
+                  'avatar', 'score', 'time_taken', 'rank']
+        read_only_fields = ['rust_session_id', 'player_name',
+                            'avatar', 'score', 'time_taken', 'rank']
 
 
 class LeaderboardReceiveSerializer(serializers.Serializer):

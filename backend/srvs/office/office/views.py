@@ -300,17 +300,14 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
 class LeaderboardReceiveView(viewsets.ViewSet):
     """
     دریافت لیدربرد از Rust
-
-    Rust پس از پایان هر سوال، نتایج را به این endpoint ارسال می‌کند.
     """
 
     @swagger_auto_schema(
         operation_description="دریافت لیدربرد از Rust",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['question_id', 'leaderboard'],
+            required=['leaderboard'],
             properties={
-                'question_id': openapi.Schema(type=openapi.TYPE_INTEGER),
                 'leaderboard': openapi.Schema(
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Schema(
@@ -329,24 +326,18 @@ class LeaderboardReceiveView(viewsets.ViewSet):
     )
     def create(self, request, quiz_pk=None, slide_pk=None):
         """دریافت لیدربرد از Rust"""
-        question_id = request.data.get('question_id')
-
-        if not question_id:
+        # از روی slide_pk سوال مربوطه را پیدا می‌کنیم
+        try:
+            question = Question.objects.get(slide_id=slide_pk)
+        except Question.DoesNotExist:
             return Response(
-                {'error': 'question_id is required'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'No question found for this slide'},
+                status=status.HTTP_404_NOT_FOUND
             )
-
-        # بررسی اینکه question مربوط به slide و quiz مورد نظر باشد
-        question = get_object_or_404(
-            Question,
-            pk=question_id,
-            slide_id=slide_pk,
-            slide__quiz_id=quiz_pk
-        )
 
         leaderboard_data = request.data.get('leaderboard', [])
 
+        saved_count = 0
         for entry in leaderboard_data:
             player_session = PlayerSession.objects.filter(
                 rust_session_id=entry['rust_session_id']
@@ -364,5 +355,10 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                         'rank': entry['rank']
                     }
                 )
+                saved_count += 1
 
-        return Response({'status': 'leaderboard saved'})
+        return Response({
+            'status': 'leaderboard saved',
+            'saved_entries': saved_count,
+            'total_entries': len(leaderboard_data)
+        })
