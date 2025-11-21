@@ -6,10 +6,10 @@ class Quiz(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     author = models.CharField(max_length=100, default="anonymous")
     music_url = models.URLField(
-        max_length=500, blank=True, null=True)  # تغییر به URL
+        max_length=500, blank=True, null=True)
     background_color = models.CharField(max_length=7, default='#FFFFFF')
     background_image_url = models.URLField(
-        max_length=500, blank=True, null=True)  # تغییر به URL
+        max_length=500, blank=True, null=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -32,7 +32,7 @@ class Slide(models.Model):
     title = models.CharField(max_length=255, blank=True, null=True)
     content_text = models.TextField(blank=True, null=True)
     content_image_url = models.URLField(
-        max_length=500, blank=True, null=True)  # تغییر به URL
+        max_length=500, blank=True, null=True)
 
     class Meta:
         unique_together = ['quiz', 'order']
@@ -65,7 +65,7 @@ class Question(models.Model):
     max_point = models.IntegerField(default=100)
     time_limit = models.IntegerField(default=30)
     image_url = models.URLField(
-        max_length=500, blank=True, null=True)  # تغییر به URL
+        max_length=500, blank=True, null=True)
     faster_answers_more_points = models.BooleanField(default=False)
     partial_scoring = models.BooleanField(default=False)
 
@@ -80,7 +80,7 @@ class Option(models.Model):
     is_correct = models.BooleanField(default=False)
     votes = models.IntegerField(default=0)
     image_url = models.URLField(
-        max_length=500, blank=True, null=True)  # تغییر به URL
+        max_length=500, blank=True, null=True)
 
     def __str__(self):
         return self.text

@@ -3,28 +3,59 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard
 from .serializers import (
     QuizSerializer, SlideSerializer, QuestionSerializer, OptionSerializer,
-    ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer
+    ExportSerializer, PlayerSessionSerializer
 )
 
 
 class QuizViewSet(viewsets.ModelViewSet):
+    """
+    مدیریت کوئیزها
+
+    ایجاد، مشاهده، ویرایش و حذف کوئیزهای تعاملی
+    """
     queryset = Quiz.objects.all()
     serializer_class = QuizSerializer
 
+    def get_queryset(self):
+        # برای Swagger
+        if getattr(self, 'swagger_fake_view', False):
+            return Quiz.objects.none()
+        return super().get_queryset()
+
+    @swagger_auto_schema(
+        operation_description="صادرات کامل اطلاعات کوئیز برای Rust",
+        responses={200: ExportSerializer}
+    )
     @action(detail=True, methods=['get'])
     def export(self, request, pk=None):
+        """
+        صادرات کامل کوئیز برای اجرا در Rust
+
+        این endpoint تمام اطلاعات کوئیز شامل اسلایدها، سوالات و گزینه‌ها را 
+        به فرمت مورد نیاز Rust برمی‌گرداند.
+        """
         quiz = self.get_object()
         serializer = ExportSerializer(quiz)
         return Response(serializer.data)
 
 
 class SlideViewSet(viewsets.ModelViewSet):
+    """
+    مدیریت اسلایدهای کوئیز
+
+    هر کوئیز می‌تواند چندین اسلاید از نوع سوال یا محتوا داشته باشد.
+    """
     serializer_class = SlideSerializer
 
     def get_queryset(self):
+        # برای Swagger
+        if getattr(self, 'swagger_fake_view', False):
+            return Slide.objects.none()
         return Slide.objects.filter(quiz_id=self.kwargs['quiz_pk'])
 
     def perform_create(self, serializer):
@@ -35,11 +66,22 @@ class SlideViewSet(viewsets.ModelViewSet):
 
 class QuestionViewSet(viewsets.ViewSet):
     """
-    ViewSet for managing questions for slides.
+    مدیریت سوالات اسلایدها
+
+    هر اسلاید از نوع سوال می‌تواند یک سوال داشته باشد.
     """
 
+    @swagger_auto_schema(
+        operation_description="دریافت سوال یک اسلاید",
+        responses={
+            200: QuestionSerializer,
+            404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
+        }
+    )
     def retrieve(self, request, quiz_pk=None, slide_pk=None):
-        """Get question for a slide"""
+        """
+        دریافت سوال مربوط به یک اسلاید
+        """
         try:
             question = Question.objects.get(
                 slide_id=slide_pk, slide__quiz_id=quiz_pk)
@@ -51,8 +93,20 @@ class QuestionViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+    @swagger_auto_schema(
+        operation_description="ایجاد سوال جدید برای اسلاید",
+        request_body=QuestionSerializer,
+        responses={
+            201: QuestionSerializer,
+            400: openapi.Response("اسلاید از قبل سوال دارد")
+        }
+    )
     def create(self, request, quiz_pk=None, slide_pk=None):
-        """Create question for a slide"""
+        """
+        ایجاد سوال جدید برای یک اسلاید
+
+        هر اسلاید فقط می‌تواند یک سوال داشته باشد.
+        """
         slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
 
         with transaction.atomic():
@@ -67,8 +121,16 @@ class QuestionViewSet(viewsets.ViewSet):
             serializer.save(slide=slide)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @swagger_auto_schema(
+        operation_description="آپدیت کامل سوال",
+        request_body=QuestionSerializer,
+        responses={
+            200: QuestionSerializer,
+            404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
+        }
+    )
     def update(self, request, quiz_pk=None, slide_pk=None):
-        """Update question for a slide"""
+        """آپدیت کامل سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
                 slide_id=slide_pk, slide__quiz_id=quiz_pk)
@@ -83,8 +145,16 @@ class QuestionViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+    @swagger_auto_schema(
+        operation_description="آپدیت جزئی سوال",
+        request_body=QuestionSerializer,
+        responses={
+            200: QuestionSerializer,
+            404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
+        }
+    )
     def partial_update(self, request, quiz_pk=None, slide_pk=None):
-        """Partial update question for a slide"""
+        """آپدیت جزئی سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
                 slide_id=slide_pk, slide__quiz_id=quiz_pk)
@@ -99,8 +169,15 @@ class QuestionViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+    @swagger_auto_schema(
+        operation_description="حذف سوال یک اسلاید",
+        responses={
+            204: "سوال با موفقیت حذف شد",
+            404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
+        }
+    )
     def destroy(self, request, quiz_pk=None, slide_pk=None):
-        """Delete question for a slide"""
+        """حذف سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
                 slide_id=slide_pk, slide__quiz_id=quiz_pk)
@@ -114,10 +191,18 @@ class QuestionViewSet(viewsets.ViewSet):
 
 
 class OptionViewSet(viewsets.ModelViewSet):
+    """
+    مدیریت گزینه‌های سوالات
+
+    هر سوال می‌تواند چندین گزینه داشته باشد.
+    """
     serializer_class = OptionSerializer
 
     def get_queryset(self):
-        # پیدا کردن سوال بر اساس slide_pk و quiz_pk
+        # برای Swagger
+        if getattr(self, 'swagger_fake_view', False):
+            return Option.objects.none()
+
         question = get_object_or_404(
             Question,
             slide_id=self.kwargs['slide_pk'],
@@ -135,48 +220,115 @@ class OptionViewSet(viewsets.ModelViewSet):
 
 
 class ContentViewSet(viewsets.ViewSet):
+    """
+    مدیریت محتوای اسلایدها
+
+    برای اسلایدهای نوع محتوا (slide_type=2)
+    """
+
+    @swagger_auto_schema(
+        operation_description="دریافت محتوای اسلاید",
+        responses={200: openapi.Response("محتوا دریافت شد")}
+    )
     def retrieve(self, request, quiz_pk=None, slide_pk=None):
+        """دریافت محتوای اسلاید"""
         slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
         return Response({
             'title': slide.title,
             'content_text': slide.content_text,
-            'content_image': slide.content_image.url if slide.content_image else None
+            'content_image_url': slide.content_image_url
         })
 
+    @swagger_auto_schema(
+        operation_description="آپدیت محتوای اسلاید",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'title': openapi.Schema(type=openapi.TYPE_STRING),
+                'content_text': openapi.Schema(type=openapi.TYPE_STRING),
+                'content_image_url': openapi.Schema(type=openapi.TYPE_STRING),
+            }
+        ),
+        responses={200: "محتوا با موفقیت آپدیت شد"}
+    )
     def update(self, request, quiz_pk=None, slide_pk=None):
+        """آپدیت محتوای اسلاید"""
         slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
         slide.title = request.data.get('title', slide.title)
         slide.content_text = request.data.get(
             'content_text', slide.content_text)
-
-        if 'content_image' in request.data:
-            slide.content_image = request.data['content_image']
-
+        slide.content_image_url = request.data.get(
+            'content_image_url', slide.content_image_url)
         slide.save()
 
         return Response({
             'title': slide.title,
             'content_text': slide.content_text,
-            'content_image': slide.content_image.url if slide.content_image else None
+            'content_image_url': slide.content_image_url
         })
 
+    @swagger_auto_schema(
+        operation_description="حذف محتوای اسلاید",
+        responses={200: "محتوا با موفقیت حذف شد"}
+    )
     def destroy(self, request, quiz_pk=None, slide_pk=None):
+        """حذف محتوای اسلاید"""
         slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
         slide.title = None
         slide.content_text = None
-        slide.content_image = None
+        slide.content_image_url = None
         slide.save()
         return Response({'status': 'content deleted'})
 
 
 class PlayerSessionViewSet(viewsets.ModelViewSet):
+    """
+    مدیریت سشن‌های بازیکنان
+
+    ارتباط بین Rust WebSocket و Django برای شناسایی بازیکنان
+    """
     queryset = PlayerSession.objects.all()
     serializer_class = PlayerSessionSerializer
 
+    def get_queryset(self):
+        # برای Swagger
+        if getattr(self, 'swagger_fake_view', False):
+            return PlayerSession.objects.none()
+        return super().get_queryset()
+
 
 class LeaderboardReceiveView(viewsets.ViewSet):
+    """
+    دریافت لیدربرد از Rust
+
+    Rust پس از پایان هر سوال، نتایج را به این endpoint ارسال می‌کند.
+    """
+
+    @swagger_auto_schema(
+        operation_description="دریافت لیدربرد از Rust",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['question_id', 'leaderboard'],
+            properties={
+                'question_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                'leaderboard': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'rust_session_id': openapi.Schema(type=openapi.TYPE_STRING),
+                            'score': openapi.Schema(type=openapi.TYPE_INTEGER),
+                            'time_taken': openapi.Schema(type=openapi.TYPE_NUMBER),
+                            'rank': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        }
+                    )
+                )
+            }
+        ),
+        responses={200: "لیدربرد با موفقیت ذخیره شد"}
+    )
     def create(self, request, quiz_pk=None, slide_pk=None):
-        # از Rust انتظار داریم question_id رو در body بفرستد
+        """دریافت لیدربرد از Rust"""
         question_id = request.data.get('question_id')
 
         if not question_id:

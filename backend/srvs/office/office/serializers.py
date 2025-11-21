@@ -10,6 +10,12 @@ class OptionSerializer(serializers.ModelSerializer):
         fields = ['option_id', 'text', 'is_correct', 'votes', 'image_url']
         read_only_fields = ['option_id', 'votes']
 
+    def create(self, validated_data):
+        """
+        ایجاد گزینه جدید برای یک سوال
+        """
+        return super().create(validated_data)
+
 
 class QuestionSerializer(serializers.ModelSerializer):
     question_id = serializers.IntegerField(source='id', read_only=True)
@@ -79,10 +85,11 @@ class PlayerSessionSerializer(serializers.ModelSerializer):
 
 
 class LeaderboardEntrySerializer(serializers.Serializer):
-    rust_session_id = serializers.CharField()
-    score = serializers.IntegerField()
-    time_taken = serializers.FloatField()
-    rank = serializers.IntegerField()
+    rust_session_id = serializers.CharField(
+        help_text="شناسه سشن بازیکن از Rust")
+    score = serializers.IntegerField(help_text="امتیاز کسب شده")
+    time_taken = serializers.FloatField(help_text="زمان پاسخگویی (ثانیه)")
+    rank = serializers.IntegerField(help_text="رتبه در لیدربرد")
 
 
 class LeaderboardReceiveSerializer(serializers.Serializer):
