@@ -304,7 +304,8 @@ class LeaderboardAdmin(admin.ModelAdmin):
         )
     leaderboard_info.short_description = 'خلاصه لیدربرد'
 
-# REMOVE OR COMMENT OUT THESE LINES - THEY ARE CAUSING THE DUPLICATE REGISTRATION
+# ثبت مدل‌ها با ادمین‌کلاس‌های سفارشی
+# (اگر بخواهید به صورت دستی ثبت کنید، این خطوط را اضافه کنید)
 # admin.site.register(Quiz, QuizAdmin)
 # admin.site.register(Slide, SlideAdmin)
 # admin.site.register(Question, QuestionAdmin)
