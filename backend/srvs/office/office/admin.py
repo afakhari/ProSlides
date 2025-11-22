@@ -117,7 +117,7 @@ class SlideAdmin(admin.ModelAdmin):
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
     list_display = [
-        'id', 'slide_display', 'question_type', 'time_limit',
+        'slide_display', 'question_type', 'time_limit',
         'max_point', 'options_count', 'has_image'
     ]
     list_filter = ['question_type',
@@ -304,8 +304,7 @@ class LeaderboardAdmin(admin.ModelAdmin):
         )
     leaderboard_info.short_description = 'خلاصه لیدربرد'
 
-# ثبت مدل‌ها با ادمین‌کلاس‌های سفارشی
-# (اگر بخواهید به صورت دستی ثبت کنید، این خطوط را اضافه کنید)
+# REMOVE OR COMMENT OUT THESE LINES - THEY ARE CAUSING THE DUPLICATE REGISTRATION
 # admin.site.register(Quiz, QuizAdmin)
 # admin.site.register(Slide, SlideAdmin)
 # admin.site.register(Question, QuestionAdmin)
