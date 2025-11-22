@@ -117,7 +117,7 @@ class SlideAdmin(admin.ModelAdmin):
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
     list_display = [
-        'id', 'slide_display', 'question_type', 'time_limit',
+        'slide_display', 'question_type', 'time_limit',
         'max_point', 'options_count', 'has_image'
     ]
     list_filter = ['question_type',
