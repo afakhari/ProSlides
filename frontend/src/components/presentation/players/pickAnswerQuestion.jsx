@@ -1,57 +1,16 @@
 import React, { useState, useEffect } from "react";
+import {
+  PickAnswerQuestion_EN,
+  PickAnswerQuestion_FA,
+  PickAnswerResult_EN,
+  PickAnswerResult_FA,
+  createUserAnswer,
+} from "../../../data/mockData";
 
-const question2 = {
-  type: 2,
-  question_id: 45,
-  question_text: "Which country has the highest population?",
-  options: [
-    { option_id: 47, option_text: "Denmark 🇩🇰" },
-    { option_id: 48, option_text: "Sweden 🇸🇪" },
-    { option_id: 49, option_text: "United Kingdom 🇬🇧" },
-    { option_id: 50, option_text: "France 🇫🇷" },
-  ],
-  question_time: 10,
-  min_point: 0,
-  max_point: 50,
-};
-const result2 = {
-  type: 3,
-  question_id: 45,
-  optionsResult: [
-    { option_id: 47, answer: false },
-    { option_id: 48, answer: false },
-    { option_id: 49, answer: true },
-    { option_id: 50, answer: false },
-  ],
-};
-const question = {
-  type: 2,
-  question_id: 46,
-  question_text: "نزدیک‌ترین سیاره به خورشید کدام است؟",
-  options: [
-    { option_id: 51, option_text: "مریخ" },
-    { option_id: 52, option_text: "زمین" },
-    { option_id: 53, option_text: "زهره" },
-    { option_id: 54, option_text: "عطارد" },
-    { option_id: 55, option_text: "مشتری" },
-    { option_id: 56, option_text: "اورانوس" },
-  ],
-  question_time: 20,
-  min_point: 10,
-  max_point: 50,
-};
-const result = {
-  type: 3,
-  question_id: 46,
-  optionsResult: [
-    { option_id: 51, answer: false },
-    { option_id: 52, answer: false },
-    { option_id: 53, answer: false },
-    { option_id: 54, answer: true },
-    { option_id: 55, answer: false },
-    { option_id: 56, answer: false },
-  ],
-};
+const question2 = PickAnswerQuestion_EN;
+const result2 = PickAnswerResult_EN;
+const question = PickAnswerQuestion_FA;
+const result = PickAnswerResult_FA;
 
 export default function PickAnswerQuestion() {
   const [selectedOptions, setSelectedOptions] = useState([]);
@@ -82,12 +41,11 @@ export default function PickAnswerQuestion() {
   const handleSubmit = () => {
     if (selectedOptions.length > 0) setSubmitted(true);
     const finished = timeLeft + 1;
-    const output = {
-      type: 4,
-      question_id: question.question_id,
-      optins_selected: selectedOptions.map((item) => item.option_id),
-      time_left: finished,
-    };
+    const output = createUserAnswer(
+      question.question_id,
+      selectedOptions.map((item) => item.option_id),
+      finished
+    );
     console.log(output);
   };
 
@@ -153,7 +111,7 @@ export default function PickAnswerQuestion() {
                                   border-solid border-white border-2 hover:bg-black/30 ${optionClass}`}
                     onClick={() => handleSelect(goz)}
                   >
-                    <span className="w-6 h-6 border-2 border-white rounded-full inline-flex flex-shrink-0 items-center justify-center relative">
+                    <span className="w-6 h-6 border-2 border-white rounded-full inline-flex shrink-0 items-center justify-center relative">
                       {selectedOptions.includes(goz) && !showResults && (
                         <span className="w-[22px] h-[22px] bg-[#393e3a] rounded-full"></span>
                       )}

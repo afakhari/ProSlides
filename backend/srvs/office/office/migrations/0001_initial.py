@@ -9,6 +9,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
+
     ]
 
     operations = [
@@ -100,6 +101,7 @@ class Migration(migrations.Migration):
             ],
             options={
                 'unique_together': {('question', 'rust_session_id')},
+
             },
         ),
     ]
