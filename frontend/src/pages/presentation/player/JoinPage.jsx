@@ -3,9 +3,8 @@ import { useNavigate } from "react-router-dom";
 import EmojiPicker from "emoji-picker-react";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
-import { DefaultGameCode } from "../../../data/mockData";
 
-export default function PlayerJoinPage(inp) {
+export default function PlayerJoinPage({ roomId, ...inp }) {
   const [players, setPlayers] = useState([]);
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("🧙");
@@ -45,7 +44,11 @@ export default function PlayerJoinPage(inp) {
     setJoined(true);
     // Connect to WebSocket for players and attempt to send join message
     try {
-      connect(DefaultGameCode);
+      if (!roomId) {
+        console.error("Missing roomId for WebSocket connection");
+        return;
+      }
+      connect(roomId);
     } catch (err) {
       console.error("Failed to connect WebSocket:", err);
     }

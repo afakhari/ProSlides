@@ -8,7 +8,6 @@ import { useServerData } from "../../../hooks/useServerData";
 import {
   QuizSetup,
   createNextPrevious,
-  DefaultGameCode,
   DefaultFooterStats,
   QuestionResult,
 } from "../../../data/mockData";
@@ -19,6 +18,9 @@ export default function ManagerPickAnswerQuestion({
   onPrevious,
   currentSlide = 1,
   totalSlides = 5,
+  quiz,
+  isRemoteReady,
+  roomId,
 }) {
   const { isConnected, sendNavigation, lastMessage } = useWebSocket();
   const { questionResults, processMessage } = useServerData();
@@ -28,13 +30,22 @@ export default function ManagerPickAnswerQuestion({
   // const questionNumber = currentQuestionIndex + 1;
   // const totalQuestions = QuizSetup.slides.length;
 
-  const currentQuestion = QuizSetup.slides[currentSlide - 1];
-  const options = currentQuestion.options.map((opt) => opt.option_text);
+  const currentQuestion = isRemoteReady
+    ? quiz.slides[currentSlide - 1]
+    : {
+        slide_type: 1,
+        question_id: null,
+        question_text: "",
+        question_time: 0,
+        max_point: 0,
+        min_point: 0,
+        options: [],
+      };
+  const options = currentQuestion.options?.map((opt) => opt.option_text) || [];
 
-  // Find correct answer index
-  const correctIndex = currentQuestion.options.findIndex(
-    (opt) => opt.answer === true
-  );
+  // Find correct answer index (only for question slides, not leaderboard)
+  const correctIndex =
+    currentQuestion?.options?.findIndex((opt) => opt.answer === true) ?? -1;
 
   const [selected, setSelected] = useState(null);
   const [voted, setVoted] = useState(false);
@@ -49,11 +60,12 @@ export default function ManagerPickAnswerQuestion({
   const [_navigationData, setNavigationData] = useState(
     createNextPrevious(5, null, null)
   ); // State for tracking navigation (to be sent to server)
-  const gameCode = DefaultGameCode;
+  const gameCode = roomId;
   // const navigate = useNavigate();
 
   // Reset state when slide changes (new question)
   useEffect(() => {
+    if (!isRemoteReady) return;
     console.log("[PickAnswerQuestion] Slide changed to:", currentSlide);
     console.log("[PickAnswerQuestion] Resetting state...");
     setShowResults(false);
@@ -64,6 +76,7 @@ export default function ManagerPickAnswerQuestion({
     currentSlide,
     currentQuestion.options.length,
     currentQuestion.question_time,
+    isRemoteReady,
   ]);
 
   // Listen for WebSocket messages and save to ServerData
@@ -88,18 +101,29 @@ export default function ManagerPickAnswerQuestion({
         currentQuestion.options
       );
 
-      // Update votes based on option_id matching
+      // Combine mock data (previous results) with server results (new results)
       const newVotes = currentQuestion.options.map((option) => {
-        const result = serverResults.find(
+        // Get mock data (if available)
+        const mockVote = option.number_of_submits ?? 0;
+
+        // Get server data
+        const serverResult = serverResults.find(
           (s) => s.option_id === option.option_id
         );
-        // Check both field names (number_of_submits and number_of_submit)
-        return result
-          ? result.number_of_submits ?? result.number_of_submit ?? 0
+        const serverVote = serverResult
+          ? serverResult.number_of_submits ?? serverResult.number_of_submit ?? 0
           : 0;
+
+        // Combine: mock + server
+        const combinedVote = mockVote + serverVote;
+        console.log(
+          `[PickAnswerQuestion] Option ${option.option_id}: mock=${mockVote} + server=${serverVote} = ${combinedVote}`
+        );
+
+        return combinedVote;
       });
 
-      console.log("[PickAnswerQuestion] Updated votes:", newVotes);
+      console.log("[PickAnswerQuestion] Combined votes:", newVotes);
       console.log("[PickAnswerQuestion] Setting showResults to true");
       setVotes(newVotes);
       setShowResults(true);
@@ -122,23 +146,41 @@ export default function ManagerPickAnswerQuestion({
         currentQuestion.question_id
       );
 
-      // فقط اگر question_id مطابقت داشته باشد
-      if (questionResults.question_id === currentQuestion.question_id) {
+      // Match question_id (handle both string and number comparisons)
+      const questResultId = String(questionResults.question_id);
+      const currentQId = String(currentQuestion.question_id);
+
+      if (questResultId === currentQId) {
         console.log(
           "[PickAnswerQuestion] Question IDs match! Updating votes..."
         );
 
+        // Combine mock data (previous results) with server results (new results)
         const newVotes = currentQuestion.options.map((option) => {
-          const result = questionResults.options.find(
+          // Get mock data (if available)
+          const mockVote = option.number_of_submits ?? 0;
+
+          // Get server data
+          const serverResult = questionResults.options.find(
             (s) => s.option_id === option.option_id
           );
-          return result
-            ? result.number_of_submits ?? result.number_of_submit ?? 0
+          const serverVote = serverResult
+            ? serverResult.number_of_submits ??
+              serverResult.number_of_submit ??
+              0
             : 0;
+
+          // Combine: mock + server
+          const combinedVote = mockVote + serverVote;
+          console.log(
+            `[PickAnswerQuestion] Option ${option.option_id}: mock=${mockVote} + server=${serverVote} = ${combinedVote}`
+          );
+
+          return combinedVote;
         });
 
         console.log(
-          "[PickAnswerQuestion] Votes from questionResults:",
+          "[PickAnswerQuestion] Combined votes from questionResults:",
           newVotes
         );
         setVotes(newVotes);
@@ -201,6 +243,7 @@ export default function ManagerPickAnswerQuestion({
 
   // تایمر
   useEffect(() => {
+    if (!isRemoteReady) return; // don't start timer until remote quiz is ready
     if (showResults) {
       console.log(
         "[PickAnswerQuestion] Timer skipped - results already showing"
@@ -221,6 +264,13 @@ export default function ManagerPickAnswerQuestion({
           clearInterval(interval);
           // Show results when timer ends (fallback if server doesn't send message)
           console.log("[PickAnswerQuestion] Timer ended, showing results");
+
+          // Use mock data from currentQuestion.options if available
+          const mockVotes = currentQuestion.options.map(
+            (opt) => opt.number_of_submits ?? 0
+          );
+          console.log("[PickAnswerQuestion] Using mock votes:", mockVotes);
+          setVotes(mockVotes);
           setShowResults(true);
           return 0;
         }
@@ -232,7 +282,13 @@ export default function ManagerPickAnswerQuestion({
       console.log("[PickAnswerQuestion] Cleaning up timer");
       clearInterval(interval);
     };
-  }, [showResults, currentSlide, currentQuestion.question_time]);
+  }, [
+    showResults,
+    currentSlide,
+    currentQuestion.question_time,
+    currentQuestion.options,
+    isRemoteReady,
+  ]);
 
   return (
     <div
@@ -269,51 +325,60 @@ export default function ManagerPickAnswerQuestion({
           </span>
         </div>
 
-        <h2 className="text-6xl font-bold text-white mb-10 mt-12">
-          {currentQuestion.question_text}
-        </h2>
+        {isRemoteReady ? (
+          <>
+            <h2 className="text-6xl font-bold text-white mb-10 mt-12">
+              {currentQuestion.question_text}
+            </h2>
 
-        {/* تایمر */}
-        {!showResults && timer > 0 && (
-          <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-white">
-            {timer}
+            {/* تایمر */}
+            {!showResults && timer > 0 && (
+              <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-white">
+                {timer}
+              </div>
+            )}
+            {/* نمودار */}
+            <div className="flex justify-around items-end w-full h-[700px] mb-10 px-4">
+              {currentQuestion.options.map((opt, index) => {
+                const isCorrect = index === correctIndex;
+                const isSelected = index === selected;
+                const totalVotes = votes.reduce((sum, v) => sum + v, 0);
+                const height =
+                  showResults && totalVotes > 0
+                    ? (votes[index] / totalVotes) * 100
+                    : 0;
+
+                return (
+                  <div
+                    key={index}
+                    className="flex flex-col items-center justify-end w-1/5 h-full"
+                  >
+                    {showResults && (
+                      <div className="mb-2 text-center text-4xl text-white font-semibold">
+                        {votes[index]}
+                      </div>
+                    )}
+                    <div
+                      className={`w-3/4 rounded-t-lg transition-all duration-1000
+                      ${isCorrect ? "bg-green-500" : "bg-pink-600"}
+                      ${
+                        isSelected && !isCorrect ? "ring-2 ring-pink-800" : ""
+                      }`}
+                      style={{ height: `${height}%` }}
+                    ></div>
+                    <p className="mt-5 text-gray-700 text-3xl font-semibold text-center">
+                      {opt.option_text}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center w-full h-[700px] mb-10 px-4">
+            <div className="text-white/80 text-2xl">Loading quiz…</div>
           </div>
         )}
-        {/* absolute inset-0 flex items-center justify-center */}
-        {/* نمودار */}
-        <div className="flex justify-around items-end w-full h-[700px] mb-10 px-4">
-          {currentQuestion.options.map((opt, index) => {
-            const isCorrect = index === correctIndex;
-            const isSelected = index === selected;
-            const totalVotes = votes.reduce((sum, v) => sum + v, 0);
-            const height =
-              showResults && totalVotes > 0
-                ? (votes[index] / totalVotes) * 100
-                : 0;
-
-            return (
-              <div
-                key={index}
-                className="flex flex-col items-center justify-end w-1/5 h-full"
-              >
-                {showResults && (
-                  <div className="mb-2 text-center text-4xl text-white font-semibold">
-                    {votes[index]}
-                  </div>
-                )}
-                <div
-                  className={`w-3/4 rounded-t-lg transition-all duration-1000
-                  ${isCorrect ? "bg-green-500" : "bg-pink-600"}
-                  ${isSelected && !isCorrect ? "ring-2 ring-pink-800" : ""}`}
-                  style={{ height: `${height}%` }}
-                ></div>
-                <p className="mt-5 text-gray-700 text-3xl font-semibold text-center">
-                  {opt.option_text}
-                </p>
-              </div>
-            );
-          })}
-        </div>
 
         {/* دکمه‌های رأی دادن */}
         {/* {!voted && !showResults && (
