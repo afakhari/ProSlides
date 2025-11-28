@@ -9,7 +9,6 @@ import {
   User_adding,
   QuizSetup,
   createNextPrevious,
-  DefaultGameCode,
   UserColorList,
   DefaultFooterStats,
 } from "../../../data/mockData";
@@ -25,6 +24,7 @@ function calculatePlayersReady({ type, Users }) {
 }
 
 export default function ManagerJoinPage({
+  roomId,
   onNext,
   onPrevious,
   currentSlide = 1,
@@ -47,7 +47,7 @@ export default function ManagerJoinPage({
     createNextPrevious(5, null, null)
   ); // State for tracking navigation (to be sent to server)
   const [_userCount, setUserCount] = useState(User_adding.Users.length); // Track user count for reactivity
-  const [sessionId] = useState("room1"); // Default session ID
+  const [sessionId] = useState(roomId); // Session ID from route
 
   // استفاده از بازیکنان از سرور یا mock data
   const displayUsers = users.length > 0 ? users : User_adding.Users;
@@ -95,6 +95,7 @@ export default function ManagerJoinPage({
 
   // Auto-connect on mount
   useEffect(() => {
+    if (!sessionId) return;
     connect(sessionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

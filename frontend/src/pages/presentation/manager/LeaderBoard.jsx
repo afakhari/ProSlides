@@ -8,10 +8,7 @@ import Footer from "../../../components/Footer";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 import {
-  QuizSetup,
   createNextPrevious,
-  LeaderboardPlayers,
-  DefaultGameCode,
   DefaultFooterStats,
   User_adding,
 } from "../../../data/mockData";
@@ -21,24 +18,46 @@ function ManagerLeaderBoard({
   onPrevious,
   currentSlide = 1,
   totalSlides = 3,
+  quiz,
+  isRemoteReady,
+  roomId,
 }) {
   const { isConnected, sendNavigation, lastMessage } = useWebSocket();
   const { leaderboardResults, processMessage } = useServerData();
 
-  // Use leaderboard from server or default
-  const [players, setPlayers] = useState(LeaderboardPlayers);
+  // Leaderboard from server (no static fallback)
+  const [players, setPlayers] = useState([]);
 
   // Update players when leaderboardResults changes
   useEffect(() => {
-    if (leaderboardResults && leaderboardResults.length > 0) {
-      setPlayers(leaderboardResults);
+    if (!leaderboardResults) return;
+    const results = leaderboardResults.results || leaderboardResults;
+    if (Array.isArray(results) && results.length > 0) {
+      // If objects already contain required fields, use directly; otherwise map
+      if (
+        results[0] &&
+        Object.prototype.hasOwnProperty.call(results[0], "total_points")
+      ) {
+        setPlayers(results);
+      } else {
+        const mapped = results.map((user, index) => ({
+          user_id: user.user_id,
+          name: user.name,
+          character: user.character,
+          color: user.color || "#6366f1",
+          rank: user.rank || index + 1,
+          total_points: user.total_points || 0,
+          new_points: user.new_points || 0,
+        }));
+        setPlayers(mapped);
+      }
     }
   }, [leaderboardResults]);
 
   // Calculate current question number and details from currentSlide
   const currentQuestionIndex = currentSlide - 1;
   const questionNumber = currentQuestionIndex - 1;
-  const totalQuestions = QuizSetup.slides.length;
+  const totalQuestions = quiz?.slides?.length ?? 0;
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
   const [displayedPlayers, setDisplayedPlayers] = useState([]);
@@ -48,7 +67,7 @@ function ManagerLeaderBoard({
   const [_navigationData, setNavigationData] = useState(
     createNextPrevious(5, null, null)
   ); // State for tracking navigation (to be sent to server)
-  const gameCode = DefaultGameCode;
+  const gameCode = roomId;
 
   // Listen for WebSocket messages - Leaderboard updates
   useEffect(() => {
@@ -229,103 +248,109 @@ function ManagerLeaderBoard({
                 className="mt-2 flex-1 overflow-auto w-full min-h-0 no-scrollbar"
                 style={{ maxHeight: "calc(100vh - 260px)" }}
               >
-                <ul className="space-y-4 w-full flex flex-col items-stretch py-2">
-                  <AnimatePresence>
-                    {displayedPlayers.map((p) => {
-                      const isHidden = hiddenNames.includes(p.rank);
-                      const widthPercent = calcPercent(p.total_points);
+                {players.length === 0 ? (
+                  <div className="text-white/80 text-center py-6">
+                    Waiting for leaderboard data…
+                  </div>
+                ) : (
+                  <ul className="space-y-4 w-full flex flex-col items-stretch py-2">
+                    <AnimatePresence>
+                      {displayedPlayers.map((p) => {
+                        const isHidden = hiddenNames.includes(p.rank);
+                        const widthPercent = calcPercent(p.total_points);
 
-                      return (
-                        <motion.li
-                          key={p.rank}
-                          layout
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 20 }}
-                          transition={{
-                            type: "spring",
-                            stiffness: 120,
-                            damping: 18,
-                          }}
-                          className="flex justify-start items-center relative w-[90%] max-w-3xl mx-auto"
-                          onMouseEnter={() => setHovered(p.rank)}
-                          onMouseLeave={() => setHovered(null)}
-                        >
-                          {/* Rank */}
-                          <div className="text-white/90 text-lg font-semibold w-8 text-center rounded-full bg-white/20 mr-3 py-1">
-                            {p.rank}
-                          </div>
+                        return (
+                          <motion.li
+                            key={p.rank}
+                            layout
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            transition={{
+                              type: "spring",
+                              stiffness: 120,
+                              damping: 18,
+                            }}
+                            className="flex justify-start items-center relative w-[90%] max-w-3xl mx-auto"
+                            onMouseEnter={() => setHovered(p.rank)}
+                            onMouseLeave={() => setHovered(null)}
+                          >
+                            {/* Rank */}
+                            <div className="text-white/90 text-lg font-semibold w-8 text-center rounded-full bg-white/20 mr-3 py-1">
+                              {p.rank}
+                            </div>
 
-                          {/* Fixed-width translucent track */}
-                          <div className="relative overlay-hidden bg-white/10 w-full h-14 mr-3">
-                            {/* Colored fill */}
-                            <motion.div
-                              className={`absolute left-0 top-0 h-full z-10`}
-                              style={{ backgroundColor: p.color }}
-                              initial={{ width: 0 }}
-                              animate={{
-                                width: animateBars ? `${widthPercent}%` : 0,
-                              }}
-                              transition={{ duration: 1.3, ease: "easeOut" }}
-                            />
+                            {/* Fixed-width translucent track */}
+                            <div className="relative overlay-hidden bg-white/10 w-full h-14 mr-3">
+                              {/* Colored fill */}
+                              <motion.div
+                                className={`absolute left-0 top-0 h-full z-10`}
+                                style={{ backgroundColor: p.color }}
+                                initial={{ width: 0 }}
+                                animate={{
+                                  width: animateBars ? `${widthPercent}%` : 0,
+                                }}
+                                transition={{ duration: 1.3, ease: "easeOut" }}
+                              />
 
-                            {/* Content on top */}
-                            <div className="relative z-20 flex items-center px-4 py-3 gap-4">
-                              <div className="player-avatar text-2xl">
-                                {p.character}
-                              </div>
-
-                              <div className="flex items-center space-x-3">
-                                <div
-                                  className={`text-white font-medium transition-all duration-200 ${
-                                    isHidden ? "blur-sm select-none" : ""
-                                  }`}
-                                >
-                                  {isHidden ? "****" : p.name}
+                              {/* Content on top */}
+                              <div className="relative z-20 flex items-center px-4 py-3 gap-4">
+                                <div className="player-avatar text-2xl">
+                                  {p.character}
                                 </div>
 
-                                {hovered === p.rank && (
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={() => handleToggleBlur(p.rank)}
-                                      className="bg-white/90 text-gray-800 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                    >
-                                      👁️
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        handleClick("✏️ Edit", p.name)
-                                      }
-                                      className="bg-white/90 text-blue-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                    >
-                                      ✏️
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        handleClick("📞 Call", p.name)
-                                      }
-                                      className="bg-white/90 text-green-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                    >
-                                      📞
-                                    </button>
+                                <div className="flex items-center space-x-3">
+                                  <div
+                                    className={`text-white font-medium transition-all duration-200 ${
+                                      isHidden ? "blur-sm select-none" : ""
+                                    }`}
+                                  >
+                                    {isHidden ? "****" : p.name}
                                   </div>
-                                )}
+
+                                  {hovered === p.rank && (
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleToggleBlur(p.rank)}
+                                        className="bg-white/90 text-gray-800 px-2 py-1 rounded-lg text-sm hover:bg-white"
+                                      >
+                                        👁️
+                                      </button>
+                                      <button
+                                        onClick={() =>
+                                          handleClick("✏️ Edit", p.name)
+                                        }
+                                        className="bg-white/90 text-blue-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
+                                      >
+                                        ✏️
+                                      </button>
+                                      <button
+                                        onClick={() =>
+                                          handleClick("📞 Call", p.name)
+                                        }
+                                        className="bg-white/90 text-green-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
+                                      >
+                                        📞
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          {/* Score */}
-                          <div className="relative w-[10%] text-white font-semibold ml-3">
-                            {Math.round(p.total_points)}p{" "}
-                            <span className="text-white/60 text-sm">
-                              +{Math.round(p.new_points)}
-                            </span>
-                          </div>
-                        </motion.li>
-                      );
-                    })}
-                  </AnimatePresence>
-                </ul>
+                            {/* Score */}
+                            <div className="relative w-[10%] text-white font-semibold ml-3">
+                              {Math.round(p.total_points)}p{" "}
+                              <span className="text-white/60 text-sm">
+                                +{Math.round(p.new_points)}
+                              </span>
+                            </div>
+                          </motion.li>
+                        );
+                      })}
+                    </AnimatePresence>
+                  </ul>
+                )}
               </div>
             </div>
           </section>

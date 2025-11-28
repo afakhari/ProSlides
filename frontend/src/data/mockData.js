@@ -165,7 +165,24 @@ export const PickAnswerResult_FA = {
 // slide_type: 1 = Question, 2 = Leaderboard
 export const QuizSetup = {
   type: 5,
+
   slides: [
+    {
+      slide_type: 2,
+      question_id: 45,
+      question_text: "How are you?",
+      question_time: 10,
+      max_point: 100.0,
+      min_point: 0.0,
+      options: [
+        { option_id: 58, option_text: "Not bad", number_of_submits: 3 },
+        { option_id: 59, option_text: "Very good!", number_of_submits: 7 },
+      ],
+    },
+    {
+      slide_type: 2, // Final leaderboard
+    },
+
     {
       slide_type: 1,
       question_id: 145,
@@ -174,10 +191,30 @@ export const QuizSetup = {
       max_point: 100,
       min_point: 0,
       options: [
-        { option_id: 72, option_text: "Berlin", answer: false },
-        { option_id: 73, option_text: "Madrid", answer: false },
-        { option_id: 74, option_text: "Paris", answer: true },
-        { option_id: 75, option_text: "Rome", answer: false },
+        {
+          option_id: 72,
+          option_text: "Berlin",
+          answer: false,
+          number_of_submits: 2,
+        },
+        {
+          option_id: 73,
+          option_text: "Madrid",
+          answer: false,
+          number_of_submits: 1,
+        },
+        {
+          option_id: 74,
+          option_text: "Paris",
+          answer: true,
+          number_of_submits: 8,
+        },
+        {
+          option_id: 75,
+          option_text: "Rome",
+          answer: false,
+          number_of_submits: 0,
+        },
       ],
     },
     {
@@ -191,10 +228,30 @@ export const QuizSetup = {
       max_point: 80,
       min_point: 0,
       options: [
-        { option_id: 76, option_text: "3", answer: false },
-        { option_id: 77, option_text: "4", answer: true },
-        { option_id: 78, option_text: "5", answer: false },
-        { option_id: 79, option_text: "6", answer: false },
+        {
+          option_id: 76,
+          option_text: "3",
+          answer: false,
+          number_of_submits: 1,
+        },
+        {
+          option_id: 77,
+          option_text: "4",
+          answer: true,
+          number_of_submits: 10,
+        },
+        {
+          option_id: 78,
+          option_text: "5",
+          answer: false,
+          number_of_submits: 0,
+        },
+        {
+          option_id: 79,
+          option_text: "6",
+          answer: false,
+          number_of_submits: 0,
+        },
       ],
     },
     {
@@ -208,10 +265,30 @@ export const QuizSetup = {
       max_point: 70,
       min_point: 0,
       options: [
-        { option_id: 80, option_text: "Venus", answer: false },
-        { option_id: 81, option_text: "Mars", answer: true },
-        { option_id: 82, option_text: "Jupiter", answer: false },
-        { option_id: 83, option_text: "Saturn", answer: false },
+        {
+          option_id: 80,
+          option_text: "Venus",
+          answer: false,
+          number_of_submits: 2,
+        },
+        {
+          option_id: 81,
+          option_text: "Mars",
+          answer: true,
+          number_of_submits: 9,
+        },
+        {
+          option_id: 82,
+          option_text: "Jupiter",
+          answer: false,
+          number_of_submits: 1,
+        },
+        {
+          option_id: 83,
+          option_text: "Saturn",
+          answer: false,
+          number_of_submits: 0,
+        },
       ],
     },
     {
@@ -266,9 +343,6 @@ export const Reactions = [
 // ============================================
 // Game Configuration
 // ============================================
-
-// Default game code
-export const DefaultGameCode = "room3";
 
 // Color list for user names
 export const UserColorList = [

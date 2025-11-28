@@ -1,7 +1,8 @@
 import React, { useState } from "react";
+import ShareMenu from "./ShareMenu";
 
 export default function TopBar({
-  gameCode = "1",
+  gameCode = "ZH4NJ",
   showQRButton = true,
   onQRToggle = null,
   isQROpen = false,
@@ -10,7 +11,7 @@ export default function TopBar({
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
 
-  const joinUrl = `proslides.ir/${gameCode}`;
+  const joinUrl = `ahaslides.com/${gameCode}`;
 
   // Function to copy link to clipboard
   const copyToClipboard = () => {
@@ -35,22 +36,10 @@ export default function TopBar({
     <div
       className={`fixed ${
         qrOpen ? "left-[20%] right-0" : "left-0 right-0"
-      } top-0 h-14 bg-pink-300 flex items-center justify-between px-5 z-50 transition-all duration-300`}
+      } top-0 h-14 bg-pink-200 flex items-center justify-between px-5 z-50 transition-all duration-300`}
     >
-      <div className="flex items-center gap-2">
-        <button
-          className="w-9 h-9 pb-1 bg-black/15 rounded-full flex items-center justify-center text-white cursor-pointer border-none text-base hover:bg-black/25 transition-colors"
-          aria-label="Back"
-        >
-          ←
-        </button>
-        <button
-          onClick={() => setIsMuted(!isMuted)}
-          className="w-8 h-8 bg-black/15 rounded-full flex items-center justify-center text-white cursor-pointer border-none text-base hover:bg-black/25 transition-colors"
-          aria-label={isMuted ? "Unmute" : "Mute"}
-        >
-          {isMuted ? "🔇" : "🔊"}
-        </button>
+      <div className="text-white font-semibold text-base flex items-center gap-1.5 before:content-[''] before:text-xl">
+        
       </div>
 
       {/* Center section with link and QR */}
@@ -62,7 +51,7 @@ export default function TopBar({
             className="cursor-pointer hover:text-blue-200 transition-colors relative"
             title="Click to copy"
           >
-            proslides.ir/{gameCode}
+            ahaslides.com/{gameCode}
             {copiedLink && (
               <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
                 Copied!
@@ -87,13 +76,22 @@ export default function TopBar({
                 className="w-full h-full"
               />
             )}
+            
           </button>
+          
         )}
       </div>
 
-      <div className="text-white font-semibold text-base flex items-center gap-1.5 before:content-['✱'] before:text-xl">
-        ProSlides
+      <div className="flex items-center gap-4">
+        <ShareMenu />
+        <div className="text-white font-semibold text-base flex items-center gap-1.5 before:content-['✱'] before:text-xl">
+          ProSlides
+        </div>
+        
       </div>
+
+              
     </div>
   );
 }
+
