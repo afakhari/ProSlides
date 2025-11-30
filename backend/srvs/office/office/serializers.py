@@ -1,5 +1,9 @@
+import logging
 from rest_framework import serializers
 from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard
+
+
+logger = logging.getLogger(__name__)
 
 
 class OptionSerializer(serializers.ModelSerializer):
@@ -62,8 +66,9 @@ class SlideSerializer(serializers.ModelSerializer):
                 serializer = LeaderboardEntrySerializer(
                     leaderboard_entries, many=True)
                 return serializer.data
-            except Exception as e:
-                print(f"Error in get_leaderboard: {e}")
+            except Exception:
+                logger.exception("Failed to build leaderboard for slide_id=%s question_id=%s",
+                                 obj.pk, getattr(obj, 'question_id', None))
                 return []
         return []
 
