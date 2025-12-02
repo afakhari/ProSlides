@@ -6,6 +6,7 @@ import {
   KeyboardShortcuts,
   Reactions,
 } from "../data/mockData";
+import ReactionEffects from "./ReactionEffects";
 
 export default function Footer({
   currentSlide = 1,
@@ -23,6 +24,7 @@ export default function Footer({
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
   const [chatMessages] = useState(DefaultChatMessages);
+  const [activeEffect, setActiveEffect] = useState(null);
 
   const menuItems = FooterMenuItems;
   const shortcuts = KeyboardShortcuts;
@@ -30,8 +32,25 @@ export default function Footer({
 
   const qrOpen = onQRToggle ? isQROpen : false;
 
+  // Handle reaction click
+  const handleReactionClick = (reactionLabel) => {
+    const effectMap = {
+      Confetti: "confetti",
+      Applause: "applause",
+      Drumroll: "drumroll",
+    };
+    setActiveEffect(effectMap[reactionLabel]);
+    setShowReactions(false);
+  };
+
   return (
     <>
+      {/* Reaction Effects Overlay */}
+      <ReactionEffects
+        effect={activeEffect}
+        onComplete={() => setActiveEffect(null)}
+      />
+
       {/* Footer */}
       <div
         className={`fixed ${
@@ -238,6 +257,7 @@ export default function Footer({
             {reactions.map((reaction, index) => (
               <button
                 key={index}
+                onClick={() => handleReactionClick(reaction.label)}
                 className="flex items-center justify-between w-full px-4 py-3 hover:bg-gray-800 rounded text-white text-left border-none cursor-pointer transition-colors"
               >
                 <div className="flex items-center gap-3">

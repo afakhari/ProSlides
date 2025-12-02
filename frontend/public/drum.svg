@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 180">
+  <!-- Drum body -->
+  <ellipse cx="100" cy="150" rx="80" ry="20" fill="#8B0000"/>
+  <rect x="20" y="70" width="160" height="80" fill="#DC143C"/>
+  <ellipse cx="100" cy="70" rx="80" ry="20" fill="#FFD700"/>
+  
+  <!-- Drum stripes -->
+  <rect x="20" y="85" width="160" height="8" fill="#FFD700"/>
+  <rect x="20" y="110" width="160" height="8" fill="#FFD700"/>
+  <rect x="20" y="135" width="160" height="8" fill="#FFD700"/>
+  
+  <!-- Drum sticks -->
+  <g transform="rotate(-30 140 40)">
+    <rect x="135" y="10" width="8" height="60" rx="4" fill="#DEB887"/>
+    <circle cx="139" cy="10" r="8" fill="#DC143C"/>
+  </g>
+  <g transform="rotate(30 60 40)">
+    <rect x="57" y="10" width="8" height="60" rx="4" fill="#DEB887"/>
+    <circle cx="61" cy="10" r="8" fill="#DC143C"/>
+  </g>
+  
+  <!-- Drum top highlight -->
+  <ellipse cx="100" cy="70" rx="70" ry="15" fill="#FFFACD" opacity="0.3"/>
+</svg>

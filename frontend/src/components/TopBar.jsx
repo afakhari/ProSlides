@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useAudio } from "../contexts/AudioContext";
 
 export default function TopBar({
   gameCode = "1",
@@ -6,7 +7,7 @@ export default function TopBar({
   onQRToggle = null,
   isQROpen = false,
 }) {
-  const [isMuted, setIsMuted] = useState(true);
+  const { isMuted, toggleMute } = useAudio();
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
 
@@ -45,7 +46,7 @@ export default function TopBar({
           ←
         </button>
         <button
-          onClick={() => setIsMuted(!isMuted)}
+          onClick={toggleMute}
           className="w-8 h-8 bg-black/15 rounded-full flex items-center justify-center text-white cursor-pointer border-none text-base hover:bg-black/25 transition-colors"
           aria-label={isMuted ? "Unmute" : "Mute"}
         >
@@ -62,7 +63,7 @@ export default function TopBar({
             className="cursor-pointer hover:text-blue-200 transition-colors relative"
             title="Click to copy"
           >
-            proslides.ir/{gameCode}
+            prosildes.ir/{gameCode}
             {copiedLink && (
               <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
                 Copied!
