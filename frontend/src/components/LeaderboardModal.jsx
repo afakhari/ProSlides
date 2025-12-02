@@ -19,12 +19,12 @@ export default function LeaderboardModal({ isOpen, onClose, players = [] }) {
       ? players
       : defaultPlayers;
 
-  console.log("[LeaderboardModal] Data source:", {
-    fromServer: leaderboardResults && leaderboardResults.length > 0,
-    serverData: leaderboardResults,
-    propsData: players,
-    displayPlayers,
-  });
+  // console.log("[LeaderboardModal] Data source:", {
+  //   fromServer: leaderboardResults && leaderboardResults.length > 0,
+  //   serverData: leaderboardResults,
+  //   propsData: players,
+  //   displayPlayers,
+  // });
 
   // Sort players by rank
   const sortedPlayers = [...displayPlayers].sort((a, b) => a.rank - b.rank);
