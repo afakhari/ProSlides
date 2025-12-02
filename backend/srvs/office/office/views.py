@@ -1,15 +1,20 @@
+import logging
 from rest_framework import viewsets, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.db.models import F, Max
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard
 from .serializers import (
     QuizSerializer, SlideSerializer, QuestionSerializer, OptionSerializer,
-    ExportSerializer, PlayerSessionSerializer
+    ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer
 )
+
+logger = logging.getLogger(__name__)
 
 
 class QuizViewSet(viewsets.ModelViewSet):
@@ -60,8 +65,67 @@ class SlideViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         quiz = get_object_or_404(Quiz, pk=self.kwargs['quiz_pk'])
-        order = self.request.data.get('order')
-        serializer.save(quiz=quiz, order=order)
+        order = serializer.validated_data.get('order')
+        if order is not None and order < 1:
+            raise ValidationError({'order': 'must be a positive integer'})
+
+        with transaction.atomic():
+            if order is not None:
+                Slide.objects.filter(quiz=quiz, order__gte=order).update(order=F('order') + 1)
+            serializer.save(quiz=quiz, order=order)
+
+    def _reorder_existing(self, quiz, instance, new_order):
+        """Shift other slides to keep order unique when one slide moves."""
+        old_order = instance.order
+
+        if new_order is None or new_order == old_order:
+            return
+        if new_order < 1:
+            raise ValidationError({'order': 'must be a positive integer'})
+
+        # Build new ordering in memory
+        slides = list(Slide.objects.filter(quiz=quiz).order_by('order'))
+        slides = [s for s in slides if s.pk != instance.pk]
+        insert_pos = max(0, min(len(slides), new_order - 1))
+        slides.insert(insert_pos, instance)
+
+        # Temporarily shift all orders to avoid unique constraint clashes
+        offset = (Slide.objects.filter(quiz=quiz).aggregate(max_order=Max('order'))['max_order'] or 0) + 1000
+        Slide.objects.filter(quiz=quiz).update(order=F('order') + offset)
+
+        # Apply final ordering
+        for idx, slide in enumerate(slides, start=1):
+            Slide.objects.filter(pk=slide.pk).update(order=idx)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        quiz = instance.quiz
+        new_order = serializer.validated_data.get('order', instance.order)
+
+        try:
+            with transaction.atomic():
+                self._reorder_existing(quiz, instance, new_order)
+                serializer.save(quiz=quiz, order=new_order)
+        except ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception(
+                "Failed to update slide_id=%s quiz_id=%s", instance.id, quiz.id
+            )
+            return Response(
+                {'error': 'Failed to update slide'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
 
 
 class QuestionViewSet(viewsets.ViewSet):
@@ -118,7 +182,17 @@ class QuestionViewSet(viewsets.ViewSet):
 
             serializer = QuestionSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            serializer.save(slide=slide)
+            try:
+                serializer.save(slide=slide)
+            except Exception:
+                logger.exception(
+                    "Failed to create question for slide_id=%s quiz_pk=%s",
+                    slide_pk, quiz_pk
+                )
+                return Response(
+                    {'error': 'Failed to create question'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @swagger_auto_schema(
@@ -137,7 +211,17 @@ class QuestionViewSet(viewsets.ViewSet):
             serializer = QuestionSerializer(
                 question, data=request.data, partial=False)
             serializer.is_valid(raise_exception=True)
-            serializer.save()
+            try:
+                serializer.save()
+            except Exception:
+                logger.exception(
+                    "Failed to update question slide_id=%s quiz_pk=%s",
+                    slide_pk, quiz_pk
+                )
+                return Response(
+                    {'error': 'Failed to update question'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             return Response(serializer.data)
         except Question.DoesNotExist:
             return Response(
@@ -161,7 +245,17 @@ class QuestionViewSet(viewsets.ViewSet):
             serializer = QuestionSerializer(
                 question, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
-            serializer.save()
+            try:
+                serializer.save()
+            except Exception:
+                logger.exception(
+                    "Failed to partially update question slide_id=%s quiz_pk=%s",
+                    slide_pk, quiz_pk
+                )
+                return Response(
+                    {'error': 'Failed to update question'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             return Response(serializer.data)
         except Question.DoesNotExist:
             return Response(
@@ -216,7 +310,14 @@ class OptionViewSet(viewsets.ModelViewSet):
             slide_id=self.kwargs['slide_pk'],
             slide__quiz_id=self.kwargs['quiz_pk']
         )
-        serializer.save(question=question)
+        try:
+            serializer.save(question=question)
+        except Exception:
+            logger.exception(
+                "Failed to create option for question slide_id=%s quiz_pk=%s",
+                self.kwargs['slide_pk'], self.kwargs['quiz_pk']
+            )
+            raise
 
 
 class ContentViewSet(viewsets.ViewSet):
@@ -254,12 +355,21 @@ class ContentViewSet(viewsets.ViewSet):
     def update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت محتوای اسلاید"""
         slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
-        slide.title = request.data.get('title', slide.title)
-        slide.content_text = request.data.get(
-            'content_text', slide.content_text)
-        slide.content_image_url = request.data.get(
-            'content_image_url', slide.content_image_url)
-        slide.save()
+        try:
+            slide.title = request.data.get('title', slide.title)
+            slide.content_text = request.data.get(
+                'content_text', slide.content_text)
+            slide.content_image_url = request.data.get(
+                'content_image_url', slide.content_image_url)
+            slide.save()
+        except Exception:
+            logger.exception(
+                "Failed to update content slide_id=%s quiz_pk=%s", slide_pk, quiz_pk
+            )
+            return Response(
+                {'error': 'Failed to update content'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         return Response({
             'title': slide.title,
@@ -274,10 +384,19 @@ class ContentViewSet(viewsets.ViewSet):
     def destroy(self, request, quiz_pk=None, slide_pk=None):
         """حذف محتوای اسلاید"""
         slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
-        slide.title = None
-        slide.content_text = None
-        slide.content_image_url = None
-        slide.save()
+        try:
+            slide.title = None
+            slide.content_text = None
+            slide.content_image_url = None
+            slide.save()
+        except Exception:
+            logger.exception(
+                "Failed to delete content slide_id=%s quiz_pk=%s", slide_pk, quiz_pk
+            )
+            return Response(
+                {'error': 'Failed to delete content'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         return Response({'status': 'content deleted'})
 
 
@@ -326,6 +445,10 @@ class LeaderboardReceiveView(viewsets.ViewSet):
     )
     def create(self, request, quiz_pk=None, slide_pk=None):
         """دریافت لیدربرد از Rust"""
+        serializer = LeaderboardReceiveSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
         # از روی slide_pk سوال مربوطه را پیدا می‌کنیم
         try:
             question = Question.objects.get(slide_id=slide_pk)
@@ -335,30 +458,63 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        leaderboard_data = request.data.get('leaderboard', [])
+        leaderboard_data = serializer.validated_data.get('leaderboard', [])
+        if not leaderboard_data:
+            return Response(
+                {'error': 'leaderboard list is empty'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         saved_count = 0
+        errors = []
         for entry in leaderboard_data:
-            player_session = PlayerSession.objects.filter(
-                rust_session_id=entry['rust_session_id']
-            ).first()
+            try:
+                rust_id = entry.get('rust_session_id')
+                if not rust_id:
+                    errors.append({'detail': 'rust_session_id missing in entry'})
+                    continue
 
-            if player_session:
-                Leaderboard.objects.update_or_create(
-                    question=question,
-                    rust_session_id=entry['rust_session_id'],
-                    defaults={
-                        'player_name': player_session.player_name,
-                        'avatar': player_session.avatar,
-                        'score': entry['score'],
-                        'time_taken': entry['time_taken'],
-                        'rank': entry['rank']
+                player_session = PlayerSession.objects.filter(
+                    rust_session_id=rust_id
+                ).first()
+
+                if player_session:
+                    Leaderboard.objects.update_or_create(
+                        question=question,
+                        rust_session_id=rust_id,
+                        defaults={
+                            'player_name': player_session.player_name,
+                            'avatar': player_session.avatar,
+                            'score': entry['score'],
+                            'time_taken': entry['time_taken'],
+                            'rank': entry['rank']
+                        }
+                    )
+                    saved_count += 1
+                else:
+                    errors.append(
+                        {
+                            'rust_session_id': rust_id,
+                            'detail': 'player_session not found'
+                        }
+                    )
+            except Exception:
+                logger.exception(
+                    "Failed to save leaderboard entry for question_id=%s", question.pk
+                )
+                errors.append(
+                    {
+                        'rust_session_id': entry.get('rust_session_id'),
+                        'detail': 'internal error while saving entry'
                     }
                 )
-                saved_count += 1
 
-        return Response({
+        response_data = {
             'status': 'leaderboard saved',
             'saved_entries': saved_count,
             'total_entries': len(leaderboard_data)
-        })
+        }
+        if errors:
+            response_data['errors'] = errors
+            return Response(response_data, status=status.HTTP_207_MULTI_STATUS)
+        return Response(response_data)

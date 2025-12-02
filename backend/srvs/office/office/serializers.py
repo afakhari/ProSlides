@@ -1,5 +1,9 @@
+import logging
 from rest_framework import serializers
 from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard
+
+
+logger = logging.getLogger(__name__)
 
 
 class OptionSerializer(serializers.ModelSerializer):
@@ -18,7 +22,7 @@ class OptionSerializer(serializers.ModelSerializer):
 
 
 class QuestionSerializer(serializers.ModelSerializer):
-    question_id = serializers.IntegerField(source='id', read_only=True)
+    question_id = serializers.SerializerMethodField()
     options = OptionSerializer(many=True, read_only=True)
 
     class Meta:
@@ -29,6 +33,10 @@ class QuestionSerializer(serializers.ModelSerializer):
             'partial_scoring', 'options'
         ]
         read_only_fields = ['question_id']
+
+    def get_question_id(self, obj):
+        # OneToOne primary key mapped to slide_id; pk resolves correctly
+        return obj.pk
 
 
 class SlideSerializer(serializers.ModelSerializer):
@@ -58,8 +66,9 @@ class SlideSerializer(serializers.ModelSerializer):
                 serializer = LeaderboardEntrySerializer(
                     leaderboard_entries, many=True)
                 return serializer.data
-            except Exception as e:
-                print(f"Error in get_leaderboard: {e}")
+            except Exception:
+                logger.exception("Failed to build leaderboard for slide_id=%s question_id=%s",
+                                 obj.pk, getattr(obj, 'question_id', None))
                 return []
         return []
 
@@ -104,9 +113,14 @@ class LeaderboardEntrySerializer(serializers.ModelSerializer):
         model = Leaderboard
         fields = ['rust_session_id', 'player_name',
                   'avatar', 'score', 'time_taken', 'rank']
-        read_only_fields = ['rust_session_id', 'player_name',
-                            'avatar', 'score', 'time_taken', 'rank']
+
+
+class LeaderboardReceiveItemSerializer(serializers.Serializer):
+    rust_session_id = serializers.CharField()
+    score = serializers.IntegerField()
+    time_taken = serializers.FloatField()
+    rank = serializers.IntegerField()
 
 
 class LeaderboardReceiveSerializer(serializers.Serializer):
-    leaderboard = LeaderboardEntrySerializer(many=True)
+    leaderboard = LeaderboardReceiveItemSerializer(many=True)

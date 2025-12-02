@@ -72,6 +72,11 @@ class Question(models.Model):
     faster_answers_more_points = models.BooleanField(default=False)
     partial_scoring = models.BooleanField(default=False)
 
+    @property
+    def id(self):
+        # سازگاری با کدی که انتظار فیلد id دارد؛ pk همان slide_id است
+        return self.pk
+
     def __str__(self):
         return self.title or f"Question for Slide {self.slide_id}"
 
