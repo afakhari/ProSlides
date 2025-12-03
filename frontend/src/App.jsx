@@ -37,6 +37,8 @@ export default function App() {
           {/* Manager/Role panel (supports both /manager and any role param) */}
           <Route path="/:roomId/:role/panel" element={<HomePage />} />
           <Route path="/:roomId/:role/panel/editor" element={<EditorPage />} />
+          {/* Catch-all route for any undefined path */}
+          <Route path="*" element={<Waiting />} />
         </Routes>
       </ServerDataProvider>
     </Router>
