@@ -88,7 +88,7 @@ class QuizSerializer(serializers.ModelSerializer):
 
 class ExportSerializer(serializers.ModelSerializer):
     quiz_id = serializers.IntegerField(source='id', read_only=True)
-    slides = SlideSerializer(many=True, read_only=True)
+    slides = serializers.SerializerMethodField()
     background = serializers.SerializerMethodField()
 
     class Meta:
@@ -99,6 +99,34 @@ class ExportSerializer(serializers.ModelSerializer):
         return {
             'color': obj.background_color,
             'image': obj.background_image_url
+        }
+
+    def get_slides(self, obj):
+        """Return slides with an extra leaderboard slide after flagged questions."""
+        serialized_slides = SlideSerializer(obj.slides.all(), many=True).data
+        slides_with_leaderboards = []
+
+        for slide_data in serialized_slides:
+            slides_with_leaderboards.append(slide_data)
+
+            if slide_data.get('slide_type') == 1 and slide_data.get('show_leaderboard_after'):
+                slides_with_leaderboards.append(self._build_leaderboard_slide(slide_data))
+
+        return slides_with_leaderboards
+
+    @staticmethod
+    def _build_leaderboard_slide(question_slide):
+        """Create a lightweight leaderboard slide placeholder."""
+        return {
+            'slide_id': question_slide.get('slide_id'),
+            'slide_type': 3,
+            'order': question_slide.get('order'),
+            'show_leaderboard_after': False,
+            'title': None,
+            'content_text': None,
+            'content_image_url': None,
+            'question': None,
+            'leaderboard': [],
         }
 
 

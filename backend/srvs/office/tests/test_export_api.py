@@ -23,3 +23,23 @@ def test_export_includes_quiz_and_slides(api_client):
     assert slide["slide_type"] == 1
     assert slide["question"]["question_id"] == question.id
     assert len(slide["question"]["options"]) == 3
+
+
+@pytest.mark.django_db
+def test_export_includes_leaderboard_slide_after_question(api_client):
+    quiz = QuizFactory()
+    question = QuestionFactory(slide__quiz=quiz, slide__show_leaderboard_after=True)
+    OptionFactory.create_batch(2, question=question)
+
+    resp = api_client.get(f"/api/quizzes/{quiz.id}/export/")
+    assert resp.status_code == 200
+
+    slides = resp.data["slides"]
+    assert len(slides) == 2
+
+    question_slide, leaderboard_slide = slides
+    assert question_slide["slide_type"] == 1
+    assert leaderboard_slide["slide_type"] == 3
+    assert leaderboard_slide["order"] == question_slide["order"]
+    assert leaderboard_slide["question"] is None
+    assert leaderboard_slide["leaderboard"] == []
