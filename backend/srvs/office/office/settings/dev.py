@@ -7,3 +7,6 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
 # Keep permissive CORS in dev
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+
+# Dev-only utilities
+INSTALLED_APPS += ["django_extensions"]

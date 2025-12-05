@@ -18,3 +18,10 @@ dependencies = [
     "pytest-django>=4.11.1",
     "pytz>=2025.2",
 ]
+
+[dependency-groups]
+dev = [
+    "django-extensions>=4.1",
+    "graphviz>=0.21",
+    "pydot>=4.0.1",
+]
