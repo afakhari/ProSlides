@@ -1,18 +1,25 @@
 import logging
 from rest_framework import viewsets, status
+from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db.models import F, Max
+from django.contrib.auth import get_user_model
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard
 from .serializers import (
     QuizSerializer, SlideSerializer, QuestionSerializer, OptionSerializer,
-    ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer
+    ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer,
+    RegisterSerializer
 )
+from .permissions import IsQuizOwner
+
+User = get_user_model()
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +32,16 @@ class QuizViewSet(viewsets.ModelViewSet):
     """
     queryset = Quiz.objects.all()
     serializer_class = QuizSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
             return Quiz.objects.none()
-        return super().get_queryset()
+        return Quiz.objects.filter(owner=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
     @swagger_auto_schema(
         operation_description="صادرات کامل اطلاعات کوئیز برای Rust",
@@ -61,10 +72,10 @@ class SlideViewSet(viewsets.ModelViewSet):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
             return Slide.objects.none()
-        return Slide.objects.filter(quiz_id=self.kwargs['quiz_pk'])
+        return Slide.objects.filter(quiz_id=self.kwargs['quiz_pk'], quiz__owner=self.request.user)
 
     def perform_create(self, serializer):
-        quiz = get_object_or_404(Quiz, pk=self.kwargs['quiz_pk'])
+        quiz = get_object_or_404(Quiz, pk=self.kwargs['quiz_pk'], owner=self.request.user)
         order = serializer.validated_data.get('order')
         if order is not None and order < 1:
             raise ValidationError({'order': 'must be a positive integer'})
@@ -148,7 +159,7 @@ class QuestionViewSet(viewsets.ViewSet):
         """
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk, slide__quiz_id=quiz_pk, slide__quiz__owner=request.user)
             serializer = QuestionSerializer(question)
             return Response(serializer.data)
         except Question.DoesNotExist:
@@ -171,7 +182,7 @@ class QuestionViewSet(viewsets.ViewSet):
 
         هر اسلاید فقط می‌تواند یک سوال داشته باشد.
         """
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
 
         with transaction.atomic():
             if Question.objects.filter(slide_id=slide_pk).exists():
@@ -207,7 +218,7 @@ class QuestionViewSet(viewsets.ViewSet):
         """آپدیت کامل سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk, slide__quiz_id=quiz_pk, slide__quiz__owner=request.user)
             serializer = QuestionSerializer(
                 question, data=request.data, partial=False)
             serializer.is_valid(raise_exception=True)
@@ -241,7 +252,7 @@ class QuestionViewSet(viewsets.ViewSet):
         """آپدیت جزئی سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk, slide__quiz_id=quiz_pk, slide__quiz__owner=request.user)
             serializer = QuestionSerializer(
                 question, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
@@ -274,7 +285,7 @@ class QuestionViewSet(viewsets.ViewSet):
         """حذف سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk, slide__quiz_id=quiz_pk, slide__quiz__owner=request.user)
             question.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Question.DoesNotExist:
@@ -300,7 +311,8 @@ class OptionViewSet(viewsets.ModelViewSet):
         question = get_object_or_404(
             Question,
             slide_id=self.kwargs['slide_pk'],
-            slide__quiz_id=self.kwargs['quiz_pk']
+            slide__quiz_id=self.kwargs['quiz_pk'],
+            slide__quiz__owner=self.request.user
         )
         return Option.objects.filter(question=question)
 
@@ -333,7 +345,7 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def retrieve(self, request, quiz_pk=None, slide_pk=None):
         """دریافت محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
         return Response({
             'title': slide.title,
             'content_text': slide.content_text,
@@ -354,7 +366,7 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
         try:
             slide.title = request.data.get('title', slide.title)
             slide.content_text = request.data.get(
@@ -383,7 +395,7 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def destroy(self, request, quiz_pk=None, slide_pk=None):
         """حذف محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
         try:
             slide.title = None
             slide.content_text = None
@@ -401,6 +413,7 @@ class ContentViewSet(viewsets.ViewSet):
 
 
 class PlayerSessionViewSet(viewsets.ModelViewSet):
+    permission_classes = [AllowAny]
     """
     مدیریت سشن‌های بازیکنان
 
@@ -413,10 +426,11 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
             return PlayerSession.objects.none()
-        return super().get_queryset()
+        return Quiz.objects.filter(owner=self.request.user)
 
 
 class LeaderboardReceiveView(viewsets.ViewSet):
+    permission_classes = [AllowAny]
     """
     دریافت لیدربرد از Rust
     """
@@ -432,7 +446,7 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                     items=openapi.Schema(
                         type=openapi.TYPE_OBJECT,
                         properties={
-                            'rust_session_id': openapi.Schema(type=openapi.TYPE_STRING),
+                            'user_id': openapi.Schema(type=openapi.TYPE_STRING),
                             'score': openapi.Schema(type=openapi.TYPE_INTEGER),
                             'time_taken': openapi.Schema(type=openapi.TYPE_NUMBER),
                             'rank': openapi.Schema(type=openapi.TYPE_INTEGER),
@@ -469,19 +483,19 @@ class LeaderboardReceiveView(viewsets.ViewSet):
         errors = []
         for entry in leaderboard_data:
             try:
-                rust_id = entry.get('rust_session_id')
+                rust_id = entry.get('user_id')
                 if not rust_id:
-                    errors.append({'detail': 'rust_session_id missing in entry'})
+                    errors.append({'detail': 'user_id missing in entry'})
                     continue
 
                 player_session = PlayerSession.objects.filter(
-                    rust_session_id=rust_id
+                    user_id=rust_id
                 ).first()
 
                 if player_session:
                     Leaderboard.objects.update_or_create(
                         question=question,
-                        rust_session_id=rust_id,
+                        user_id=rust_id,
                         defaults={
                             'player_name': player_session.player_name,
                             'avatar': player_session.avatar,
@@ -494,7 +508,7 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                 else:
                     errors.append(
                         {
-                            'rust_session_id': rust_id,
+                            'user_id': rust_id,
                             'detail': 'player_session not found'
                         }
                     )
@@ -504,7 +518,7 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                 )
                 errors.append(
                     {
-                        'rust_session_id': entry.get('rust_session_id'),
+                        'user_id': entry.get('user_id'),
                         'detail': 'internal error while saving entry'
                     }
                 )
@@ -518,3 +532,14 @@ class LeaderboardReceiveView(viewsets.ViewSet):
             response_data['errors'] = errors
             return Response(response_data, status=status.HTTP_207_MULTI_STATUS)
         return Response(response_data)
+
+
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+

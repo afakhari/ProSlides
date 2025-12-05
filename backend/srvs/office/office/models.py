@@ -7,6 +7,9 @@ class Quiz(models.Model):
     title = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     author = models.CharField(max_length=100, default="anonymous")
+    owner = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="quizzes", null=True, blank=True
+    )
     music_url = models.URLField(
         max_length=500, blank=True, null=True)
     background_color = models.CharField(max_length=7, default='#FFFFFF')
@@ -107,19 +110,19 @@ class Option(models.Model):
 
 
 class PlayerSession(models.Model):
-    rust_session_id = models.CharField(max_length=255, unique=True)
+    user_id = models.CharField(max_length=255, unique=True)
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
     player_name = models.CharField(max_length=100)
     avatar = models.CharField(max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.player_name} ({self.rust_session_id})"
+        return f"{self.player_name} ({self.user_id})"
 
 
 class Leaderboard(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
-    rust_session_id = models.CharField(max_length=255)
+    user_id = models.CharField(max_length=255)
     player_name = models.CharField(max_length=100)
     avatar = models.CharField(max_length=10)
     score = models.IntegerField()
@@ -128,4 +131,4 @@ class Leaderboard(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['question', 'rust_session_id']
+        unique_together = ['question', 'user_id']

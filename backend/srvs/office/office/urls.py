@@ -3,6 +3,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework import routers, permissions
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from . import views
@@ -76,6 +77,11 @@ urlpatterns = [
     # Leaderboard endpoint (nested under question)
     path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/question/leaderboard/',
          leaderboard_view, name='question-leaderboard'),
+
+    # Auth
+    path('api/auth/register/', views.RegisterView.as_view(), name='auth-register'),
+    path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]
 
 # Serve media files in development

@@ -1,5 +1,6 @@
 import logging
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard
 
 
@@ -133,18 +134,18 @@ class ExportSerializer(serializers.ModelSerializer):
 class PlayerSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PlayerSession
-        fields = ['rust_session_id', 'quiz', 'player_name', 'avatar']
+        fields = ['user_id', 'quiz', 'player_name', 'avatar']
 
 
 class LeaderboardEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Leaderboard
-        fields = ['rust_session_id', 'player_name',
+        fields = ['user_id', 'player_name',
                   'avatar', 'score', 'time_taken', 'rank']
 
 
 class LeaderboardReceiveItemSerializer(serializers.Serializer):
-    rust_session_id = serializers.CharField()
+    user_id = serializers.CharField()
     score = serializers.IntegerField()
     time_taken = serializers.FloatField()
     rank = serializers.IntegerField()
@@ -152,3 +153,23 @@ class LeaderboardReceiveItemSerializer(serializers.Serializer):
 
 class LeaderboardReceiveSerializer(serializers.Serializer):
     leaderboard = LeaderboardReceiveItemSerializer(many=True)
+
+
+User = get_user_model()
+
+
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = ["username", "email", "password"]
+
+    def create(self, validated_data):
+        user = User(
+            username=validated_data["username"],
+            email=validated_data.get("email"),
+        )
+        user.set_password(validated_data["password"])
+        user.save()
+        return user

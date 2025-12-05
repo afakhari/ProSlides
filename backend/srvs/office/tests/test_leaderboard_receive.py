@@ -19,13 +19,13 @@ def test_leaderboard_receive_saves_entries(api_client):
     payload = {
         "leaderboard": [
             {
-                "rust_session_id": player.rust_session_id,
+                "user_id": player.user_id,
                 "score": 120,
                 "time_taken": 3.5,
                 "rank": 1,
             },
             {
-                "rust_session_id": "missing-player",
+                "user_id": "missing-player",
                 "score": 50,
                 "time_taken": 4.2,
                 "rank": 2,
@@ -57,7 +57,7 @@ def test_leaderboard_receive_missing_question(api_client):
     payload = {
         "leaderboard": [
             {
-                "rust_session_id": "any",
+                "user_id": "any",
                 "score": 10,
                 "time_taken": 1.0,
                 "rank": 1,
