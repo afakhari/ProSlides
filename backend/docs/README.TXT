@@ -1,0 +1,1 @@
+for watching visual version of models diagram you can go to https://dreampuf.github.io/GraphvizOnline/ and copy models.dot content on it

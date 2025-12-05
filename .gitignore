@@ -64,6 +64,9 @@ db.sqlite3-journal
 #Django Static files
 staticfiles/admin/
 staticfiles/rest_framework/
+backend/srvs/office/staticfiles/
+backend/srvs/office/db.sqlite3
+backend/srvs/office/logs/
 
 # Flask stuff:
 instance/

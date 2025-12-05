@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 
@@ -42,10 +42,22 @@ class Slide(models.Model):
         ordering = ['order']
 
     def save(self, *args, **kwargs):
+        """
+        Assign the next available order under a row lock when order is omitted,
+        to avoid duplicate order values under concurrent inserts.
+        """
         if self.order is None:
-            last_slide = Slide.objects.filter(
-                quiz=self.quiz).order_by('-order').first()
-            self.order = last_slide.order + 1 if last_slide else 1
+            with transaction.atomic():
+                last_slide = (
+                    self.__class__.objects
+                    .select_for_update()
+                    .filter(quiz=self.quiz)
+                    .order_by('-order')
+                    .first()
+                )
+                self.order = last_slide.order + 1 if last_slide else 1
+                super().save(*args, **kwargs)
+                return
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -86,7 +98,7 @@ class Option(models.Model):
         Question, on_delete=models.CASCADE, related_name='options')
     text = models.CharField(max_length=255)
     is_correct = models.BooleanField(default=False)
-    votes = models.IntegerField(default=0)
+    votes = models.PositiveIntegerField(default=0)
     image_url = models.URLField(
         max_length=500, blank=True, null=True)
 
