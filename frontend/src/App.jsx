@@ -194,6 +194,13 @@ function AppPresentation({ roomId, role }) {
 
   /* ---------------- Player Rendering (Server Driven) ---------------- */
   const renderPlayer = () => {
+    console.log(
+      "[App renderPlayer] currentQuestion:",
+      !!currentQuestion,
+      "leaderboardResults:",
+      !!leaderboardResults
+    );
+
     if (currentQuestion) {
       const result = questionResults || partialQuestionResults;
       return (
@@ -206,6 +213,11 @@ function AppPresentation({ roomId, role }) {
     }
 
     if (leaderboardResults) {
+      console.log(
+        "[App renderPlayer] Showing PlayerLeaderBoard with",
+        (leaderboardResults.results || leaderboardResults)?.length,
+        "players"
+      );
       return (
         <PlayerLeaderBoard
           roomId={roomId}

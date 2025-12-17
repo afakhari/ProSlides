@@ -43,9 +43,12 @@ export default function ManagerPickAnswerQuestion({
       };
   const options = currentQuestion.options?.map((opt) => opt.option_text) || [];
 
-  // Find correct answer index (only for question slides, not leaderboard)
-  const correctIndex =
-    currentQuestion?.options?.findIndex((opt) => opt.answer === true) ?? -1;
+  // پیدا کردن همه گزینه‌های صحیح (نه فقط یکی)
+  const correctIndexes =
+    currentQuestion?.options?.reduce((arr, opt, idx) => {
+      if (opt.answer === true) arr.push(idx);
+      return arr;
+    }, []) ?? [];
 
   const [selected, setSelected] = useState(null);
   const [voted, setVoted] = useState(false);
@@ -340,7 +343,7 @@ export default function ManagerPickAnswerQuestion({
             {/* نمودار */}
             <div className="flex justify-around items-end w-full h-[700px] mb-10 px-4">
               {currentQuestion.options.map((opt, index) => {
-                const isCorrect = index === correctIndex;
+                const isCorrect = correctIndexes.includes(index);
                 const isSelected = index === selected;
                 const totalVotes = votes.reduce((sum, v) => sum + v, 0);
                 const height =

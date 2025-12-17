@@ -21,38 +21,64 @@ function ManagerLeaderBoard({
   quiz,
   isRemoteReady,
   roomId,
+  getLeaderboardForQuestion,
 }) {
-  const { isConnected, sendNavigation, lastMessage } = useWebSocket();
-  const { leaderboardResults, processMessage } = useServerData();
+  // فقط داده‌های سرور را از useServerData بگیر، و sendNavigation را از useWebSocket
+  const { isConnected, lastMessage } = useWebSocket();
+  const {
+    managerLastLeaderboard,
+    leaderboardResults,
+    cachedLeaderboardResults,
+    processMessage,
+  } = useServerData();
+  const { sendNavigation } = useWebSocket();
 
-  // Leaderboard from server (no static fallback)
-  const [players, setPlayers] = useState([]);
+  // حذف state داخلی و فقط استفاده از داده context
 
-  // Update players when leaderboardResults changes
-  useEffect(() => {
-    if (!leaderboardResults) return;
-    const results = leaderboardResults.results || leaderboardResults;
-    if (Array.isArray(results) && results.length > 0) {
-      // If objects already contain required fields, use directly; otherwise map
-      if (
-        results[0] &&
-        Object.prototype.hasOwnProperty.call(results[0], "total_points")
-      ) {
-        setPlayers(results);
-      } else {
-        const mapped = results.map((user, index) => ({
-          user_id: user.user_id,
-          name: user.name,
-          character: user.character,
-          color: user.color || "#6366f1",
-          rank: user.rank || index + 1,
-          total_points: user.total_points || 0,
-          new_points: user.new_points || 0,
-        }));
-        setPlayers(mapped);
-      }
-    }
-  }, [leaderboardResults]);
+  // Get the question ID from the previous slide (leaderboard usually comes after a question)
+  // NOTE: slide indices are 0-based, but currentSlide appears to be 1-based
+  // When on a leaderboard slide, the question before it is always at currentSlide - 1
+  const questionSlideIndex = currentSlide - 1;
+  const questionSlide =
+    questionSlideIndex >= 0 && quiz?.slides
+      ? quiz.slides[questionSlideIndex]
+      : null;
+  const previousQuestionId = questionSlide?.question_id;
+
+  // Try to get leaderboard for this specific question, or use current leaderboardResults
+  const leaderboardForThisQuestion = previousQuestionId
+    ? getLeaderboardForQuestion(previousQuestionId)
+    : null;
+  // همیشه آخرین لیدربرد معتبر را نگه دار و اگر داده جدید نیامد، پاک نکن
+  // اگر هیچ داده‌ای برای اسلاید فعلی نبود، آخرین لیدربرد معتبر را نمایش بده
+  let dataToUse =
+    leaderboardResults ||
+    leaderboardForThisQuestion ||
+    cachedLeaderboardResults;
+  if (
+    !dataToUse ||
+    (Array.isArray(dataToUse) && dataToUse.length === 0) ||
+    (dataToUse.results && dataToUse.results.length === 0)
+  ) {
+    dataToUse = managerLastLeaderboard;
+  }
+
+  // فقط داده را از context می‌گیریم و هیچ وقت setPlayers نمی‌زنیم
+  const results = dataToUse?.results || dataToUse || [];
+  // همیشه از rank سرور استفاده کن و هیچوقت index را جایگزین نکن
+  const players = Array.isArray(results)
+    ? results.map((user) => ({
+        user_id: user.user_id,
+        name: user.name,
+        character: user.character,
+        color: user.color || "#6366f1",
+        rank: user.rank, // فقط مقدار سرور
+        total_points: user.total_points || 0,
+        new_points: user.new_points || 0,
+      }))
+    : [];
+  // فقط یک لاگ برای تست مقدار نهایی داده لیدربورد
+  console.log("[ManagerLeaderBoard] players count:", players.length);
 
   // Calculate current question number and details from currentSlide
   const currentQuestionIndex = currentSlide - 1;
@@ -60,7 +86,7 @@ function ManagerLeaderBoard({
   const totalQuestions = quiz?.slides?.length ?? 0;
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
-  const [displayedPlayers, setDisplayedPlayers] = useState([]);
+  // حذف حلقه بی‌پایان: فقط یک state برای انیمیشن
   const [animateBars, setAnimateBars] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
@@ -69,54 +95,7 @@ function ManagerLeaderBoard({
   ); // State for tracking navigation (to be sent to server)
   const gameCode = roomId;
 
-  // Listen for WebSocket messages - Leaderboard updates
-  useEffect(() => {
-    if (!lastMessage) return;
-
-    // Process message through ServerDataContext first
-    processMessage(lastMessage);
-
-    console.log("[LeaderBoard] Received message:", lastMessage);
-
-    // Type 1: Leaderboard Results (from server)
-    if (lastMessage.type === 1 && lastMessage.results) {
-      console.log("[LeaderBoard] Leaderboard updated:", lastMessage.results);
-      const updatedPlayers = lastMessage.results.map((user) => ({
-        user_id: user.user_id,
-        name: user.name,
-        character: user.character,
-        color: user.color || "#6366f1",
-        rank: user.rank,
-        total_points: user.total_points,
-        new_points: user.new_points,
-      }));
-      setPlayers(updatedPlayers);
-    }
-
-    // Type 11: Leaderboard Update (فرضی)
-    if (lastMessage.type === 11 && lastMessage.leaderboard) {
-      console.log(
-        "[LeaderBoard] Leaderboard updated:",
-        lastMessage.leaderboard
-      );
-      setPlayers(lastMessage.leaderboard);
-    }
-
-    // Type 7: if players come with users
-    if (lastMessage.type === 7 && lastMessage.users) {
-      // Convert users to leaderboard format if needed
-      const updatedPlayers = lastMessage.users.map((user, index) => ({
-        user_id: user.user_id,
-        name: user.name,
-        character: user.character,
-        color: user.color || LeaderboardPlayers[index]?.color || "#6366f1",
-        rank: user.rank || index + 1,
-        total_points: user.total_points || 0,
-        new_points: user.new_points || 0,
-      }));
-      setPlayers(updatedPlayers);
-    }
-  }, [lastMessage, processMessage]);
+  // هیچ پیام مستقیمی از سرور پردازش نمی‌شود، فقط داده context استفاده می‌شود
 
   // Handle navigation and update server data
   const handleNext = () => {
@@ -174,24 +153,20 @@ function ManagerLeaderBoard({
     return Math.max(percent, 1);
   };
 
+  // فقط یک بار مقدار اولیه و نهایی را با useMemo محاسبه کن
+  // نمایش بر اساس rank سرور (همیشه درست)
+  // نمایش همیشه بر اساس rank سرور (هم در حالت اولیه و هم نهایی)
+  const displayedPlayers = React.useMemo(() => {
+    return [...players].sort((a, b) => a.rank - b.rank);
+  }, [players]);
+
+  // فقط یک بار انیمیشن را فعال کن
   useEffect(() => {
-    const withOld = players.map((p) => ({
-      ...p,
-      oldScore: p.total_points - p.new_points,
-    }));
-    const sortedOld = [...withOld].sort((a, b) => b.oldScore - a.oldScore);
-    setDisplayedPlayers(sortedOld);
     setAnimateBars(false);
-
-    const t = setTimeout(() => {
-      const sortedNew = [...players].sort(
-        (a, b) => b.total_points - a.total_points
-      );
-      setDisplayedPlayers(sortedNew);
-      setAnimateBars(true);
-    }, 1200);
-
-    return () => clearTimeout(t);
+    if (players.length > 0) {
+      const t = setTimeout(() => setAnimateBars(true), 1200);
+      return () => clearTimeout(t);
+    }
   }, [players]);
 
   return (
@@ -261,7 +236,7 @@ function ManagerLeaderBoard({
 
                         return (
                           <motion.li
-                            key={p.rank}
+                            key={p.user_id}
                             layout
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -406,51 +381,49 @@ function ManagerLeaderBoard({
               </div>
 
               <div className="space-y-3">
-                {[...displayedPlayers]
-                  .sort((a, b) => a.rank - b.rank)
-                  .map((player) => {
-                    const maxScore = Math.max(
-                      ...displayedPlayers.map((p) => p.total_points)
-                    );
-                    const minScore = Math.min(
-                      ...displayedPlayers.map((p) => p.total_points)
-                    );
-                    const calcPercent = (score) => {
-                      if (maxScore === minScore) return 100;
-                      const percent =
-                        ((score - minScore) / (maxScore - minScore)) * 99 + 1;
-                      return Math.max(percent, 1);
-                    };
-                    const barWidth = calcPercent(player.total_points);
+                {displayedPlayers.map((player) => {
+                  const maxScore = Math.max(
+                    ...displayedPlayers.map((p) => p.total_points)
+                  );
+                  const minScore = Math.min(
+                    ...displayedPlayers.map((p) => p.total_points)
+                  );
+                  const calcPercent = (score) => {
+                    if (maxScore === minScore) return 100;
+                    const percent =
+                      ((score - minScore) / (maxScore - minScore)) * 99 + 1;
+                    return Math.max(percent, 1);
+                  };
+                  const barWidth = calcPercent(player.total_points);
 
-                    return (
-                      <div
-                        key={player.user_id}
-                        className="flex items-center gap-4 relative"
-                      >
-                        <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-white font-bold shrink-0">
-                          {player.rank}
-                        </div>
-                        <div className="flex-1 relative">
-                          <div
-                            className="rounded-lg h-16 transition-all duration-1000 flex items-center px-4 gap-3"
-                            style={{
-                              backgroundColor: player.color,
-                              width: `${Math.max(barWidth, 15)}%`,
-                            }}
-                          >
-                            <span className="text-2xl">{player.character}</span>
-                            <span className="text-white font-semibold text-lg">
-                              {player.name}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-white font-bold text-xl shrink-0 w-20 text-right">
-                          {Math.round(player.total_points)}p
+                  return (
+                    <div
+                      key={player.user_id}
+                      className="flex items-center gap-4 relative"
+                    >
+                      <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-white font-bold shrink-0">
+                        {player.rank}
+                      </div>
+                      <div className="flex-1 relative">
+                        <div
+                          className="rounded-lg h-16 transition-all duration-1000 flex items-center px-4 gap-3"
+                          style={{
+                            backgroundColor: player.color,
+                            width: `${Math.max(barWidth, 15)}%`,
+                          }}
+                        >
+                          <span className="text-2xl">{player.character}</span>
+                          <span className="text-white font-semibold text-lg">
+                            {player.name}
+                          </span>
                         </div>
                       </div>
-                    );
-                  })}
+                      <div className="text-white font-bold text-xl shrink-0 w-20 text-right">
+                        {Math.round(player.total_points)}p
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {displayedPlayers.length > 5 && (
