@@ -13,15 +13,30 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
   const startTime = useRef(Date.now());
   const { sendMessage, isConnected } = useWebSocket();
 
-  // ⏱ تایمر
+  // ⏱ تایمر دقیق با اختلاف زمان واقعی (حتی اگر تب عوض شود یا فریز شود)
   useEffect(() => {
-    if (timeLeft > -1) {
-      const timer = setInterval(() => {
-        setTimeLeft((prev) => Math.round(prev * 10 - 1) / 10);
-      }, 100);
-      return () => clearInterval(timer);
-    }
-  }, [timeLeft]);
+    startTime.current = Date.now();
+    setTimeLeft(question.question_time);
+  }, [question.question_id, question.question_time]);
+
+  useEffect(() => {
+    let frameId;
+    let stopped = false;
+    const tick = () => {
+      if (stopped) return;
+      const elapsed = (Date.now() - startTime.current) / 1000;
+      const left = Math.max(0, question.question_time - elapsed);
+      setTimeLeft(left);
+      if (left > 0) {
+        frameId = requestAnimationFrame(tick);
+      }
+    };
+    tick();
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(frameId);
+    };
+  }, [question.question_id, question.question_time]);
 
   const handleSelect = (option) => {
     if (submitted || timeLeft <= -1) return;
@@ -86,7 +101,8 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
 
   const progressPercent =
     timeLeft >= 0 ? (timeLeft / question.question_time) * 100 : 0;
-  const showResults = timeLeft <= -1;
+  // نمایش جواب‌ها اگر تایمر تمام شد یا داده result رسید
+  const showResults = timeLeft <= -1 || !!result;
   const options = question.options || [];
 
   return (

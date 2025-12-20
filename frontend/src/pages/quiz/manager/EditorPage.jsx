@@ -28,7 +28,6 @@ export default function EditorPage() {
         <QuestionEditor
           onBack={() => setStep("select")}
           selectedQuestionType={selectedQuestionType}
-          roomId={roomId}
         />
       )}
     </div>
@@ -64,7 +63,7 @@ function FullScreenTypeSelect({ onSelect }) {
   );
 }
 
-function QuestionEditor({ selectedQuestionType, roomId }) {
+function QuestionEditor({ selectedQuestionType }) {
   const [slides, setSlides] = useState(() => {
     const saved = localStorage.getItem("slides");
     if (saved) {

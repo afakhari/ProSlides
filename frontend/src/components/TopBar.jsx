@@ -11,7 +11,7 @@ export default function TopBar({
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
 
-  const joinUrl = `proslides.ir/${gameCode}`;
+  const joinUrl = `proslides.ir/${gameCode}/player/presentation`;
 
   // Function to copy link to clipboard
   const copyToClipboard = () => {
@@ -63,7 +63,7 @@ export default function TopBar({
             className="cursor-pointer hover:text-blue-200 transition-colors relative"
             title="Click to copy"
           >
-            prosildes.ir/{gameCode}
+            proslides.ir/{gameCode}/player/presentation
             {copiedLink && (
               <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
                 Copied!

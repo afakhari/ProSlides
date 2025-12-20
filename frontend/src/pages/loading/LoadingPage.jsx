@@ -4,7 +4,7 @@ function Waiting() {
   return (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat flex flex-col"
-      style={{ backgroundImage: "url('/src/assets/bg.jpg')" }}
+      style={{ backgroundImage: "url('/bg.jpg')" }}
     >
       <header>
         <div className="flex items-center justify-center text-white px-6 py-7">

@@ -57,6 +57,12 @@ function PlayerLeaderBoard({ players }) {
   const [animateBars, setAnimateBars] = useState(false);
   // const navigate = useNavigate();
 
+  console.log(
+    "[PlayerLeaderBoard] Rendering with",
+    players?.length || 0,
+    "players"
+  );
+
   const handleToggleBlur = (id) => {
     setHiddenNames((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -77,23 +83,21 @@ function PlayerLeaderBoard({ players }) {
   };
 
   useEffect(() => {
-    const withOld = players.map((p) => ({
+    // Ensure players have colors and are displayed as received from server
+    const processedPlayers = players.map((p) => ({
       ...p,
-      oldScore: p.total_points - p.new_points,
+      color: p.color || "#6366f1", // Default color if missing
     }));
-    const sortedOld = [...withOld].sort((a, b) => b.oldScore - a.oldScore);
-    setDisplayedPlayers(sortedOld);
+    setDisplayedPlayers(processedPlayers);
 
+    // Trigger animation
+    setAnimateBars(false);
     const t = setTimeout(() => {
-      const sortedNew = [...players].sort(
-        (a, b) => b.total_points - a.total_points
-      );
-      setDisplayedPlayers(sortedNew);
       setAnimateBars(true);
-    }, 1200);
+    }, 500);
 
     return () => clearTimeout(t);
-  }, []);
+  }, [players]);
 
   return (
     <div
@@ -131,7 +135,7 @@ function PlayerLeaderBoard({ players }) {
 
                   return (
                     <motion.li
-                      key={p.rank}
+                      key={p.user_id || p.rank}
                       layout
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}

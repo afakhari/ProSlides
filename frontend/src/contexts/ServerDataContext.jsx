@@ -55,6 +55,7 @@ export const ServerDataProvider = ({ children }) => {
     setServerData((prev) => ({
       ...prev,
       leaderboardResults: results,
+      currentQuestion: null, // پاک کردن سوال فعلی تا لیدربورد نمایش داده شود
       lastMessageType: 1,
       lastUpdateTime: new Date().toISOString(),
     }));
@@ -77,10 +78,24 @@ export const ServerDataProvider = ({ children }) => {
   // تابع کلی برای پردازش پیام از WebSocket
   const processMessage = useCallback(
     (message) => {
-      if (!message || !message.type) return;
+      if (!message) return;
+
+      // اگر پیام فقط results دارد و type ندارد، آن را به عنوان لیدربورد در نظر بگیر
+      if (!message.type && message.results && Array.isArray(message.results)) {
+        console.log(
+          "[ServerData] Leaderboard message received (no type field):",
+          message.results.length,
+          "players"
+        );
+        updateLeaderboard(message.results);
+        return;
+      }
+
+      if (!message.type) return;
 
       switch (message.type) {
         case 1: // Leaderboard Results
+        case 11: // Leaderboard Results (Type 11)
           if (message.results) {
             updateLeaderboard(message.results);
           }
@@ -122,6 +137,7 @@ export const ServerDataProvider = ({ children }) => {
       updateQuestionResults,
       updateLeaderboard,
       updateCurrentQuestion,
+      updatePartialQuestionResults,
     ]
   );
 
