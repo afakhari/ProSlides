@@ -7,21 +7,28 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
 from django.conf import settings
+from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.shortcuts import get_object_or_404
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.db import transaction
 from django.db.models import Count, F, Max, Sum
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard, EmailVerification
 from .serializers import (
     QuizSerializer, SlideSerializer, QuestionSerializer, OptionSerializer,
     ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer,
     RegisterSerializer, QuizListSerializer, VerifyEmailSerializer,
-    ResendVerificationSerializer
+    ResendVerificationSerializer, PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer
 )
 from .permissions import IsQuizOwner
 
@@ -751,6 +758,8 @@ class LeaderboardReceiveView(viewsets.ViewSet):
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
 
     @swagger_auto_schema(
         operation_description="Register a new user and send a verification code.",
@@ -784,6 +793,8 @@ class RegisterView(APIView):
 
 class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth_verify"
 
     @swagger_auto_schema(
         operation_description="Verify a user's email with a code.",
@@ -845,6 +856,8 @@ class VerifyEmailView(APIView):
 
 class ResendVerificationView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth_verify"
 
     @swagger_auto_schema(
         operation_description="Resend email verification code.",
@@ -893,4 +906,111 @@ class ResendVerificationView(APIView):
         send_verification_email(user, verification.code)
 
         return Response({"detail": "Verification code sent"})
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
+
+    @swagger_auto_schema(
+        operation_description="Request a password reset link.",
+        request_body=PasswordResetRequestSerializer,
+        responses={200: openapi.Response("If the account exists, a reset link was sent")}
+    )
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        user = User.objects.filter(email__iexact=email).first()
+        if user and user.is_active:
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            reset_link = settings.PASSWORD_RESET_URL_TEMPLATE.format(uid=uid, token=token)
+            send_mail(
+                subject="ProSlides password reset",
+                message=(
+                    "Use the link below to reset your password:\n{link}"
+                ).format(link=reset_link),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+
+        return Response({"detail": "If the account exists, a reset link was sent"})
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
+
+    @swagger_auto_schema(
+        operation_description="Confirm password reset using uid and token.",
+        request_body=PasswordResetConfirmSerializer,
+        responses={200: openapi.Response("Password updated")}
+    )
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uid = serializer.validated_data["uid"]
+        token = serializer.validated_data["token"]
+        new_password = serializer.validated_data["new_password"]
+
+        try:
+            user_id = urlsafe_base64_decode(uid).decode()
+        except Exception:
+            return Response({"detail": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(pk=user_id).first()
+        if not user:
+            return Response({"detail": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not default_token_generator.check_token(user, token):
+            return Response({"detail": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+        return Response({"detail": "Password updated"})
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Blacklist a refresh token.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=["refresh"],
+            properties={
+                "refresh": openapi.Schema(type=openapi.TYPE_STRING),
+            },
+        ),
+        responses={200: openapi.Response("Logged out")}
+    )
+    def post(self, request):
+        refresh = request.data.get("refresh")
+        if not refresh:
+            return Response(
+                {"detail": "refresh token is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            token = RefreshToken(refresh)
+            token.blacklist()
+        except Exception:
+            return Response({"detail": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": "Logged out"})
+
+
+class ThrottledTokenObtainPairView(TokenObtainPairView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+
+class ThrottledTokenRefreshView(TokenRefreshView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
 

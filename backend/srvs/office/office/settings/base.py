@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "django_filters",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
 ]
 
 MIDDLEWARE = [
@@ -107,6 +108,10 @@ EMAIL_VERIFICATION_RESEND_SECONDS = env.int(
 EMAIL_VERIFICATION_MAX_ATTEMPTS = env.int(
     "EMAIL_VERIFICATION_MAX_ATTEMPTS", default=5
 )
+PASSWORD_RESET_URL_TEMPLATE = env.str(
+    "PASSWORD_RESET_URL_TEMPLATE",
+    default="https://proslides.ir/reset-password?uid={uid}&token={token}",
+)
 
 # DRF defaults
 REST_FRAMEWORK = {
@@ -116,6 +121,18 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/min",
+        "user": "120/min",
+        "auth": "10/min",
+        "auth_verify": "6/min",
+        "password_reset": "5/min",
+    },
 }
 
 # SimpleJWT (defaults؛ قابل تنظیم با env)
@@ -125,6 +142,8 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "AUTH_HEADER_TYPES": ("Bearer",),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 # CORS (development default; can be overridden per environment)

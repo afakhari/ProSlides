@@ -1,6 +1,9 @@
 import pytest
 from rest_framework.test import APIClient
 
+from django.core import mail
+from django.test import override_settings
+
 from backend.srvs.office.office.models import EmailVerification
 from backend.srvs.office.tests.factories import QuizFactory, UserFactory, SlideFactory
 
@@ -108,3 +111,66 @@ def test_register_rejects_duplicate_email(api_client: APIClient):
     payload2 = {"username": "seconduser", "email": "dup@example.com", "password": "StrongPass!123"}
     resp2 = api_client.post("/api/auth/register/", payload2, format="json")
     assert resp2.status_code == 400
+
+
+@pytest.mark.django_db
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+def test_password_reset_flow(api_client: APIClient):
+    user = UserFactory(email="reset@example.com")
+    user.is_active = True
+    user.set_password("OldStrongPass!123")
+    user.save()
+
+    resp = api_client.post(
+        "/api/auth/password/reset/",
+        {"email": "reset@example.com"},
+        format="json",
+    )
+    assert resp.status_code == 200
+    assert len(mail.outbox) == 1
+
+    body = mail.outbox[0].body
+    assert "reset-password" in body
+    uid = body.split("uid=")[1].split("&")[0]
+    token = body.split("token=")[1].split()[0]
+
+    confirm = api_client.post(
+        "/api/auth/password/reset/confirm/",
+        {"uid": uid, "token": token, "new_password": "NewStrongPass!123"},
+        format="json",
+    )
+    assert confirm.status_code == 200
+
+    login = api_client.post(
+        "/api/auth/token/",
+        {"username": user.username, "password": "NewStrongPass!123"},
+        format="json",
+    )
+    assert login.status_code == 200
+
+
+@pytest.mark.django_db
+def test_logout_blacklists_refresh_token(api_client: APIClient):
+    user = UserFactory()
+    user.is_active = True
+    user.set_password("StrongPass!123")
+    user.save()
+
+    login = api_client.post(
+        "/api/auth/token/",
+        {"username": user.username, "password": "StrongPass!123"},
+        format="json",
+    )
+    assert login.status_code == 200
+    refresh = login.data["refresh"]
+
+    api_client.force_authenticate(user=user)
+    logout = api_client.post("/api/auth/logout/", {"refresh": refresh}, format="json")
+    assert logout.status_code == 200
+
+    refresh_resp = api_client.post(
+        "/api/auth/token/refresh/",
+        {"refresh": refresh},
+        format="json",
+    )
+    assert refresh_resp.status_code == 401

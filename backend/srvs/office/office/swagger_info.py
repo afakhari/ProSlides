@@ -21,6 +21,9 @@ Stable REST API for authoring and running interactive quizzes.
 - `POST /api/auth/verify/`
 - `POST /api/auth/verify/resend/`
 - `POST /api/auth/token/`
+- `POST /api/auth/password/reset/`
+- `POST /api/auth/password/reset/confirm/`
+- `POST /api/auth/logout/`
 - Header: `Authorization: Bearer <access>`
 
 ## Typical Flow
