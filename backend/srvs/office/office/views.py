@@ -68,6 +68,7 @@ class QuizViewSet(viewsets.ModelViewSet):
     queryset = Quiz.objects.all()
     serializer_class = QuizSerializer
     permission_classes = [IsAuthenticated]
+    swagger_tags = ["Quizzes"]
 
     def get_queryset(self):
         # برای Swagger
@@ -96,7 +97,8 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="Return quiz list for user panel.",
-        responses={200: QuizListSerializer(many=True)}
+        responses={200: QuizListSerializer(many=True)},
+        tags=["Quizzes"]
     )
     @action(detail=False, methods=['get'], url_path='list')
     def list_quizzes(self, request):
@@ -106,7 +108,8 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="صادرات کامل اطلاعات کوئیز برای Rust",
-        responses={200: ExportSerializer}
+        responses={200: ExportSerializer},
+        tags=["Quizzes"]
     )
     @action(detail=True, methods=['get'])
     def export(self, request, pk=None):
@@ -122,7 +125,30 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="Calculate final leaderboard for a quiz.",
-        responses={200: openapi.Response("Final leaderboard")}
+        responses={
+            200: openapi.Response(
+                "Final leaderboard",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "leaderboard": openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(
+                                type=openapi.TYPE_OBJECT,
+                                properties={
+                                    "user_id": openapi.Schema(type=openapi.TYPE_STRING),
+                                    "player_name": openapi.Schema(type=openapi.TYPE_STRING),
+                                    "avatar": openapi.Schema(type=openapi.TYPE_STRING),
+                                    "score": openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    "rank": openapi.Schema(type=openapi.TYPE_INTEGER),
+                                },
+                            ),
+                        )
+                    },
+                ),
+            )
+        },
+        tags=["Leaderboard"]
     )
     @action(detail=True, methods=['get'], url_path='final-leaderboard')
     def final_leaderboard(self, request, pk=None):
@@ -172,7 +198,8 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="Reset quiz results and participants.",
-        responses={200: openapi.Response("Results reset")}
+        responses={200: openapi.Response("Results reset")},
+        tags=["Quizzes"]
     )
     @action(detail=True, methods=['post'], url_path='reset-result')
     def reset_result(self, request, pk=None):
@@ -197,7 +224,8 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="Duplicate a quiz with all slides/questions/options.",
-        responses={201: QuizSerializer}
+        responses={201: QuizSerializer},
+        tags=["Quizzes"]
     )
     @action(detail=True, methods=['post'], url_path='duplicate')
     def duplicate(self, request, pk=None):
@@ -262,6 +290,7 @@ class SlideViewSet(viewsets.ModelViewSet):
     هر کوئیز می‌تواند چندین اسلاید از نوع سوال یا محتوا داشته باشد.
     """
     serializer_class = SlideSerializer
+    swagger_tags = ["Slides"]
 
     def get_queryset(self):
         # برای Swagger
@@ -353,7 +382,8 @@ class QuestionViewSet(viewsets.ViewSet):
         responses={
             200: QuestionSerializer,
             404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
-        }
+        },
+        tags=["Questions"]
     )
     def retrieve(self, request, quiz_pk=None, slide_pk=None):
         """
@@ -376,7 +406,8 @@ class QuestionViewSet(viewsets.ViewSet):
         responses={
             201: QuestionSerializer,
             400: openapi.Response("اسلاید از قبل سوال دارد")
-        }
+        },
+        tags=["Questions"]
     )
     def create(self, request, quiz_pk=None, slide_pk=None):
         """
@@ -415,7 +446,8 @@ class QuestionViewSet(viewsets.ViewSet):
         responses={
             200: QuestionSerializer,
             404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
-        }
+        },
+        tags=["Questions"]
     )
     def update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت کامل سوال برای یک اسلاید"""
@@ -450,7 +482,8 @@ class QuestionViewSet(viewsets.ViewSet):
         responses={
             200: QuestionSerializer,
             404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
-        }
+        },
+        tags=["Questions"]
     )
     def partial_update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت جزئی سوال برای یک اسلاید"""
@@ -484,7 +517,8 @@ class QuestionViewSet(viewsets.ViewSet):
         responses={
             204: "سوال با موفقیت حذف شد",
             404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
-        }
+        },
+        tags=["Questions"]
     )
     def destroy(self, request, quiz_pk=None, slide_pk=None):
         """حذف سوال برای یک اسلاید"""
@@ -508,6 +542,7 @@ class OptionViewSet(viewsets.ModelViewSet):
     هر سوال می‌تواند چندین گزینه داشته باشد.
     """
     serializer_class = OptionSerializer
+    swagger_tags = ["Options"]
 
     def get_queryset(self):
         # برای Swagger
@@ -558,7 +593,8 @@ class ContentViewSet(viewsets.ViewSet):
 
     @swagger_auto_schema(
         operation_description="دریافت محتوای اسلاید",
-        responses={200: openapi.Response("محتوا دریافت شد")}
+        responses={200: openapi.Response("محتوا دریافت شد")},
+        tags=["Content"]
     )
     def retrieve(self, request, quiz_pk=None, slide_pk=None):
         """دریافت محتوای اسلاید"""
@@ -579,7 +615,8 @@ class ContentViewSet(viewsets.ViewSet):
                 'content_image_url': openapi.Schema(type=openapi.TYPE_STRING),
             }
         ),
-        responses={200: "محتوا با موفقیت آپدیت شد"}
+        responses={200: "محتوا با موفقیت آپدیت شد"},
+        tags=["Content"]
     )
     def update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت محتوای اسلاید"""
@@ -609,7 +646,8 @@ class ContentViewSet(viewsets.ViewSet):
 
     @swagger_auto_schema(
         operation_description="حذف محتوای اسلاید",
-        responses={200: "محتوا با موفقیت حذف شد"}
+        responses={200: "محتوا با موفقیت حذف شد"},
+        tags=["Content"]
     )
     def destroy(self, request, quiz_pk=None, slide_pk=None):
         """حذف محتوای اسلاید"""
@@ -640,6 +678,7 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
     """
     queryset = PlayerSession.objects.all()
     serializer_class = PlayerSessionSerializer
+    swagger_tags = ["Players"]
 
     def get_queryset(self):
         # برای Swagger
@@ -655,7 +694,7 @@ class LeaderboardReceiveView(viewsets.ViewSet):
     """
 
     @swagger_auto_schema(
-        operation_description="دریافت لیدربرد از Rust",
+        operation_description="Receive leaderboard entries for a question.",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['leaderboard'],
@@ -664,17 +703,50 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Schema(
                         type=openapi.TYPE_OBJECT,
+                        required=['user_id', 'score', 'time_taken', 'rank'],
                         properties={
                             'user_id': openapi.Schema(type=openapi.TYPE_STRING),
                             'score': openapi.Schema(type=openapi.TYPE_INTEGER),
                             'time_taken': openapi.Schema(type=openapi.TYPE_NUMBER),
                             'rank': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        }
-                    )
+                        },
+                    ),
                 )
-            }
+            },
         ),
-        responses={200: "لیدربرد با موفقیت ذخیره شد"}
+        responses={
+            200: openapi.Response(
+                "Leaderboard stored",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_STRING),
+                        'saved_count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'errors': openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(type=openapi.TYPE_OBJECT),
+                        ),
+                    },
+                ),
+            ),
+            207: openapi.Response(
+                "Leaderboard partially stored",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_STRING),
+                        'saved_count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'errors': openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(type=openapi.TYPE_OBJECT),
+                        ),
+                    },
+                ),
+            ),
+            400: openapi.Response("Invalid payload"),
+            404: openapi.Response("No question found for this slide"),
+        },
+        tags=["Leaderboard"]
     )
     def create(self, request, quiz_pk=None, slide_pk=None):
         """دریافت لیدربرد از Rust"""
@@ -764,7 +836,29 @@ class RegisterView(APIView):
     @swagger_auto_schema(
         operation_description="Register a new user and send a verification code.",
         request_body=RegisterSerializer,
-        responses={201: openapi.Response("Verification code sent")}
+        responses={
+            201: openapi.Response(
+                "Verification code sent",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "username": openapi.Schema(type=openapi.TYPE_STRING),
+                        "email": openapi.Schema(type=openapi.TYPE_STRING),
+                        "is_active": openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        "verification_sent": openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                    },
+                ),
+                examples={
+                    "application/json": {
+                        "username": "newuser",
+                        "email": "new@example.com",
+                        "is_active": False,
+                        "verification_sent": True,
+                    }
+                },
+            )
+        },
+        tags=["Auth"]
     )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -799,7 +893,33 @@ class VerifyEmailView(APIView):
     @swagger_auto_schema(
         operation_description="Verify a user's email with a code.",
         request_body=VerifyEmailSerializer,
-        responses={200: openapi.Response("Email verified")}
+        responses={
+            200: openapi.Response(
+                "Email verified",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Email verified"}},
+            ),
+            400: openapi.Response(
+                "Invalid or expired code",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Invalid email or code"}},
+            ),
+            429: openapi.Response(
+                "Too many failed attempts",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Too many failed attempts"}},
+            ),
+        },
+        tags=["Auth"]
     )
     def post(self, request):
         serializer = VerifyEmailSerializer(data=request.data)
@@ -862,7 +982,25 @@ class ResendVerificationView(APIView):
     @swagger_auto_schema(
         operation_description="Resend email verification code.",
         request_body=ResendVerificationSerializer,
-        responses={200: openapi.Response("Verification code sent")}
+        responses={
+            200: openapi.Response(
+                "Verification code sent",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Verification code sent"}},
+            ),
+            429: openapi.Response(
+                "Please wait before requesting a new code",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Please wait before requesting a new code."}},
+            ),
+        },
+        tags=["Auth"]
     )
     def post(self, request):
         serializer = ResendVerificationSerializer(data=request.data)
@@ -916,7 +1054,17 @@ class PasswordResetRequestView(APIView):
     @swagger_auto_schema(
         operation_description="Request a password reset link.",
         request_body=PasswordResetRequestSerializer,
-        responses={200: openapi.Response("If the account exists, a reset link was sent")}
+        responses={
+            200: openapi.Response(
+                "If the account exists, a reset link was sent",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "If the account exists, a reset link was sent"}},
+            )
+        },
+        tags=["Auth"]
     )
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -949,7 +1097,25 @@ class PasswordResetConfirmView(APIView):
     @swagger_auto_schema(
         operation_description="Confirm password reset using uid and token.",
         request_body=PasswordResetConfirmSerializer,
-        responses={200: openapi.Response("Password updated")}
+        responses={
+            200: openapi.Response(
+                "Password updated",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Password updated"}},
+            ),
+            400: openapi.Response(
+                "Invalid token",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Invalid token"}},
+            ),
+        },
+        tags=["Auth"]
     )
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
@@ -988,7 +1154,25 @@ class LogoutView(APIView):
                 "refresh": openapi.Schema(type=openapi.TYPE_STRING),
             },
         ),
-        responses={200: openapi.Response("Logged out")}
+        responses={
+            200: openapi.Response(
+                "Logged out",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Logged out"}},
+            ),
+            400: openapi.Response(
+                "Invalid token",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Invalid token"}},
+            ),
+        },
+        tags=["Auth"]
     )
     def post(self, request):
         refresh = request.data.get("refresh")
@@ -1009,8 +1193,69 @@ class ThrottledTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "auth"
 
+    @swagger_auto_schema(
+        operation_description="Obtain access and refresh tokens.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=["username", "password"],
+            properties={
+                "username": openapi.Schema(type=openapi.TYPE_STRING),
+                "password": openapi.Schema(type=openapi.TYPE_STRING),
+            },
+        ),
+        responses={
+            200: openapi.Response(
+                "Tokens",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "access": openapi.Schema(type=openapi.TYPE_STRING),
+                        "refresh": openapi.Schema(type=openapi.TYPE_STRING),
+                    },
+                ),
+                examples={
+                    "application/json": {
+                        "access": "jwt-access-token",
+                        "refresh": "jwt-refresh-token",
+                    }
+                },
+            ),
+            401: openapi.Response("Invalid credentials"),
+        },
+        tags=["Auth"]
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
 
 class ThrottledTokenRefreshView(TokenRefreshView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "auth"
+
+    @swagger_auto_schema(
+        operation_description="Refresh access token using a refresh token.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=["refresh"],
+            properties={
+                "refresh": openapi.Schema(type=openapi.TYPE_STRING),
+            },
+        ),
+        responses={
+            200: openapi.Response(
+                "Access token",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "access": openapi.Schema(type=openapi.TYPE_STRING),
+                    },
+                ),
+                examples={"application/json": {"access": "new-jwt-access-token"}},
+            ),
+            401: openapi.Response("Invalid token"),
+        },
+        tags=["Auth"]
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
 

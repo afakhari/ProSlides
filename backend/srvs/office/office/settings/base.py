@@ -196,4 +196,14 @@ SWAGGER_SETTINGS = {
     "USE_SESSION_AUTH": False,
     "DOC_EXPANSION": "none",
     "PERSIST_AUTH": True,
+    "TAGS": [
+        {"name": "Auth", "description": "Authentication, verification, and recovery"},
+        {"name": "Quizzes", "description": "Quiz management and metadata"},
+        {"name": "Slides", "description": "Slide CRUD and ordering"},
+        {"name": "Questions", "description": "Question CRUD for slides"},
+        {"name": "Options", "description": "Answer options for questions"},
+        {"name": "Leaderboard", "description": "Leaderboard ingest and aggregation"},
+        {"name": "Players", "description": "Player session management"},
+        {"name": "Content", "description": "Content-only slides"},
+    ],
 }

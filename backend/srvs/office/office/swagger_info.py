@@ -31,6 +31,9 @@ Stable REST API for authoring and running interactive quizzes.
 2) Export quiz data for the player client.
 3) Receive leaderboard updates per question.
 4) Use final leaderboard or reset results if needed.
+
+## Error Format
+- Most validation errors return: `{ "detail": "message" }` or field-based errors.
 """,
     contact=openapi.Contact(name="ProSlides Team", email="support@proslides.com"),
     terms_of_service="https://proslides.ir/terms",
