@@ -104,8 +104,7 @@ urlpatterns = [
     re_path(r'^api/auth/token/refresh/?$', views.ThrottledTokenRefreshView.as_view(), name='token_refresh'),
 
     # API routes
-    re_path(r'^api/?$', include(router.urls)),
-    re_path(r'^api/', include(router.urls)),
+    re_path(r'^api(?:/|$)', include(router.urls)),
 ]
 
 # Serve media files in development

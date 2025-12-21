@@ -125,13 +125,13 @@ class Command(BaseCommand):
     def _question_type(self, rng):
         return "single" if rng.random() < 0.7 else "multiple"
 
-    def _build_leaderboard(self, question, players, per_question, rng):
+    def _build_leaderboard(self, question, players, per_question, rng, player_id_field, leaderboard_id_field):
         selected = rng.sample(players, k=min(len(players), per_question))
         entries = []
         for player in selected:
             entries.append(
                 {
-                    "rust_session_id": player.rust_session_id,
+                    "session_id": getattr(player, player_id_field),
                     "player_name": player.player_name,
                     "avatar": player.avatar,
                     "score": rng.randint(0, question.max_point),
@@ -147,17 +147,16 @@ class Command(BaseCommand):
             if prev_score is None or entry["score"] < prev_score:
                 current_rank = idx + 1
             prev_score = entry["score"]
-            ranked.append(
-                models.Leaderboard(
-                    question=question,
-                    rust_session_id=entry["rust_session_id"],
-                    player_name=entry["player_name"],
-                    avatar=entry["avatar"],
-                    score=entry["score"],
-                    time_taken=entry["time_taken"],
-                    rank=current_rank,
-                )
-            )
+            leaderboard_kwargs = {
+                "question": question,
+                "player_name": entry["player_name"],
+                "avatar": entry["avatar"],
+                "score": entry["score"],
+                "time_taken": entry["time_taken"],
+                "rank": current_rank,
+            }
+            leaderboard_kwargs[leaderboard_id_field] = entry["session_id"]
+            ranked.append(models.Leaderboard(**leaderboard_kwargs))
         return ranked
 
     @transaction.atomic
@@ -175,6 +174,18 @@ class Command(BaseCommand):
         options_created = 0
         players_created = 0
         leaderboards_created = 0
+
+        player_fields = {field.name for field in models.PlayerSession._meta.fields}
+        if "rust_session_id" in player_fields:
+            player_id_field = "rust_session_id"
+        else:
+            player_id_field = "user_id"
+
+        leaderboard_fields = {field.name for field in models.Leaderboard._meta.fields}
+        if "rust_session_id" in leaderboard_fields:
+            leaderboard_id_field = "rust_session_id"
+        else:
+            leaderboard_id_field = "user_id"
 
         for quiz_idx in range(options["quizzes"]):
             owner = owners[quiz_idx % len(owners)] if owners else None
@@ -251,10 +262,12 @@ class Command(BaseCommand):
             for player_idx in range(options["players_per_quiz"]):
                 player_rows.append(
                     models.PlayerSession(
-                        rust_session_id=uuid.uuid4().hex,
-                        quiz=quiz,
-                        player_name=f"Player {quiz_idx + 1}-{player_idx + 1}",
-                        avatar=rng.choice(AVATARS),
+                        **{
+                            player_id_field: uuid.uuid4().hex,
+                            "quiz": quiz,
+                            "player_name": f"Player {quiz_idx + 1}-{player_idx + 1}",
+                            "avatar": rng.choice(AVATARS),
+                        }
                     )
                 )
             models.PlayerSession.objects.bulk_create(player_rows)
@@ -272,6 +285,8 @@ class Command(BaseCommand):
                         player_rows,
                         options["leaderboard_per_question"],
                         rng,
+                        player_id_field,
+                        leaderboard_id_field,
                     )
                 )
             if leaderboard_rows:
