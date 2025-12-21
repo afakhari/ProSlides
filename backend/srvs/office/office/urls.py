@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework import routers, permissions
@@ -15,7 +15,7 @@ schema_view = get_schema_view(
     permission_classes=(permissions.AllowAny,),
 )
 
-router = routers.DefaultRouter()
+router = routers.DefaultRouter(trailing_slash='/?')
 
 # Quiz routes
 router.register(r'quizzes', views.QuizViewSet, basename='quiz')
@@ -66,16 +66,25 @@ urlpatterns = [
     path('api/', include(router.urls)),
 
     # Question endpoint (nested)
-    path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/question/',
-         question_view, name='question-detail'),
+    re_path(
+        r'^api/quizzes/(?P<quiz_pk>\d+)/slides/(?P<slide_pk>\d+)/question/?$',
+        question_view,
+        name='question-detail'
+    ),
 
     # Content endpoint (nested)
-    path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/content/',
-         content_view, name='slide-content'),
+    re_path(
+        r'^api/quizzes/(?P<quiz_pk>\d+)/slides/(?P<slide_pk>\d+)/content/?$',
+        content_view,
+        name='slide-content'
+    ),
 
     # Leaderboard endpoint (nested under question)
-    path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/question/leaderboard/',
-         leaderboard_view, name='question-leaderboard'),
+    re_path(
+        r'^api/quizzes/(?P<quiz_pk>\d+)/slides/(?P<slide_pk>\d+)/question/leaderboard/?$',
+        leaderboard_view,
+        name='question-leaderboard'
+    ),
 
     # Auth
     path('api/auth/register/', views.RegisterView.as_view(), name='auth-register'),
