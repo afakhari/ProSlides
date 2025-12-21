@@ -72,9 +72,6 @@ urlpatterns = [
         name='schema-json'
     ),
 
-    # API routes
-    re_path(r'^api/?', include(router.urls)),
-
     # Question endpoint (nested)
     re_path(
         r'^api/quizzes/(?P<quiz_pk>\d+)/slides/(?P<slide_pk>\d+)/question/?$',
@@ -97,14 +94,18 @@ urlpatterns = [
     ),
 
     # Auth
-    path('api/auth/register/', views.RegisterView.as_view(), name='auth-register'),
-    path('api/auth/verify/', views.VerifyEmailView.as_view(), name='auth-verify'),
-    path('api/auth/verify/resend/', views.ResendVerificationView.as_view(), name='auth-verify-resend'),
-    path('api/auth/password/reset/', views.PasswordResetRequestView.as_view(), name='auth-password-reset'),
-    path('api/auth/password/reset/confirm/', views.PasswordResetConfirmView.as_view(), name='auth-password-reset-confirm'),
-    path('api/auth/logout/', views.LogoutView.as_view(), name='auth-logout'),
-    path('api/auth/token/', views.ThrottledTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/auth/token/refresh/', views.ThrottledTokenRefreshView.as_view(), name='token_refresh'),
+    re_path(r'^api/auth/register/?$', views.RegisterView.as_view(), name='auth-register'),
+    re_path(r'^api/auth/verify/?$', views.VerifyEmailView.as_view(), name='auth-verify'),
+    re_path(r'^api/auth/verify/resend/?$', views.ResendVerificationView.as_view(), name='auth-verify-resend'),
+    re_path(r'^api/auth/password/reset/?$', views.PasswordResetRequestView.as_view(), name='auth-password-reset'),
+    re_path(r'^api/auth/password/reset/confirm/?$', views.PasswordResetConfirmView.as_view(), name='auth-password-reset-confirm'),
+    re_path(r'^api/auth/logout/?$', views.LogoutView.as_view(), name='auth-logout'),
+    re_path(r'^api/auth/token/?$', views.ThrottledTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    re_path(r'^api/auth/token/refresh/?$', views.ThrottledTokenRefreshView.as_view(), name='token_refresh'),
+
+    # API routes
+    re_path(r'^api/?$', include(router.urls)),
+    re_path(r'^api/', include(router.urls)),
 ]
 
 # Serve media files in development
