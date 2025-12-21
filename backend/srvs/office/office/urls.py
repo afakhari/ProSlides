@@ -72,9 +72,6 @@ urlpatterns = [
         name='schema-json'
     ),
 
-    # API routes
-    re_path(r'^api/?', include(router.urls)),
-
     # Question endpoint (nested)
     re_path(
         r'^api/quizzes/(?P<quiz_pk>\d+)/slides/(?P<slide_pk>\d+)/question/?$',
@@ -95,6 +92,10 @@ urlpatterns = [
         leaderboard_view,
         name='question-leaderboard'
     ),
+
+    # API routes
+    re_path(r'^api/?$', include(router.urls)),
+    re_path(r'^api/', include(router.urls)),
 ]
 
 # Serve media files in development
