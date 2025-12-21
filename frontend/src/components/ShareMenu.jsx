@@ -9,17 +9,22 @@ export default function ShareMenu() {
   const [code, setCode] = useState("");
   const [qr, setQr] = useState("");
 
-  const BASE = "https://ahaslides.com/";
+  const BASE = "https://Proslides.com/";
 
   // --- Generate QR Code ---
   useEffect(() => {
-    if (!code) return;
+    if (!code || code.length < 5) {
+      setQr("");   // هنوز QR ساخته نشه
+      return;
+    }
+
     const full = BASE + code;
 
     QRCode.toDataURL(full, { margin: 2 })
       .then((url) => setQr(url))
       .catch((err) => console.error(err));
   }, [code]);
+
 
   return (
     <>
@@ -151,12 +156,16 @@ function InviteAudienceUI({ BASE, code, setCode, qr }) {
         <span className="text-gray-500">{BASE}</span>
         <input
           className="border rounded-lg px-2 py-1 w-40 focus:ring-2 focus:ring-pink-400"
-          placeholder="yourcode"
+          placeholder="room1"
           value={code}
           onChange={(e) => setCode(e.target.value.trim())}
         />
       </div>
-
+      {code.length > 0 && code.length < 5 && (
+        <p className="text-red-500 text-sm mt-3">
+          کد باید حداقل ۵ کاراکتر باشد.
+        </p>
+      )}
       {qr && (
         <div className="mt-6 flex flex-col items-center">
           <p className="text-sm text-gray-600 mb-2">or scan QR</p>
