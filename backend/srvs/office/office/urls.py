@@ -53,7 +53,7 @@ question_view = views.QuestionViewSet.as_view({
 
 urlpatterns = [
     # Admin
-    path('admin/', admin.site.urls),
+    re_path(r'^admin/?', admin.site.urls),
 
     # API Documentation
     re_path(
@@ -73,7 +73,7 @@ urlpatterns = [
     ),
 
     # API routes
-    path('api/', include(router.urls)),
+    re_path(r'^api/?', include(router.urls)),
 
     # Question endpoint (nested)
     re_path(
