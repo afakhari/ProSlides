@@ -117,3 +117,6 @@ LOGGING = {
         "django": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
     },
 }
+
+# Swagger UI compatibility settings
+SWAGGER_USE_COMPAT_RENDERERS = False
