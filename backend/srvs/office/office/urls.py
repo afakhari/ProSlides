@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include, re_path
+from django.views.generic import RedirectView
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework import routers, permissions
@@ -53,24 +54,16 @@ question_view = views.QuestionViewSet.as_view({
 
 urlpatterns = [
     # Admin
-    re_path(r'^admin/?', admin.site.urls),
+    path('admin/', admin.site.urls),
+    re_path(r'^admin$', RedirectView.as_view(url='/admin/', permanent=False)),
 
     # API Documentation
-    re_path(
-        r'^swagger/?$',
-        schema_view.with_ui('swagger', cache_timeout=0),
-        name='schema-swagger-ui'
-    ),
-    re_path(
-        r'^redoc/?$',
-        schema_view.with_ui('redoc', cache_timeout=0),
-        name='schema-redoc'
-    ),
-    re_path(
-        r'^swagger\\.json/?$',
-        schema_view.without_ui(cache_timeout=0),
-        name='schema-json'
-    ),
+    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    re_path(r'^swagger$', RedirectView.as_view(url='/swagger/', permanent=False)),
+    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    re_path(r'^redoc$', RedirectView.as_view(url='/redoc/', permanent=False)),
+    path('swagger.json/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
+    re_path(r'^swagger\\.json$', RedirectView.as_view(url='/swagger.json/', permanent=False)),
 
     # Question endpoint (nested)
     re_path(
@@ -104,7 +97,8 @@ urlpatterns = [
     re_path(r'^api/auth/token/refresh/?$', views.ThrottledTokenRefreshView.as_view(), name='token_refresh'),
 
     # API routes
-    re_path(r'^api(?:/|$)', include(router.urls)),
+    path('api/', include(router.urls)),
+    re_path(r'^api$', RedirectView.as_view(url='/api/', permanent=False)),
 ]
 
 # Serve media files in development
