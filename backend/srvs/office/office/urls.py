@@ -94,8 +94,7 @@ urlpatterns = [
     ),
 
     # API routes
-    re_path(r'^api/?$', include(router.urls)),
-    re_path(r'^api/', include(router.urls)),
+    re_path(r'^api(?:/|$)', include(router.urls)),
 ]
 
 # Serve media files in development
