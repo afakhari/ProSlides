@@ -1,11 +1,14 @@
 import logging
 import re
+import secrets
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.conf import settings
+from django.core.mail import send_mail
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db.models import Count, F, Max, Sum
@@ -13,17 +16,36 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard
+from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard, EmailVerification
 from .serializers import (
     QuizSerializer, SlideSerializer, QuestionSerializer, OptionSerializer,
     ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer,
-    RegisterSerializer, QuizListSerializer
+    RegisterSerializer, QuizListSerializer, VerifyEmailSerializer,
+    ResendVerificationSerializer
 )
 from .permissions import IsQuizOwner
 
 User = get_user_model()
 
 logger = logging.getLogger(__name__)
+
+
+def generate_verification_code():
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def send_verification_email(user, code):
+    ttl_minutes = settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
+    send_mail(
+        subject="Your ProSlides verification code",
+        message=(
+            "Your verification code is {code}. "
+            "It expires in {ttl} minutes."
+        ).format(code=code, ttl=ttl_minutes),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
 
 
 def touch_quiz(quiz_id):
@@ -730,9 +752,145 @@ class LeaderboardReceiveView(viewsets.ViewSet):
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        operation_description="Register a new user and send a verification code.",
+        request_body=RegisterSerializer,
+        responses={201: openapi.Response("Verification code sent")}
+    )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        user = serializer.save()
+
+        verification = EmailVerification.objects.create(
+            user=user,
+            code=generate_verification_code(),
+            expires_at=timezone.now() + timezone.timedelta(
+                minutes=settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
+            ),
+        )
+        send_verification_email(user, verification.code)
+
+        return Response(
+            {
+                "username": user.username,
+                "email": user.email,
+                "is_active": user.is_active,
+                "verification_sent": True,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class VerifyEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="Verify a user's email with a code.",
+        request_body=VerifyEmailSerializer,
+        responses={200: openapi.Response("Email verified")}
+    )
+    def post(self, request):
+        serializer = VerifyEmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        code = serializer.validated_data["code"]
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            return Response(
+                {"detail": "Invalid email or code"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if user.is_active:
+            return Response({"detail": "Email already verified"})
+
+        verification = EmailVerification.objects.filter(user=user, is_verified=False).first()
+        if not verification or verification.code is None:
+            return Response(
+                {"detail": "Verification code not found"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if verification.is_expired():
+            return Response(
+                {"detail": "Verification code expired"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if verification.attempts >= settings.EMAIL_VERIFICATION_MAX_ATTEMPTS:
+            return Response(
+                {"detail": "Too many failed attempts"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        if code != verification.code:
+            verification.attempts += 1
+            verification.save(update_fields=["attempts"])
+            return Response(
+                {"detail": "Invalid email or code"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+        verification.is_verified = True
+        verification.verified_at = timezone.now()
+        verification.code = None
+        verification.save(update_fields=["is_verified", "verified_at", "code"])
+
+        return Response({"detail": "Email verified"})
+
+
+class ResendVerificationView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="Resend email verification code.",
+        request_body=ResendVerificationSerializer,
+        responses={200: openapi.Response("Verification code sent")}
+    )
+    def post(self, request):
+        serializer = ResendVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            return Response(
+                {"detail": "If the account exists, a code was sent."},
+                status=status.HTTP_200_OK,
+            )
+
+        if user.is_active:
+            return Response({"detail": "Email already verified"})
+
+        verification, _ = EmailVerification.objects.get_or_create(
+            user=user,
+            defaults={
+                "code": generate_verification_code(),
+                "expires_at": timezone.now() + timezone.timedelta(
+                    minutes=settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
+                ),
+            },
+        )
+
+        resend_wait = settings.EMAIL_VERIFICATION_RESEND_SECONDS
+        if verification.sent_at and (timezone.now() - verification.sent_at).total_seconds() < resend_wait:
+            return Response(
+                {"detail": "Please wait before requesting a new code."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        verification.code = generate_verification_code()
+        verification.attempts = 0
+        verification.is_verified = False
+        verification.expires_at = timezone.now() + timezone.timedelta(
+            minutes=settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
+        )
+        verification.save()
+        send_verification_email(user, verification.code)
+
+        return Response({"detail": "Verification code sent"})
 

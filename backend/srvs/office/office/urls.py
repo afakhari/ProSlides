@@ -80,6 +80,8 @@ urlpatterns = [
 
     # Auth
     path('api/auth/register/', views.RegisterView.as_view(), name='auth-register'),
+    path('api/auth/verify/', views.VerifyEmailView.as_view(), name='auth-verify'),
+    path('api/auth/verify/resend/', views.ResendVerificationView.as_view(), name='auth-verify-resend'),
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]

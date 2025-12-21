@@ -18,6 +18,8 @@ Stable REST API for authoring and running interactive quizzes.
 
 ## Authentication
 - `POST /api/auth/register/`
+- `POST /api/auth/verify/`
+- `POST /api/auth/verify/resend/`
 - `POST /api/auth/token/`
 - Header: `Authorization: Bearer <access>`
 

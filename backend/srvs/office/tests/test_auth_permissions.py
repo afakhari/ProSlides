@@ -1,6 +1,7 @@
 import pytest
 from rest_framework.test import APIClient
 
+from backend.srvs.office.office.models import EmailVerification
 from backend.srvs.office.tests.factories import QuizFactory, UserFactory, SlideFactory
 
 
@@ -10,6 +11,12 @@ def test_register_creates_user(api_client: APIClient):
     resp = api_client.post("/api/auth/register/", payload, format="json")
     assert resp.status_code == 201
     assert resp.data["username"] == "newuser"
+    assert resp.data["is_active"] is False
+    assert resp.data["verification_sent"] is True
+
+    verification = EmailVerification.objects.filter(user__email="new@example.com").first()
+    assert verification is not None
+    assert verification.code is not None
 
 
 @pytest.mark.django_db
@@ -60,3 +67,44 @@ def test_export_requires_auth(api_client: APIClient):
     api_client.force_authenticate(user=quiz.owner)
     resp_auth = api_client.get(f"/api/quizzes/{quiz.id}/export/")
     assert resp_auth.status_code == 200
+
+
+@pytest.mark.django_db
+def test_verify_email_activates_user(api_client: APIClient):
+    payload = {"username": "verifyuser", "email": "verify@example.com", "password": "StrongPass!123"}
+    resp = api_client.post("/api/auth/register/", payload, format="json")
+    assert resp.status_code == 201
+
+    verification = EmailVerification.objects.get(user__email="verify@example.com")
+    verify_payload = {"email": "verify@example.com", "code": verification.code}
+    verify_resp = api_client.post("/api/auth/verify/", verify_payload, format="json")
+    assert verify_resp.status_code == 200
+
+    verification.refresh_from_db()
+    assert verification.is_verified is True
+    assert verification.code is None
+
+
+@pytest.mark.django_db
+def test_verify_email_rejects_wrong_code(api_client: APIClient):
+    payload = {"username": "wrongcode", "email": "wrong@example.com", "password": "StrongPass!123"}
+    api_client.post("/api/auth/register/", payload, format="json")
+    verification = EmailVerification.objects.get(user__email="wrong@example.com")
+
+    verify_payload = {"email": "wrong@example.com", "code": "000000"}
+    resp = api_client.post("/api/auth/verify/", verify_payload, format="json")
+    assert resp.status_code == 400
+
+    verification.refresh_from_db()
+    assert verification.attempts == 1
+
+
+@pytest.mark.django_db
+def test_register_rejects_duplicate_email(api_client: APIClient):
+    payload = {"username": "firstuser", "email": "dup@example.com", "password": "StrongPass!123"}
+    resp1 = api_client.post("/api/auth/register/", payload, format="json")
+    assert resp1.status_code == 201
+
+    payload2 = {"username": "seconduser", "email": "dup@example.com", "password": "StrongPass!123"}
+    resp2 = api_client.post("/api/auth/register/", payload2, format="json")
+    assert resp2.status_code == 400

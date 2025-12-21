@@ -84,6 +84,30 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Email defaults
+EMAIL_BACKEND = env.str(
+    "EMAIL_BACKEND",
+    default="django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend",
+)
+DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", default="no-reply@proslides.ir")
+EMAIL_HOST = env.str("EMAIL_HOST", default="localhost")
+EMAIL_PORT = env.int("EMAIL_PORT", default=25)
+EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+
+# Email verification policy
+EMAIL_VERIFICATION_CODE_TTL_MINUTES = env.int(
+    "EMAIL_VERIFICATION_CODE_TTL_MINUTES", default=10
+)
+EMAIL_VERIFICATION_RESEND_SECONDS = env.int(
+    "EMAIL_VERIFICATION_RESEND_SECONDS", default=60
+)
+EMAIL_VERIFICATION_MAX_ATTEMPTS = env.int(
+    "EMAIL_VERIFICATION_MAX_ATTEMPTS", default=5
+)
+
 # DRF defaults
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -140,3 +164,17 @@ LOGGING = {
 
 # Swagger UI compatibility settings
 SWAGGER_USE_COMPAT_RENDERERS = False
+
+SWAGGER_SETTINGS = {
+    "SECURITY_DEFINITIONS": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": 'JWT Authorization header using the Bearer scheme. Example: "Authorization: Bearer <token>"',
+        }
+    },
+    "USE_SESSION_AUTH": False,
+    "DOC_EXPANSION": "none",
+    "PERSIST_AUTH": True,
+}
