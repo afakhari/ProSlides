@@ -4,32 +4,30 @@ swagger_info = openapi.Info(
     title="ProSlides API",
     default_version="v1",
     description="""
-# ProSlides API Docs
+# ProSlides API
 
-مدیریت کوییز شبیه AhaSlides/Kahoot:
-- مالک‌ها با JWT لاگین می‌کنند و فقط روی کوییزهای خودشان CRUD دارند.
-- شرکت‌کننده‌ها بدون لاگین فقط از مسیرهای عمومی استفاده می‌کنند (جلسه بازیکن، لیدربورد).
+Stable REST API for authoring and running interactive quizzes.
 
-## معماری
-- Django REST Framework (CRUD داده)
-- SimpleJWT (Bearer Token)
-- انتشار کوییز به WebSocket (Rust) و UI
+## Core Concepts
+- **Quiz**: top-level container.
+- **Slide**: ordered items inside a quiz (question or content).
+- **Question**: configuration and scoring rules for question slides.
+- **Option**: available answers for a question.
+- **Player Session**: live participant record.
+- **Leaderboard**: per-question scoring records.
 
-## احراز هویت
-- `POST /api/auth/register/` ثبت‌نام مالک
-- `POST /api/auth/token/` دریافت Access/Refresh
-- هدر: `Authorization: Bearer <access>`
+## Authentication
+- `POST /api/auth/register/`
+- `POST /api/auth/token/`
+- Header: `Authorization: Bearer <access>`
 
-## دسترسی‌ها
-- CRUD کوییز/اسلاید/سؤال/گزینه فقط برای owner
-- مسیرهای عمومی: `leaderboard receive` و `player-sessions` بدون توکن
-- `export` نیاز به توکن مالک دارد.
-
-## جریان نمونه
-1) Register → Token → ساخت کوییز و اسلاید
-2) Export برای اجرای WebSocket
-3) بازیکنان نتایج را از endpoint عمومی ارسال می‌کنند
+## Typical Flow
+1) Create a quiz and slides.
+2) Export quiz data for the player client.
+3) Receive leaderboard updates per question.
+4) Use final leaderboard or reset results if needed.
 """,
     contact=openapi.Contact(name="ProSlides Team", email="support@proslides.com"),
+    terms_of_service="https://proslides.ir/terms",
     license=openapi.License(name="MIT License"),
 )
