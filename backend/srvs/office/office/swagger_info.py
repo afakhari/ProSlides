@@ -16,11 +16,6 @@ Stable REST API for authoring and running interactive quizzes.
 - **Player Session**: live participant record.
 - **Leaderboard**: per-question scoring records.
 
-## Authentication
-- `POST /api/auth/register/`
-- `POST /api/auth/token/`
-- Header: `Authorization: Bearer <access>`
-
 ## Typical Flow
 1) Create a quiz and slides.
 2) Export quiz data for the player client.

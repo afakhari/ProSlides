@@ -69,11 +69,6 @@ class QuizViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['get'], url_path='list')
     def list_quizzes(self, request):
-        if not (request.user and request.user.is_authenticated) and not request.query_params.get('author'):
-            return Response(
-                {'detail': 'author is required when not authenticated'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
         queryset = self._filter_quizzes_for_request(request, self.get_queryset())
         queryset = queryset.annotate(slides_count=Count('slides', distinct=True))
         serializer = QuizListSerializer(queryset, many=True)
