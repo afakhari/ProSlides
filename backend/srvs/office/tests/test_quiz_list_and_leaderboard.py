@@ -10,16 +10,19 @@ from backend.srvs.office.tests.factories import (
 
 
 @pytest.mark.django_db
-def test_quiz_list_requires_author_when_unauthenticated(api_client):
+def test_quiz_list_returns_results(api_client):
     quiz = QuizFactory(author="alice")
+    QuizFactory(author="bob")
 
     resp = api_client.get("/api/quizzes/list/")
-    assert resp.status_code == 400
+    assert resp.status_code == 200
+    assert resp.data["count"] == 2
+    assert len(resp.data["results"]) == 2
 
     resp = api_client.get("/api/quizzes/list/?author=alice")
     assert resp.status_code == 200
-    assert len(resp.data) == 1
-    assert resp.data[0]["quiz_id"] == quiz.id
+    assert resp.data["count"] == 1
+    assert resp.data["results"][0]["quiz_id"] == quiz.id
 
 
 @pytest.mark.django_db

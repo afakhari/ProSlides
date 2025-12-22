@@ -17,6 +17,7 @@ from .serializers import (
     ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer,
     QuizListSerializer
 )
+from .pagination import StandardResultsSetPagination
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class QuizViewSet(viewsets.ModelViewSet):
     """
     queryset = Quiz.objects.all()
     serializer_class = QuizSerializer
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         # برای Swagger
@@ -65,12 +67,49 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="Return quiz list for user panel.",
-        responses={200: QuizListSerializer(many=True)}
+        manual_parameters=[
+            openapi.Parameter(
+                "page",
+                openapi.IN_QUERY,
+                description="Page number",
+                type=openapi.TYPE_INTEGER,
+            ),
+            openapi.Parameter(
+                "page_size",
+                openapi.IN_QUERY,
+                description="Page size (max 100)",
+                type=openapi.TYPE_INTEGER,
+            ),
+        ],
+        responses={
+            200: openapi.Response(
+                "Paginated quiz list",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                        "page": openapi.Schema(type=openapi.TYPE_INTEGER),
+                        "page_size": openapi.Schema(type=openapi.TYPE_INTEGER),
+                        "total_pages": openapi.Schema(type=openapi.TYPE_INTEGER),
+                        "next": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                        "previous": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                        "results": openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(type=openapi.TYPE_OBJECT),
+                        ),
+                    },
+                ),
+            )
+        },
     )
     @action(detail=False, methods=['get'], url_path='list')
     def list_quizzes(self, request):
         queryset = self._filter_quizzes_for_request(request, self.get_queryset())
         queryset = queryset.annotate(slides_count=Count('slides', distinct=True))
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = QuizListSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
         serializer = QuizListSerializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -231,6 +270,7 @@ class SlideViewSet(viewsets.ModelViewSet):
     هر کوئیز می‌تواند چندین اسلاید از نوع سوال یا محتوا داشته باشد.
     """
     serializer_class = SlideSerializer
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         # برای Swagger
@@ -606,6 +646,7 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
     """
     queryset = PlayerSession.objects.all()
     serializer_class = PlayerSessionSerializer
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         # برای Swagger

@@ -21,6 +21,11 @@ Stable REST API for authoring and running interactive quizzes.
 2) Export quiz data for the player client.
 3) Receive leaderboard updates per question.
 4) Use final leaderboard or reset results if needed.
+
+## Pagination
+Endpoints that return lists use page-number pagination.
+- Query params: `page`, `page_size`
+- Response shape: `{ count, page, page_size, total_pages, next, previous, results }`
 """,
     contact=openapi.Contact(name="ProSlides Team", email="support@proslides.com"),
     terms_of_service="https://proslides.ir/terms",
