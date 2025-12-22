@@ -136,7 +136,7 @@ class QuizViewSet(viewsets.ModelViewSet):
                             items=openapi.Schema(
                                 type=openapi.TYPE_OBJECT,
                                 properties={
-                                    "user_id": openapi.Schema(type=openapi.TYPE_STRING),
+                                    "rust_session_id": openapi.Schema(type=openapi.TYPE_STRING),
                                     "player_name": openapi.Schema(type=openapi.TYPE_STRING),
                                     "avatar": openapi.Schema(type=openapi.TYPE_STRING),
                                     "score": openapi.Schema(type=openapi.TYPE_INTEGER),
@@ -156,29 +156,29 @@ class QuizViewSet(viewsets.ModelViewSet):
         totals = (
             Leaderboard.objects
             .filter(question__slide__quiz=quiz)
-            .values('user_id')
+            .values('rust_session_id')
             .annotate(score=Sum('score'))
-            .order_by('-score', 'user_id')
+            .order_by('-score', 'rust_session_id')
         )
         session_map = PlayerSession.objects.filter(
             quiz=quiz
-        ).in_bulk(field_name='user_id')
+        ).in_bulk(field_name='rust_session_id')
 
         fallback_rows = (
             Leaderboard.objects
             .filter(question__slide__quiz=quiz)
-            .values('user_id')
+            .values('rust_session_id')
             .annotate(player_name=Max('player_name'), avatar=Max('avatar'))
         )
-        fallback_map = {row['user_id']: row for row in fallback_rows}
+        fallback_map = {row['rust_session_id']: row for row in fallback_rows}
 
         entries = []
         for row in totals:
-            user_id = row['user_id']
-            session = session_map.get(user_id)
-            fallback = fallback_map.get(user_id, {})
+            rust_id = row['rust_session_id']
+            session = session_map.get(rust_id)
+            fallback = fallback_map.get(rust_id, {})
             entries.append({
-                'user_id': user_id,
+                'rust_session_id': rust_id,
                 'player_name': session.player_name if session else fallback.get('player_name'),
                 'avatar': session.avatar if session else fallback.get('avatar'),
                 'score': row['score'] or 0,
@@ -703,9 +703,9 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Schema(
                         type=openapi.TYPE_OBJECT,
-                        required=['user_id', 'score', 'time_taken', 'rank'],
+                        required=['rust_session_id', 'score', 'time_taken', 'rank'],
                         properties={
-                            'user_id': openapi.Schema(type=openapi.TYPE_STRING),
+                            'rust_session_id': openapi.Schema(type=openapi.TYPE_STRING),
                             'score': openapi.Schema(type=openapi.TYPE_INTEGER),
                             'time_taken': openapi.Schema(type=openapi.TYPE_NUMBER),
                             'rank': openapi.Schema(type=openapi.TYPE_INTEGER),
@@ -777,19 +777,19 @@ class LeaderboardReceiveView(viewsets.ViewSet):
         errors = []
         for entry in leaderboard_data:
             try:
-                rust_id = entry.get('user_id')
+                rust_id = entry.get('rust_session_id')
                 if not rust_id:
-                    errors.append({'detail': 'user_id missing in entry'})
+                    errors.append({'detail': 'rust_session_id missing in entry'})
                     continue
 
                 player_session = PlayerSession.objects.filter(
-                    user_id=rust_id
+                    rust_session_id=rust_id
                 ).first()
 
                 if player_session:
                     Leaderboard.objects.update_or_create(
                         question=question,
-                        user_id=rust_id,
+                        rust_session_id=rust_id,
                         defaults={
                             'player_name': player_session.player_name,
                             'avatar': player_session.avatar,
@@ -802,7 +802,7 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                 else:
                     errors.append(
                         {
-                            'user_id': rust_id,
+                            'rust_session_id': rust_id,
                             'detail': 'player_session not found'
                         }
                     )
@@ -812,7 +812,7 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                 )
                 errors.append(
                     {
-                        'user_id': entry.get('user_id'),
+                        'rust_session_id': entry.get('rust_session_id'),
                         'detail': 'internal error while saving entry'
                     }
                 )

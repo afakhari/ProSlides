@@ -74,7 +74,7 @@ class PlayerSessionFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.PlayerSession
 
-    user_id = factory.Faker("uuid4")
+    rust_session_id = factory.Faker("uuid4")
     quiz = factory.SubFactory(QuizFactory)
     player_name = factory.Faker("name")
     avatar = factory.Faker("emoji")

@@ -161,23 +161,41 @@ class ExportSerializer(serializers.ModelSerializer):
 
 
 class PlayerSessionSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField(write_only=True, required=False)
+
     class Meta:
         model = PlayerSession
-        fields = ['user_id', 'quiz', 'player_name', 'avatar']
+        fields = ['rust_session_id', 'user_id', 'quiz', 'player_name', 'avatar']
+
+    def validate(self, attrs):
+        session_id = attrs.get('rust_session_id') or attrs.get('user_id')
+        if not session_id:
+            raise serializers.ValidationError({'rust_session_id': 'This field is required.'})
+        attrs['rust_session_id'] = session_id
+        attrs.pop('user_id', None)
+        return attrs
 
 
 class LeaderboardEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Leaderboard
-        fields = ['user_id', 'player_name',
-                  'avatar', 'score', 'time_taken', 'rank']
+        fields = ['rust_session_id', 'player_name', 'avatar', 'score', 'time_taken', 'rank']
 
 
 class LeaderboardReceiveItemSerializer(serializers.Serializer):
-    user_id = serializers.CharField()
+    rust_session_id = serializers.CharField(required=False)
+    user_id = serializers.CharField(required=False)
     score = serializers.IntegerField()
     time_taken = serializers.FloatField()
     rank = serializers.IntegerField()
+
+    def validate(self, attrs):
+        session_id = attrs.get('rust_session_id') or attrs.get('user_id')
+        if not session_id:
+            raise serializers.ValidationError({'rust_session_id': 'This field is required.'})
+        attrs['rust_session_id'] = session_id
+        attrs.pop('user_id', None)
+        return attrs
 
 
 class LeaderboardReceiveSerializer(serializers.Serializer):

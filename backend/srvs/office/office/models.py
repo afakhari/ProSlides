@@ -171,19 +171,19 @@ class Option(models.Model):
 
 
 class PlayerSession(models.Model):
-    user_id = models.CharField(max_length=255, unique=True)
+    rust_session_id = models.CharField(max_length=255, unique=True)
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
     player_name = models.CharField(max_length=100)
     avatar = models.CharField(max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.player_name} ({self.user_id})"
+        return f"{self.player_name} ({self.rust_session_id})"
 
 
 class Leaderboard(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
-    user_id = models.CharField(max_length=255)
+    rust_session_id = models.CharField(max_length=255)
     player_name = models.CharField(max_length=100)
     avatar = models.CharField(max_length=10)
     score = models.IntegerField()
@@ -192,4 +192,4 @@ class Leaderboard(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['question', 'user_id']
+        unique_together = ['question', 'rust_session_id']

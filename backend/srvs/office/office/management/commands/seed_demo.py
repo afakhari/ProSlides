@@ -116,19 +116,19 @@ class Command(BaseCommand):
         # Sample player sessions and leaderboard entries for q1
         players = [
             models.PlayerSession.objects.create(
-                user_id="player-1",
+                rust_session_id="player-1",
                 quiz=quiz,
                 player_name="Alice",
                 avatar=":)",
             ),
             models.PlayerSession.objects.create(
-                user_id="player-2",
+                rust_session_id="player-2",
                 quiz=quiz,
                 player_name="Bob",
                 avatar=":D",
             ),
             models.PlayerSession.objects.create(
-                user_id="player-3",
+                rust_session_id="player-3",
                 quiz=quiz,
                 player_name="Charlie",
                 avatar=":P",
@@ -138,7 +138,7 @@ class Command(BaseCommand):
         leaderboard_entries = [
             models.Leaderboard(
                 question=q1,
-                user_id=players[0].user_id,
+                rust_session_id=players[0].rust_session_id,
                 player_name=players[0].player_name,
                 avatar=players[0].avatar,
                 score=95,
@@ -147,7 +147,7 @@ class Command(BaseCommand):
             ),
             models.Leaderboard(
                 question=q1,
-                user_id=players[1].user_id,
+                rust_session_id=players[1].rust_session_id,
                 player_name=players[1].player_name,
                 avatar=players[1].avatar,
                 score=70,
@@ -156,7 +156,7 @@ class Command(BaseCommand):
             ),
             models.Leaderboard(
                 question=q1,
-                user_id=players[2].user_id,
+                rust_session_id=players[2].rust_session_id,
                 player_name=players[2].player_name,
                 avatar=players[2].avatar,
                 score=40,

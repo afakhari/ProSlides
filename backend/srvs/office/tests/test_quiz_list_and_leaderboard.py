@@ -38,7 +38,7 @@ def test_leaderboard_receive_validates_quiz_pk(api_client):
     payload = {
         "leaderboard": [
             {
-                "user_id": player.user_id,
+                "rust_session_id": player.rust_session_id,
                 "score": 10,
                 "time_taken": 1.0,
                 "rank": 1,
@@ -91,7 +91,7 @@ def test_final_leaderboard_tie_ranking(api_client):
 
     Leaderboard.objects.create(
         question=question1,
-        user_id=p1.user_id,
+        rust_session_id=p1.rust_session_id,
         player_name=p1.player_name,
         avatar=p1.avatar,
         score=100,
@@ -100,7 +100,7 @@ def test_final_leaderboard_tie_ranking(api_client):
     )
     Leaderboard.objects.create(
         question=question2,
-        user_id=p1.user_id,
+        rust_session_id=p1.rust_session_id,
         player_name=p1.player_name,
         avatar=p1.avatar,
         score=50,
@@ -109,7 +109,7 @@ def test_final_leaderboard_tie_ranking(api_client):
     )
     Leaderboard.objects.create(
         question=question1,
-        user_id=p2.user_id,
+        rust_session_id=p2.rust_session_id,
         player_name=p2.player_name,
         avatar=p2.avatar,
         score=150,
@@ -118,7 +118,7 @@ def test_final_leaderboard_tie_ranking(api_client):
     )
     Leaderboard.objects.create(
         question=question1,
-        user_id=p3.user_id,
+        rust_session_id=p3.rust_session_id,
         player_name=p3.player_name,
         avatar=p3.avatar,
         score=120,
@@ -130,7 +130,7 @@ def test_final_leaderboard_tie_ranking(api_client):
     resp = api_client.get(f"/api/quizzes/{quiz.id}/final-leaderboard/")
     assert resp.status_code == 200
 
-    leaderboard = {entry["user_id"]: entry for entry in resp.data["leaderboard"]}
-    assert leaderboard[p1.user_id]["rank"] == 1
-    assert leaderboard[p2.user_id]["rank"] == 1
-    assert leaderboard[p3.user_id]["rank"] == 3
+    leaderboard = {entry["rust_session_id"]: entry for entry in resp.data["leaderboard"]}
+    assert leaderboard[p1.rust_session_id]["rank"] == 1
+    assert leaderboard[p2.rust_session_id]["rank"] == 1
+    assert leaderboard[p3.rust_session_id]["rank"] == 3

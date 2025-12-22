@@ -232,15 +232,15 @@ class OptionAdmin(admin.ModelAdmin):
 @admin.register(PlayerSession)
 class PlayerSessionAdmin(admin.ModelAdmin):
     list_display = [
-        'user_id', 'player_name', 'avatar', 'quiz_display',
+        'rust_session_id', 'player_name', 'avatar', 'quiz_display',
         'created_at'
     ]
     list_filter = ['quiz', 'created_at']
-    search_fields = ['player_name', 'user_id', 'quiz__title']
+    search_fields = ['player_name', 'rust_session_id', 'quiz__title']
     readonly_fields = ['created_at', 'session_info']
     fieldsets = (
         ('اطلاعات بازیکن', {
-            'fields': ('user_id', 'player_name', 'avatar', 'quiz')
+            'fields': ('rust_session_id', 'player_name', 'avatar', 'quiz')
         }),
         ('زمان', {
             'fields': ('created_at',)
@@ -257,7 +257,7 @@ class PlayerSessionAdmin(admin.ModelAdmin):
     def session_info(self, obj):
         return format_html(
             '<strong>سشن:</strong> {}<br><strong>بازیکن:</strong> {}<br><strong>کوئیز:</strong> {}',
-            obj.user_id,
+            obj.rust_session_id,
             obj.player_name,
             obj.quiz.title
         )
@@ -271,11 +271,11 @@ class LeaderboardAdmin(admin.ModelAdmin):
         'score', 'time_taken', 'rank', 'created_at'
     ]
     list_filter = ['question__slide__quiz', 'created_at', 'rank']
-    search_fields = ['player_name', 'user_id', 'question__title']
+    search_fields = ['player_name', 'rust_session_id', 'question__title']
     readonly_fields = ['created_at', 'leaderboard_info']
     fieldsets = (
         ('اطلاعات لیدربرد', {
-            'fields': ('question', 'user_id', 'player_name', 'avatar')
+            'fields': ('question', 'rust_session_id', 'player_name', 'avatar')
         }),
         ('نتایج', {
             'fields': ('score', 'time_taken', 'rank')
