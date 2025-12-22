@@ -24,8 +24,8 @@ def test_quiz_list_requires_authentication(api_client):
     api_client.force_authenticate(user=user)
     resp = api_client.get("/api/quizzes/list/")
     assert resp.status_code == 200
-    assert len(resp.data) == 1
-    assert resp.data[0]["quiz_id"] == owned_quiz.id
+    assert resp.data["count"] == 1
+    assert resp.data["results"][0]["quiz_id"] == owned_quiz.id
 
 
 @pytest.mark.django_db

@@ -133,6 +133,8 @@ REST_FRAMEWORK = {
         "auth_verify": "6/min",
         "password_reset": "5/min",
     },
+    "DEFAULT_PAGINATION_CLASS": "backend.srvs.office.office.pagination.StandardResultsSetPagination",
+    "PAGE_SIZE": 20,
 }
 
 # SimpleJWT (defaults؛ قابل تنظیم با env)

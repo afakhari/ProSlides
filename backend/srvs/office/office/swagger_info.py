@@ -34,6 +34,11 @@ Stable REST API for authoring and running interactive quizzes.
 
 ## Error Format
 - Most validation errors return: `{ "detail": "message" }` or field-based errors.
+
+## Pagination
+Endpoints that return lists use page-number pagination.
+- Query params: `page`, `page_size`
+- Response shape: `{ count, page, page_size, total_pages, next, previous, results }`
 """,
     contact=openapi.Contact(name="ProSlides Team", email="support@proslides.com"),
     terms_of_service="https://proslides.ir/terms",
