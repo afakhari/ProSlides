@@ -108,6 +108,9 @@ EMAIL_VERIFICATION_RESEND_SECONDS = env.int(
 EMAIL_VERIFICATION_MAX_ATTEMPTS = env.int(
     "EMAIL_VERIFICATION_MAX_ATTEMPTS", default=5
 )
+AUTH_REQUIRE_EMAIL_VERIFICATION = env.bool(
+    "AUTH_REQUIRE_EMAIL_VERIFICATION", default=not DEBUG
+)
 PASSWORD_RESET_URL_TEMPLATE = env.str(
     "PASSWORD_RESET_URL_TEMPLATE",
     default="https://proslides.ir/reset-password?uid={uid}&token={token}",

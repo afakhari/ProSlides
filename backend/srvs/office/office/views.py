@@ -907,21 +907,25 @@ class RegisterView(APIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        verification = EmailVerification.objects.create(
-            user=user,
-            code=generate_verification_code(),
-            expires_at=timezone.now() + timezone.timedelta(
-                minutes=settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
-            ),
-        )
-        send_verification_email(user, verification.code)
+        if settings.AUTH_REQUIRE_EMAIL_VERIFICATION:
+            verification = EmailVerification.objects.create(
+                user=user,
+                code=generate_verification_code(),
+                expires_at=timezone.now() + timezone.timedelta(
+                    minutes=settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
+                ),
+            )
+            send_verification_email(user, verification.code)
+        else:
+            user.is_active = True
+            user.save(update_fields=["is_active"])
 
         return Response(
             {
                 "username": user.username,
                 "email": user.email,
                 "is_active": user.is_active,
-                "verification_sent": True,
+                "verification_sent": settings.AUTH_REQUIRE_EMAIL_VERIFICATION,
             },
             status=status.HTTP_201_CREATED,
         )

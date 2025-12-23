@@ -24,12 +24,15 @@ import { useWebSocket } from "./hooks/useWebSocket";
 
 import HomePage from "./pages/quiz/manager/HomePage";
 import EditorPage from "./pages/quiz/manager/EditorPage";
+import AuthPage from "./pages/auth/AuthPage";
 
 export default function App() {
   return (
     <Router>
       <ServerDataProvider>
         <Routes>
+          <Route path="/" element={<AuthPage />} />
+          <Route path="/auth" element={<AuthPage />} />
           <Route
             path="/:roomId/:role/presentation"
             element={<PresentationRouter />}
