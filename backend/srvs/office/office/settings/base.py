@@ -117,3 +117,12 @@ LOGGING = {
         "django": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
     },
 }
+
+# Swagger UI compatibility settings
+SWAGGER_USE_COMPAT_RENDERERS = False
+
+# REST framework settings
+REST_FRAMEWORK = {
+    "DEFAULT_PAGINATION_CLASS": "backend.srvs.office.office.pagination.StandardResultsSetPagination",
+    "PAGE_SIZE": 20,
+}

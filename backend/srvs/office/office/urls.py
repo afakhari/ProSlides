@@ -1,5 +1,6 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.views.generic import RedirectView
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework import routers, permissions
@@ -15,7 +16,7 @@ schema_view = get_schema_view(
     permission_classes=(permissions.AllowAny,),
 )
 
-router = routers.DefaultRouter()
+router = routers.DefaultRouter(trailing_slash='/?')
 
 # Quiz routes
 router.register(r'quizzes', views.QuizViewSet, basename='quiz')
@@ -54,28 +55,40 @@ question_view = views.QuestionViewSet.as_view({
 urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
+    re_path(r'^admin$', RedirectView.as_view(url='/admin/', permanent=False)),
 
     # API Documentation
-    path('swagger/', schema_view.with_ui('swagger',
-         cache_timeout=0), name='schema-swagger-ui'),
-    path('redoc/', schema_view.with_ui('redoc',
-         cache_timeout=0), name='schema-redoc'),
+    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    re_path(r'^swagger$', RedirectView.as_view(url='/swagger/', permanent=False)),
+    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    re_path(r'^redoc$', RedirectView.as_view(url='/redoc/', permanent=False)),
     path('swagger.json/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
+    re_path(r'^swagger\\.json$', RedirectView.as_view(url='/swagger.json/', permanent=False)),
+
+    # Question endpoint (nested)
+    re_path(
+        r'^api/quizzes/(?P<quiz_pk>\d+)/slides/(?P<slide_pk>\d+)/question/?$',
+        question_view,
+        name='question-detail'
+    ),
+
+    # Content endpoint (nested)
+    re_path(
+        r'^api/quizzes/(?P<quiz_pk>\d+)/slides/(?P<slide_pk>\d+)/content/?$',
+        content_view,
+        name='slide-content'
+    ),
+
+    # Leaderboard endpoint (nested under question)
+    re_path(
+        r'^api/quizzes/(?P<quiz_pk>\d+)/slides/(?P<slide_pk>\d+)/question/leaderboard/?$',
+        leaderboard_view,
+        name='question-leaderboard'
+    ),
 
     # API routes
     path('api/', include(router.urls)),
-
-    # Question endpoint (nested)
-    path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/question/',
-         question_view, name='question-detail'),
-
-    # Content endpoint (nested)
-    path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/content/',
-         content_view, name='slide-content'),
-
-    # Leaderboard endpoint (nested under question)
-    path('api/quizzes/<int:quiz_pk>/slides/<int:slide_pk>/question/leaderboard/',
-         leaderboard_view, name='question-leaderboard'),
+    re_path(r'^api$', RedirectView.as_view(url='/api/', permanent=False)),
 ]
 
 # Serve media files in development
