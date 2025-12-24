@@ -1,4 +1,5 @@
 import logging
+from django.db.models import Prefetch
 from rest_framework import serializers
 from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard
 
@@ -61,8 +62,13 @@ class SlideSerializer(serializers.ModelSerializer):
         """دریافت لیدربرد برای اسلایدهای سوال"""
         if obj.slide_type == 1 and hasattr(obj, 'question'):  # فقط برای اسلایدهای سوال
             try:
-                leaderboard_entries = Leaderboard.objects.filter(
-                    question=obj.question).order_by('rank')
+                prefetched = getattr(obj.question, 'prefetched_leaderboard', None)
+                if prefetched is not None:
+                    leaderboard_entries = prefetched
+                else:
+                    leaderboard_entries = Leaderboard.objects.filter(
+                        question=obj.question
+                    ).order_by('rank')
                 serializer = LeaderboardEntrySerializer(
                     leaderboard_entries, many=True)
                 return serializer.data
@@ -128,7 +134,14 @@ class ExportSerializer(serializers.ModelSerializer):
 
     def get_slides(self, obj):
         """Return slides with an extra leaderboard slide after flagged questions."""
-        serialized_slides = SlideSerializer(obj.slides.all(), many=True).data
+        slides = obj.slides.select_related('question').prefetch_related(
+            Prefetch(
+                'question__leaderboard_set',
+                queryset=Leaderboard.objects.order_by('rank'),
+                to_attr='prefetched_leaderboard',
+            )
+        )
+        serialized_slides = SlideSerializer(slides, many=True).data
         slides_with_leaderboards = []
 
         for slide_data in serialized_slides:
