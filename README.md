@@ -1,6 +1,9 @@
 # ProSlides
 a live interactive quiz
 
+## Local Setup
+See `LOCAL_SETUP.md` for a step-by-step guide for running the backend locally.
+
 ## Seed Demo Data
 
 This project provides a management command to generate bulk demo data.
