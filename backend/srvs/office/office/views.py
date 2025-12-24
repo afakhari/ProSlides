@@ -54,6 +54,49 @@ def paginated_response_schema(items_schema):
             ),
         },
     )
+QUIZ_ITEM_SCHEMA = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "title": openapi.Schema(type=openapi.TYPE_STRING),
+        "created_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+        "updated_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+        "author": openapi.Schema(type=openapi.TYPE_STRING),
+        "access_code": openapi.Schema(type=openapi.TYPE_STRING),
+        "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "music_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "background_color": openapi.Schema(type=openapi.TYPE_STRING),
+        "background_image_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "slides": openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT)),
+    },
+)
+
+SLIDE_ITEM_SCHEMA = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        "slide_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "slide_type": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "order": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "show_leaderboard_after": openapi.Schema(type=openapi.TYPE_BOOLEAN),
+        "title": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "content_text": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "content_image_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "question": openapi.Schema(type=openapi.TYPE_OBJECT, nullable=True),
+        "leaderboard": openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT)),
+    },
+)
+
+PLAYER_SESSION_ITEM_SCHEMA = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        "rust_session_id": openapi.Schema(type=openapi.TYPE_STRING),
+        "quiz": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "player_name": openapi.Schema(type=openapi.TYPE_STRING),
+        "avatar": openapi.Schema(type=openapi.TYPE_STRING),
+    },
+)
+
+
 def touch_quiz(quiz_id):
     Quiz.objects.filter(pk=quiz_id).update(updated_at=timezone.now())
 
@@ -103,9 +146,7 @@ class QuizViewSet(viewsets.ModelViewSet):
         responses={
             200: openapi.Response(
                 "Paginated quiz list",
-                schema=paginated_response_schema(
-                    openapi.Schema(ref="#/definitions/Quiz")
-                ),
+                schema=paginated_response_schema(QUIZ_ITEM_SCHEMA),
             )
         },
         tags=["Quizzes"],
@@ -313,9 +354,7 @@ class SlideViewSet(viewsets.ModelViewSet):
         responses={
             200: openapi.Response(
                 "Paginated slide list",
-                schema=paginated_response_schema(
-                    openapi.Schema(ref="#/definitions/Slide")
-                ),
+                schema=paginated_response_schema(SLIDE_ITEM_SCHEMA),
             )
         },
         tags=["Slides"],
@@ -705,9 +744,7 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
         responses={
             200: openapi.Response(
                 "Paginated player session list",
-                schema=paginated_response_schema(
-                    openapi.Schema(ref="#/definitions/PlayerSession")
-                ),
+                schema=paginated_response_schema(PLAYER_SESSION_ITEM_SCHEMA),
             )
         },
         tags=["Players"],
