@@ -31,7 +31,7 @@ function ManagerLeaderBoard({
     cachedLeaderboardResults,
     processMessage,
   } = useServerData();
-  const { sendNavigation } = useWebSocket();
+  const { sendNavigation, sendEnd } = useWebSocket();
 
   // حذف state داخلی و فقط استفاده از داده context
 
@@ -65,6 +65,14 @@ function ManagerLeaderBoard({
 
   // فقط داده را از context می‌گیریم و هیچ وقت setPlayers نمی‌زنیم
   const results = dataToUse?.results || dataToUse || [];
+
+  console.log(
+    "[ManagerLeaderBoard DEBUG] leaderboardResults:",
+    leaderboardResults
+  );
+  console.log("[ManagerLeaderBoard DEBUG] dataToUse:", dataToUse);
+  console.log("[ManagerLeaderBoard DEBUG] results:", results);
+
   // همیشه از rank سرور استفاده کن و هیچوقت index را جایگزین نکن
   const players = Array.isArray(results)
     ? results.map((user) => ({
@@ -72,13 +80,13 @@ function ManagerLeaderBoard({
         name: user.name,
         character: user.character,
         color: user.color || "#6366f1",
-        rank: user.rank, // فقط مقدار سرور
+        rank: user.rank,
         total_points: user.total_points || 0,
         new_points: user.new_points || 0,
       }))
     : [];
-  // فقط یک لاگ برای تست مقدار نهایی داده لیدربورد
-  console.log("[ManagerLeaderBoard] players count:", players.length);
+
+  console.log("[ManagerLeaderBoard DEBUG] players:", players);
 
   // Calculate current question number and details from currentSlide
   const currentQuestionIndex = currentSlide - 1;
@@ -86,13 +94,13 @@ function ManagerLeaderBoard({
   const totalQuestions = quiz?.slides?.length ?? 0;
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
-  // حذف حلقه بی‌پایان: فقط یک state برای انیمیشن
+  const [displayedPlayers, setDisplayedPlayers] = useState([]);
   const [animateBars, setAnimateBars] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [_navigationData, setNavigationData] = useState(
     createNextPrevious(5, null, null)
-  ); // State for tracking navigation (to be sent to server)
+  );
   const gameCode = roomId;
 
   // هیچ پیام مستقیمی از سرور پردازش نمی‌شود، فقط داده context استفاده می‌شود
@@ -134,6 +142,11 @@ function ManagerLeaderBoard({
     if (onPrevious) onPrevious();
   };
 
+  const handleEnd = () => {
+    console.log("[LeaderBoard] Sending end command to server");
+    sendEnd();
+  };
+
   const handleToggleBlur = (id) => {
     setHiddenNames((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -153,21 +166,22 @@ function ManagerLeaderBoard({
     return Math.max(percent, 1);
   };
 
-  // فقط یک بار مقدار اولیه و نهایی را با useMemo محاسبه کن
-  // نمایش بر اساس rank سرور (همیشه درست)
-  // نمایش همیشه بر اساس rank سرور (هم در حالت اولیه و هم نهایی)
-  const displayedPlayers = React.useMemo(() => {
-    return [...players].sort((a, b) => a.rank - b.rank);
-  }, [players]);
-
-  // فقط یک بار انیمیشن را فعال کن
   useEffect(() => {
+    // Ensure players have colors and are displayed as received from server
+    const processedPlayers = players.map((p) => ({
+      ...p,
+      color: p.color || "#6366f1",
+    }));
+    setDisplayedPlayers(processedPlayers);
+
+    // Trigger animation
     setAnimateBars(false);
-    if (players.length > 0) {
-      const t = setTimeout(() => setAnimateBars(true), 1200);
-      return () => clearTimeout(t);
-    }
-  }, [players]);
+    const t = setTimeout(() => {
+      setAnimateBars(true);
+    }, 500);
+
+    return () => clearTimeout(t);
+  }, [JSON.stringify(players)]);
 
   return (
     <div
@@ -348,6 +362,7 @@ function ManagerLeaderBoard({
           onShowLeaderboard={() => setShowLeaderboardModal(true)}
           onNext={handleNext}
           onPrevious={handlePrevious}
+          onEnd={handleEnd}
         />
 
         {/* Inlined Leaderboard Modal (replaces removed shared component) */}

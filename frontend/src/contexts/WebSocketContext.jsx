@@ -107,6 +107,15 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
     return sendMessage(msg);
   };
 
+  // Send end command (for manager)
+  const sendEnd = () => {
+    const msg = {
+      type: 9,
+      action: "end",
+    };
+    return sendMessage(msg);
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -128,6 +137,7 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
     disconnect,
     sendMessage,
     sendNavigation,
+    sendEnd,
   };
 
   return (

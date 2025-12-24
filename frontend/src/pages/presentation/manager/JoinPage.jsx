@@ -30,7 +30,8 @@ export default function ManagerJoinPage({
   currentSlide = 1,
   totalSlides = 3,
 }) {
-  const { isConnected, connect, sendNavigation, lastMessage } = useWebSocket();
+  const { isConnected, connect, sendNavigation, sendEnd, lastMessage } =
+    useWebSocket();
   const { users, processMessage } = useServerData();
 
   const [page, setPage] = useState("lobby"); // 'lobby' | 'quiz'
@@ -145,6 +146,11 @@ export default function ManagerJoinPage({
     sendNavigation("previous");
 
     if (onPrevious) onPrevious();
+  };
+
+  const handleEnd = () => {
+    console.log("[JoinPage] Sending end command to server");
+    sendEnd();
   };
 
   const handleStart = () => {
@@ -402,6 +408,7 @@ export default function ManagerJoinPage({
           isQROpen={showQRModal}
           onShowLeaderboard={() => setShowLeaderboard(true)}
           onNext={handleNext}
+          onEnd={handleEnd}
           // onPrevious=null
         />
 

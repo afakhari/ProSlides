@@ -55,6 +55,7 @@ function PlayerLeaderBoard({ players }) {
   const [hiddenNames, setHiddenNames] = useState([]);
   const [displayedPlayers, setDisplayedPlayers] = useState([]);
   const [animateBars, setAnimateBars] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
   // const navigate = useNavigate();
 
   console.log(
@@ -62,6 +63,12 @@ function PlayerLeaderBoard({ players }) {
     players?.length || 0,
     "players"
   );
+
+  // خواندن user_id بازیکن فعلی از localStorage
+  useEffect(() => {
+    const userId = localStorage.getItem("user_id");
+    setCurrentUserId(userId);
+  }, []);
 
   const handleToggleBlur = (id) => {
     setHiddenNames((prev) =>
@@ -96,8 +103,22 @@ function PlayerLeaderBoard({ players }) {
       setAnimateBars(true);
     }, 500);
 
-    return () => clearTimeout(t);
-  }, [players]);
+    // اسکرول به خودم با تاخیر
+    const scrollTimeout = setTimeout(() => {
+      const myElement = document.getElementById(`player-${currentUserId}`);
+      if (myElement) {
+        myElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }, 800);
+
+    return () => {
+      clearTimeout(t);
+      clearTimeout(scrollTimeout);
+    };
+  }, [players, currentUserId]);
 
   return (
     <div
@@ -132,10 +153,12 @@ function PlayerLeaderBoard({ players }) {
                 {displayedPlayers.map((p) => {
                   const isHidden = hiddenNames.includes(p.rank);
                   const widthPercent = calcPercent(p.total_points);
+                  const isCurrentUser = p.user_id === currentUserId;
 
                   return (
                     <motion.li
                       key={p.user_id || p.rank}
+                      id={`player-${p.user_id}`}
                       layout
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -145,7 +168,9 @@ function PlayerLeaderBoard({ players }) {
                         stiffness: 120,
                         damping: 18,
                       }}
-                      className="flex justify-start items-center relative w-[90%] max-w-2xl mx-auto"
+                      className={`flex justify-start items-center relative w-[90%] max-w-2xl mx-auto ${
+                        isCurrentUser ? "ring-4 ring-yellow-400 rounded-lg" : ""
+                      }`}
                       onMouseEnter={() => setHovered(p.rank)}
                       onMouseLeave={() => setHovered(null)}
                     >

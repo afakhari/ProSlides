@@ -22,7 +22,7 @@ export default function ManagerPickAnswerQuestion({
   isRemoteReady,
   roomId,
 }) {
-  const { isConnected, sendNavigation, lastMessage } = useWebSocket();
+  const { isConnected, sendNavigation, sendEnd, lastMessage } = useWebSocket();
   const { questionResults, processMessage } = useServerData();
 
   // Calculate current question number and details from currentSlide
@@ -234,6 +234,11 @@ export default function ManagerPickAnswerQuestion({
     if (onPrevious) onPrevious();
   };
 
+  const handleEnd = () => {
+    console.log("[PickAnswerQuestion] Sending end command to server");
+    sendEnd();
+  };
+
   // Debug: Log state changes
   useEffect(() => {
     console.log("[PickAnswerQuestion] State update:", {
@@ -415,6 +420,7 @@ export default function ManagerPickAnswerQuestion({
         onShowLeaderboard={() => setShowLeaderboard(true)}
         onNext={handleNext}
         onPrevious={handlePrevious}
+        onEnd={handleEnd}
       />
 
       {/* Leaderboard modal removed - manager LeaderBoard page now contains modal UI */}

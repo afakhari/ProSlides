@@ -18,6 +18,7 @@ export default function Footer({
   onShowLeaderboard = null,
   onNext = null,
   onPrevious = null,
+  onEnd = null,
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -91,6 +92,13 @@ export default function Footer({
           </button>
 
           <button
+            onClick={() => onEnd && onEnd()}
+            className="px-3 h-8 hover:bg-red-500/80 bg-red-600/70 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors text-sm font-semibold"
+          >
+            End
+          </button>
+
+          <button
             onClick={() => setShowChat(!showChat)}
             className="w-10 h-10 hover:bg-white/30 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors text-lg"
           >
@@ -122,7 +130,7 @@ export default function Footer({
           </button>
         </div>
 
-        {/* Right section - Stats */}
+        {/* Right section - Stats 
         <div className="flex items-center gap-2 bg-black/40 rounded-full pb-1 mb-2">
           <div className="flex items-center gap-2 px-3 py-2 rounded text-white">
             <span>❤️</span>
@@ -150,7 +158,7 @@ export default function Footer({
               {stats.players.current}/{stats.players.max}
             </span>
           </div>
-        </div>
+        </div>*/}
       </div>
 
       {/* Side Menu - Opens on Hover */}

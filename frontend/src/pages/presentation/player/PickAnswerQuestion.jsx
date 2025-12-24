@@ -40,11 +40,19 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
 
   const handleSelect = (option) => {
     if (submitted || timeLeft <= -1) return;
-    setSelectedOptions((prev) =>
-      prev.includes(option)
-        ? prev.filter((item) => item !== option)
-        : [...prev, option]
-    );
+
+    // اگر has_multiple فالس باشد، فقط یک گزینه مجاز است
+    if (question.has_multiple === false) {
+      // اگر گزینه قبلاً انتخاب شده، پاک می‌کنیم (toggle off)
+      setSelectedOptions((prev) => (prev.includes(option) ? [] : [option]));
+    } else {
+      // اگر has_multiple ترو یا تعریف نشده باشد، رفتار قبلی (چند انتخابی)
+      setSelectedOptions((prev) =>
+        prev.includes(option)
+          ? prev.filter((item) => item !== option)
+          : [...prev, option]
+      );
+    }
   };
 
   const handleSubmit = () => {

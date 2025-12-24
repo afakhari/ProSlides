@@ -96,8 +96,13 @@ export const ServerDataProvider = ({ children }) => {
       switch (message.type) {
         case 1: // Leaderboard Results
         case 11: // Leaderboard Results (Type 11)
+          console.log("[ServerData] Type 1/11 received, message:", message);
           if (message.results) {
             updateLeaderboard(message.results);
+          } else {
+            console.warn(
+              "[ServerData] Type 1/11 received but no results field"
+            );
           }
           break;
 
