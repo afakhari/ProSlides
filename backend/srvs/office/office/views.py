@@ -38,6 +38,40 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+PAGINATION_PARAMS = [
+    openapi.Parameter(
+        "page",
+        openapi.IN_QUERY,
+        description="Page number",
+        type=openapi.TYPE_INTEGER,
+    ),
+    openapi.Parameter(
+        "page_size",
+        openapi.IN_QUERY,
+        description="Page size (max 100)",
+        type=openapi.TYPE_INTEGER,
+    ),
+]
+
+
+def paginated_response_schema(items_schema):
+    return openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            "count": openapi.Schema(type=openapi.TYPE_INTEGER),
+            "page": openapi.Schema(type=openapi.TYPE_INTEGER),
+            "page_size": openapi.Schema(type=openapi.TYPE_INTEGER),
+            "total_pages": openapi.Schema(type=openapi.TYPE_INTEGER),
+            "next": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+            "previous": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+            "results": openapi.Schema(
+                type=openapi.TYPE_ARRAY,
+                items=items_schema,
+            ),
+        },
+    )
+
+
 def generate_verification_code():
     return f"{secrets.randbelow(1_000_000):06d}"
 
@@ -98,38 +132,40 @@ class QuizViewSet(viewsets.ModelViewSet):
         return f"{base_title} (copy{max_copy + 1})"
 
     @swagger_auto_schema(
-        operation_description="Return quiz list for user panel.",
-        manual_parameters=[
-            openapi.Parameter(
-                "page",
-                openapi.IN_QUERY,
-                description="Page number",
-                type=openapi.TYPE_INTEGER,
-            ),
-            openapi.Parameter(
-                "page_size",
-                openapi.IN_QUERY,
-                description="Page size (max 100)",
-                type=openapi.TYPE_INTEGER,
-            ),
-        ],
+        operation_description="List quizzes.",
+        manual_parameters=PAGINATION_PARAMS,
         responses={
             200: openapi.Response(
                 "Paginated quiz list",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        "count": openapi.Schema(type=openapi.TYPE_INTEGER),
-                        "page": openapi.Schema(type=openapi.TYPE_INTEGER),
-                        "page_size": openapi.Schema(type=openapi.TYPE_INTEGER),
-                        "total_pages": openapi.Schema(type=openapi.TYPE_INTEGER),
-                        "next": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
-                        "previous": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
-                        "results": openapi.Schema(
-                            type=openapi.TYPE_ARRAY,
-                            items=openapi.Schema(type=openapi.TYPE_OBJECT),
-                        ),
-                    },
+                schema=paginated_response_schema(
+                    openapi.Schema(ref="#/definitions/Quiz")
+                ),
+            )
+        },
+        tags=["Quizzes"],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Return quiz list for user panel.",
+        manual_parameters=PAGINATION_PARAMS,
+        responses={
+            200: openapi.Response(
+                "Paginated quiz list",
+                schema=paginated_response_schema(
+                    openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "quiz_name": openapi.Schema(type=openapi.TYPE_STRING),
+                            "last_update": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                            "created_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                            "access_code": openapi.Schema(type=openapi.TYPE_STRING),
+                            "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "slides_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                        },
+                    )
                 ),
             )
         },
@@ -137,7 +173,7 @@ class QuizViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['get'], url_path='list')
     def list_quizzes(self, request):
-        queryset = self._filter_quizzes_for_request(request, self.get_queryset())
+        queryset = self.get_queryset()
         queryset = queryset.annotate(slides_count=Count('slides', distinct=True))
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -332,6 +368,22 @@ class SlideViewSet(viewsets.ModelViewSet):
     serializer_class = SlideSerializer
     swagger_tags = ["Slides"]
     pagination_class = StandardResultsSetPagination
+
+    @swagger_auto_schema(
+        operation_description="List slides for a quiz.",
+        manual_parameters=PAGINATION_PARAMS,
+        responses={
+            200: openapi.Response(
+                "Paginated slide list",
+                schema=paginated_response_schema(
+                    openapi.Schema(ref="#/definitions/Slide")
+                ),
+            )
+        },
+        tags=["Slides"],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
         # برای Swagger
@@ -722,6 +774,22 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
     swagger_tags = ["Players"]
     pagination_class = StandardResultsSetPagination
 
+    @swagger_auto_schema(
+        operation_description="List player sessions.",
+        manual_parameters=PAGINATION_PARAMS,
+        responses={
+            200: openapi.Response(
+                "Paginated player session list",
+                schema=paginated_response_schema(
+                    openapi.Schema(ref="#/definitions/PlayerSession")
+                ),
+            )
+        },
+        tags=["Players"],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
     def get_queryset(self):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
@@ -763,7 +831,8 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                     type=openapi.TYPE_OBJECT,
                     properties={
                         'status': openapi.Schema(type=openapi.TYPE_STRING),
-                        'saved_count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'saved_entries': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'total_entries': openapi.Schema(type=openapi.TYPE_INTEGER),
                         'errors': openapi.Schema(
                             type=openapi.TYPE_ARRAY,
                             items=openapi.Schema(type=openapi.TYPE_OBJECT),
@@ -777,7 +846,8 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                     type=openapi.TYPE_OBJECT,
                     properties={
                         'status': openapi.Schema(type=openapi.TYPE_STRING),
-                        'saved_count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'saved_entries': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'total_entries': openapi.Schema(type=openapi.TYPE_INTEGER),
                         'errors': openapi.Schema(
                             type=openapi.TYPE_ARRAY,
                             items=openapi.Schema(type=openapi.TYPE_OBJECT),
