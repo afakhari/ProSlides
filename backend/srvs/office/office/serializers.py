@@ -12,8 +12,11 @@ class OptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Option
-        fields = ['option_id', 'text', 'is_correct', 'votes', 'image_url']
+        fields = ['option_id', 'order', 'text', 'is_correct', 'votes', 'image_url']
         read_only_fields = ['option_id', 'votes']
+        extra_kwargs = {
+            'order': {'required': False},
+        }
 
     def create(self, validated_data):
         """
@@ -182,7 +185,9 @@ class LeaderboardEntrySerializer(serializers.ModelSerializer):
 
 
 class LeaderboardReceiveItemSerializer(serializers.Serializer):
-    rust_session_id = serializers.CharField()
+    rust_session_id = serializers.CharField(max_length=255)
+    player_name = serializers.CharField(max_length=100)
+    avatar = serializers.CharField(max_length=10)
     score = serializers.IntegerField()
     time_taken = serializers.FloatField()
     rank = serializers.IntegerField()

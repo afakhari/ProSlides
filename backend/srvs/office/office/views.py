@@ -182,6 +182,7 @@ class QuizViewSet(viewsets.ModelViewSet):
     def list_quizzes(self, request):
         queryset = self._filter_quizzes_for_request(request, self.get_queryset())
         queryset = queryset.annotate(slides_count=Count('slides', distinct=True))
+        queryset = queryset.order_by('-created_at')
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = QuizListSerializer(page, many=True)
@@ -775,8 +776,18 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Schema(
                         type=openapi.TYPE_OBJECT,
+                        required=[
+                            'rust_session_id',
+                            'player_name',
+                            'avatar',
+                            'score',
+                            'time_taken',
+                            'rank',
+                        ],
                         properties={
                             'rust_session_id': openapi.Schema(type=openapi.TYPE_STRING),
+                            'player_name': openapi.Schema(type=openapi.TYPE_STRING),
+                            'avatar': openapi.Schema(type=openapi.TYPE_STRING),
                             'score': openapi.Schema(type=openapi.TYPE_INTEGER),
                             'time_taken': openapi.Schema(type=openapi.TYPE_NUMBER),
                             'rank': openapi.Schema(type=openapi.TYPE_INTEGER),
@@ -854,31 +865,57 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                 if not rust_id:
                     errors.append({'detail': 'rust_session_id missing in entry'})
                     continue
+                player_name = entry.get('player_name')
+                avatar = entry.get('avatar')
+                if not player_name:
+                    errors.append({'rust_session_id': rust_id, 'detail': 'player_name missing in entry'})
+                    continue
+                if not avatar:
+                    errors.append({'rust_session_id': rust_id, 'detail': 'avatar missing in entry'})
+                    continue
 
                 player_session = PlayerSession.objects.filter(
                     rust_session_id=rust_id
                 ).first()
 
                 if player_session:
-                    Leaderboard.objects.update_or_create(
-                        question=question,
-                        rust_session_id=rust_id,
-                        defaults={
-                            'player_name': player_session.player_name,
-                            'avatar': player_session.avatar,
-                            'score': entry['score'],
-                            'time_taken': entry['time_taken'],
-                            'rank': entry['rank']
-                        }
-                    )
-                    saved_count += 1
+                    if player_session.quiz_id != question.slide.quiz_id:
+                        errors.append(
+                            {
+                                'rust_session_id': rust_id,
+                                'detail': 'player_session belongs to another quiz'
+                            }
+                        )
+                        continue
+                    updates = {}
+                    if player_session.player_name != player_name:
+                        updates['player_name'] = player_name
+                    if player_session.avatar != avatar:
+                        updates['avatar'] = avatar
+                    if updates:
+                        PlayerSession.objects.filter(pk=player_session.pk).update(**updates)
+                        for key, value in updates.items():
+                            setattr(player_session, key, value)
                 else:
-                    errors.append(
-                        {
-                            'rust_session_id': rust_id,
-                            'detail': 'player_session not found'
-                        }
+                    player_session = PlayerSession.objects.create(
+                        rust_session_id=rust_id,
+                        quiz=question.slide.quiz,
+                        player_name=player_name,
+                        avatar=avatar,
                     )
+
+                Leaderboard.objects.update_or_create(
+                    question=question,
+                    rust_session_id=rust_id,
+                    defaults={
+                        'player_name': player_name,
+                        'avatar': avatar,
+                        'score': entry['score'],
+                        'time_taken': entry['time_taken'],
+                        'rank': entry['rank']
+                    }
+                )
+                saved_count += 1
             except Exception:
                 logger.exception(
                     "Failed to save leaderboard entry for question_id=%s", question.pk

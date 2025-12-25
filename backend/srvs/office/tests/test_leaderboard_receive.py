@@ -6,7 +6,7 @@ from backend.srvs.office.tests.factories import (
     QuestionFactory,
     PlayerSessionFactory,
 )
-from backend.srvs.office.office.models import Leaderboard
+from backend.srvs.office.office.models import Leaderboard, PlayerSession
 
 
 @pytest.mark.django_db
@@ -20,12 +20,16 @@ def test_leaderboard_receive_saves_entries(api_client):
         "leaderboard": [
             {
                 "rust_session_id": player.rust_session_id,
+                "player_name": player.player_name,
+                "avatar": player.avatar,
                 "score": 120,
                 "time_taken": 3.5,
                 "rank": 1,
             },
             {
                 "rust_session_id": "missing-player",
+                "player_name": "new-player",
+                "avatar": "NP",
                 "score": 50,
                 "time_taken": 4.2,
                 "rank": 2,
@@ -40,15 +44,19 @@ def test_leaderboard_receive_saves_entries(api_client):
     )
 
     # یک ورودی ذخیره می‌شود، دیگری خطا می‌دهد
-    assert resp.status_code == 207
-    assert resp.data["saved_entries"] == 1
+    assert resp.status_code == 200
+    assert resp.data["saved_entries"] == 2
     assert resp.data["total_entries"] == 2
-    assert resp.data["errors"]
+    assert "errors" not in resp.data
 
     saved = Leaderboard.objects.filter(question=question).first()
     assert saved is not None
     assert saved.player_name == player.player_name
     assert saved.rank == 1
+    assert PlayerSession.objects.filter(
+        rust_session_id="missing-player",
+        quiz=quiz,
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -58,6 +66,8 @@ def test_leaderboard_receive_missing_question(api_client):
         "leaderboard": [
             {
                 "rust_session_id": "any",
+                "player_name": "any",
+                "avatar": "A1",
                 "score": 10,
                 "time_taken": 1.0,
                 "rank": 1,
