@@ -190,14 +190,14 @@ export default function PlayerJoinPage({ roomId, ...inp }) {
           Get ready to play!
         </h4>
 
-        <h3 className="text-white mb-6">the question will start soon.</h3>
+        <h3 className="text-white mb-6">the quiz will start soon.</h3>
 
-        <button
+        {/* <button
           className="mt-6 bg-purple-700 text-white px-8 py-3 rounded-lg hover:bg-purple-800 transition"
           onClick={() => console.log(players)}
         >
           start Game
-        </button>
+        </button> */}
       </div>
     </div>
   );

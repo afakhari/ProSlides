@@ -91,7 +91,7 @@ export default function LeaderboardModal({ isOpen, onClose, players = [] }) {
                       className="rounded-lg h-16 transition-all duration-1000 flex items-center px-4 gap-3"
                       style={{
                         backgroundColor: player.color,
-                        width: `${Math.max(barWidth, 15)}%`,
+                        width: `${Math.max(barWidth, 0)}%`,
                       }}
                     >
                       <span className="text-2xl">{player.character}</span>

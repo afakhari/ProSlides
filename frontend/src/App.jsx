@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import ManagerJoinPage from "./pages/presentation/manager/JoinPage";
 import ManagerPickAnswerQuestion from "./pages/presentation/manager/PickAnswerQuestion";
 import ManagerLeaderBoard from "./pages/presentation/manager/LeaderBoard";
+import ManagerPlayerLeaderBoard from "./pages/presentation/manager/PlayerLeaderBoard";
 
 import PlayerJoinPage from "./pages/presentation/player/JoinPage";
 import PlayerPickAnswerQuestion from "./pages/presentation/player/PickAnswerQuestion";
@@ -121,6 +122,13 @@ function AppPresentation({ roomId, role }) {
     questionResults,
     partialQuestionResults,
   } = useServerData();
+
+  // 🟢 وقتی manager است و type:1 از سرور می‌رسد، به لیدربورد برو
+  useEffect(() => {
+    if (role === "manager" && leaderboardResults) {
+      setData({ type: "ManagerLeaderBoard" });
+    }
+  }, [leaderboardResults, role]);
 
   /* ------------------ EXACT NEXT/PREVIOUS FROM YOUR CODE ------------------ */
 

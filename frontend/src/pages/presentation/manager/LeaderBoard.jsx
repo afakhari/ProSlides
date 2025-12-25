@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
+import { getColorForUser } from "../../../lib/colorUtils";
 // LeaderboardModal component was inlined into this page per request
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
@@ -29,9 +30,10 @@ function ManagerLeaderBoard({
     managerLastLeaderboard,
     leaderboardResults,
     cachedLeaderboardResults,
+    modalLeaderboardResults,
     processMessage,
   } = useServerData();
-  const { sendNavigation } = useWebSocket();
+  const { sendNavigation, sendEnd } = useWebSocket();
 
   // حذف state داخلی و فقط استفاده از داده context
 
@@ -65,20 +67,28 @@ function ManagerLeaderBoard({
 
   // فقط داده را از context می‌گیریم و هیچ وقت setPlayers نمی‌زنیم
   const results = dataToUse?.results || dataToUse || [];
+
+  console.log(
+    "[ManagerLeaderBoard DEBUG] leaderboardResults:",
+    leaderboardResults
+  );
+  console.log("[ManagerLeaderBoard DEBUG] dataToUse:", dataToUse);
+  console.log("[ManagerLeaderBoard DEBUG] results:", results);
+
   // همیشه از rank سرور استفاده کن و هیچوقت index را جایگزین نکن
   const players = Array.isArray(results)
     ? results.map((user) => ({
         user_id: user.user_id,
         name: user.name,
         character: user.character,
-        color: user.color || "#6366f1",
-        rank: user.rank, // فقط مقدار سرور
+        color: getColorForUser(user.user_id),
+        rank: user.rank,
         total_points: user.total_points || 0,
         new_points: user.new_points || 0,
       }))
     : [];
-  // فقط یک لاگ برای تست مقدار نهایی داده لیدربورد
-  console.log("[ManagerLeaderBoard] players count:", players.length);
+
+  console.log("[ManagerLeaderBoard DEBUG] players:", players);
 
   // Calculate current question number and details from currentSlide
   const currentQuestionIndex = currentSlide - 1;
@@ -86,13 +96,13 @@ function ManagerLeaderBoard({
   const totalQuestions = quiz?.slides?.length ?? 0;
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
-  // حذف حلقه بی‌پایان: فقط یک state برای انیمیشن
+  const [displayedPlayers, setDisplayedPlayers] = useState([]);
   const [animateBars, setAnimateBars] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [_navigationData, setNavigationData] = useState(
     createNextPrevious(5, null, null)
-  ); // State for tracking navigation (to be sent to server)
+  );
   const gameCode = roomId;
 
   // هیچ پیام مستقیمی از سرور پردازش نمی‌شود، فقط داده context استفاده می‌شود
@@ -134,6 +144,11 @@ function ManagerLeaderBoard({
     if (onPrevious) onPrevious();
   };
 
+  const handleEnd = () => {
+    console.log("[LeaderBoard] Sending end command to server");
+    sendEnd();
+  };
+
   const handleToggleBlur = (id) => {
     setHiddenNames((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -153,21 +168,22 @@ function ManagerLeaderBoard({
     return Math.max(percent, 1);
   };
 
-  // فقط یک بار مقدار اولیه و نهایی را با useMemo محاسبه کن
-  // نمایش بر اساس rank سرور (همیشه درست)
-  // نمایش همیشه بر اساس rank سرور (هم در حالت اولیه و هم نهایی)
-  const displayedPlayers = React.useMemo(() => {
-    return [...players].sort((a, b) => a.rank - b.rank);
-  }, [players]);
-
-  // فقط یک بار انیمیشن را فعال کن
   useEffect(() => {
+    // Ensure players have colors and are displayed as received from server
+    const processedPlayers = players.map((p) => ({
+      ...p,
+      color: p.color || "#6366f1",
+    }));
+    setDisplayedPlayers(processedPlayers);
+
+    // Trigger animation
     setAnimateBars(false);
-    if (players.length > 0) {
-      const t = setTimeout(() => setAnimateBars(true), 1200);
-      return () => clearTimeout(t);
-    }
-  }, [players]);
+    const t = setTimeout(() => {
+      setAnimateBars(true);
+    }, 500);
+
+    return () => clearTimeout(t);
+  }, [JSON.stringify(players)]);
 
   return (
     <div
@@ -232,7 +248,10 @@ function ManagerLeaderBoard({
                     <AnimatePresence>
                       {displayedPlayers.map((p) => {
                         const isHidden = hiddenNames.includes(p.rank);
-                        const widthPercent = calcPercent(p.total_points);
+                        const hasScore = p.total_points > 0;
+                        const widthPercent = hasScore
+                          ? calcPercent(p.total_points)
+                          : 0;
 
                         return (
                           <motion.li
@@ -251,22 +270,37 @@ function ManagerLeaderBoard({
                             onMouseLeave={() => setHovered(null)}
                           >
                             {/* Rank */}
-                            <div className="text-white/90 text-lg font-semibold w-8 text-center rounded-full bg-white/20 mr-3 py-1">
+                            <div
+                              className="text-lg font-bold w-10 h-10 flex items-center justify-center rounded-full mr-3"
+                              style={{
+                                backgroundColor: p.color,
+                                color: "#fff",
+                                boxShadow: `0 4px 12px ${p.color}60`,
+                              }}
+                            >
                               {p.rank}
                             </div>
 
                             {/* Fixed-width translucent track */}
-                            <div className="relative overlay-hidden bg-white/10 w-full h-14 mr-3">
-                              {/* Colored fill */}
-                              <motion.div
-                                className={`absolute left-0 top-0 h-full z-10`}
-                                style={{ backgroundColor: p.color }}
-                                initial={{ width: 0 }}
-                                animate={{
-                                  width: animateBars ? `${widthPercent}%` : 0,
-                                }}
-                                transition={{ duration: 1.3, ease: "easeOut" }}
-                              />
+                            <div className="relative overlay-hidden bg-white/10 w-full h-14 mr-3 rounded-lg">
+                              {/* Colored fill - only show if score > 0 */}
+                              {hasScore && (
+                                <motion.div
+                                  className={`absolute left-0 top-0 h-full z-10 rounded-lg`}
+                                  style={{
+                                    backgroundColor: p.color,
+                                    boxShadow: `0 4px 15px ${p.color}80, 0 2px 8px ${p.color}60`,
+                                  }}
+                                  initial={{ width: 0 }}
+                                  animate={{
+                                    width: animateBars ? `${widthPercent}%` : 0,
+                                  }}
+                                  transition={{
+                                    duration: 1.3,
+                                    ease: "easeOut",
+                                  }}
+                                />
+                              )}
 
                               {/* Content on top */}
                               <div className="relative z-20 flex items-center px-4 py-3 gap-4">
@@ -348,6 +382,7 @@ function ManagerLeaderBoard({
           onShowLeaderboard={() => setShowLeaderboardModal(true)}
           onNext={handleNext}
           onPrevious={handlePrevious}
+          onEnd={handleEnd}
         />
 
         {/* Inlined Leaderboard Modal (replaces removed shared component) */}
@@ -368,7 +403,7 @@ function ManagerLeaderBoard({
                       Leaderboard
                     </h2>
                     <p className="text-gray-400 text-sm">
-                      {displayedPlayers.length} players
+                      {(modalLeaderboardResults || []).length} players
                     </p>
                   </div>
                 </div>
@@ -381,57 +416,77 @@ function ManagerLeaderBoard({
               </div>
 
               <div className="space-y-3">
-                {displayedPlayers.map((player) => {
+                {(() => {
+                  const modalPlayers = modalLeaderboardResults || [];
+                  console.log("[LeaderBoard] Modal players:", modalPlayers);
                   const maxScore = Math.max(
-                    ...displayedPlayers.map((p) => p.total_points)
+                    ...modalPlayers.map((p) => p.total_points || 0),
+                    0
                   );
-                  const minScore = Math.min(
-                    ...displayedPlayers.map((p) => p.total_points)
-                  );
-                  const calcPercent = (score) => {
-                    if (maxScore === minScore) return 100;
-                    const percent =
-                      ((score - minScore) / (maxScore - minScore)) * 99 + 1;
-                    return Math.max(percent, 1);
-                  };
-                  const barWidth = calcPercent(player.total_points);
+                  console.log("[LeaderBoard] Max score:", maxScore);
 
-                  return (
-                    <div
-                      key={player.user_id}
-                      className="flex items-center gap-4 relative"
-                    >
-                      <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-white font-bold shrink-0">
-                        {player.rank}
-                      </div>
-                      <div className="flex-1 relative">
+                  // درصد امتیاز نسبت به نفر اول
+                  const calcPercent = (score) => {
+                    if (maxScore === 0) return 0;
+                    return (score / maxScore) * 100;
+                  };
+
+                  return modalPlayers.map((player) => {
+                    const score = player.total_points || 0;
+                    const barWidth = calcPercent(score);
+                    const hasScore = score > 0;
+                    const playerColor = getColorForUser(player.user_id);
+
+                    return (
+                      <div
+                        key={player.user_id}
+                        className="flex items-center gap-4 relative"
+                      >
                         <div
-                          className="rounded-lg h-16 transition-all duration-1000 flex items-center px-4 gap-3"
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0"
                           style={{
-                            backgroundColor: player.color,
-                            width: `${Math.max(barWidth, 15)}%`,
+                            backgroundColor: playerColor,
+                            boxShadow: `0 4px 12px ${playerColor}60`,
                           }}
                         >
-                          <span className="text-2xl">{player.character}</span>
-                          <span className="text-white font-semibold text-lg">
-                            {player.name}
-                          </span>
+                          {player.rank}
+                        </div>
+                        <div className="flex-1 relative h-16 flex items-center">
+                          {hasScore ? (
+                            <div
+                              className="rounded-lg h-16 transition-all duration-1000 flex items-center px-4 gap-3"
+                              style={{
+                                backgroundColor: playerColor,
+                                width: `${Math.max(barWidth, 15)}%`,
+                                boxShadow: `0 4px 15px ${playerColor}80, 0 2px 8px ${playerColor}60`,
+                              }}
+                            >
+                              <span className="text-2xl">
+                                {player.character}
+                              </span>
+                              <span className="text-white font-semibold text-lg">
+                                {player.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3 px-4">
+                              <span className="text-2xl">
+                                {player.character}
+                              </span>
+                              <span className="text-white font-semibold text-lg">
+                                {player.name}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-white font-bold text-xl shrink-0 w-20 text-right">
+                          {Math.round(score)}p
                         </div>
                       </div>
-                      <div className="text-white font-bold text-xl shrink-0 w-20 text-right">
-                        {Math.round(player.total_points)}p
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
-
-              {displayedPlayers.length > 5 && (
-                <button className="w-full mt-4 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg border-none cursor-pointer transition-colors flex items-center justify-center gap-2">
-                  <span>▼</span>
-                  <span>Show more</span>
-                </button>
-              )}
             </div>
           </div>
         )}
