@@ -384,16 +384,21 @@ class QuizViewSet(viewsets.ModelViewSet):
                         faster_answers_more_points=question.faster_answers_more_points,
                         partial_scoring=question.partial_scoring,
                     )
-                    options = [
-                        Option(
-                            question=new_question,
-                            text=option.text,
-                            is_correct=option.is_correct,
-                            votes=0,
-                            image_url=option.image_url,
+                    options = []
+                    for idx, option in enumerate(
+                        question.options.all().order_by('order', 'id'),
+                        start=1,
+                    ):
+                        options.append(
+                            Option(
+                                question=new_question,
+                                order=option.order or idx,
+                                text=option.text,
+                                is_correct=option.is_correct,
+                                votes=0,
+                                image_url=option.image_url,
+                            )
                         )
-                        for option in question.options.all()
-                    ]
                     if options:
                         Option.objects.bulk_create(options)
 
@@ -657,9 +662,13 @@ class QuestionViewSet(viewsets.ViewSet):
         """حذف سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk, slide__quiz__owner=request.user)
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+                slide__quiz__owner=request.user
+            )
+            quiz_id = question.slide.quiz_id
             question.delete()
-            touch_quiz(question.slide.quiz_id)
+            touch_quiz(quiz_id)
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Question.DoesNotExist:
             return Response(
