@@ -39,6 +39,8 @@ def test_leaderboard_receive_validates_quiz_pk(api_client):
         "leaderboard": [
             {
                 "rust_session_id": player.rust_session_id,
+                "player_name": player.player_name,
+                "avatar": player.avatar,
                 "score": 10,
                 "time_taken": 1.0,
                 "rank": 1,

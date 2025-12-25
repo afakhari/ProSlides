@@ -160,11 +160,28 @@ class Question(models.Model):
 class Option(models.Model):
     question = models.ForeignKey(
         Question, on_delete=models.CASCADE, related_name='options')
+    order = models.PositiveIntegerField()
     text = models.CharField(max_length=255)
     is_correct = models.BooleanField(default=False)
     votes = models.PositiveIntegerField(default=0)
     image_url = models.URLField(
         max_length=500, blank=True, null=True)
+
+    class Meta:
+        ordering = ['order']
+
+    def save(self, *args, **kwargs):
+        if self.order is None:
+            with transaction.atomic():
+                last_option = (
+                    self.__class__.objects
+                    .select_for_update()
+                    .filter(question=self.question)
+                    .order_by('-order')
+                    .first()
+                )
+                self.order = last_option.order + 1 if last_option else 1
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.text
