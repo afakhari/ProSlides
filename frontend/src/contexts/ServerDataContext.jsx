@@ -9,6 +9,7 @@ export const ServerDataProvider = ({ children }) => {
     questionResults: null, // Type 8: نتایج سوال
     partialQuestionResults: null, // Type 3: partial/result for current question (options_result)
     leaderboardResults: null, // Type 1: نتایج لیدربورد
+    modalLeaderboardResults: null, // Type 12: نتایج لیدربورد برای modal
     currentQuestion: null, // Type 2: سوال فعلی
     lastMessageType: null, // آخرین type دریافتی
     lastUpdateTime: null, // زمان آخرین به‌روزرسانی
@@ -62,6 +63,17 @@ export const ServerDataProvider = ({ children }) => {
     console.log("[ServerData] Leaderboard updated:", results);
   }, []);
 
+  // تابع برای به‌روزرسانی لیدربورد modal (Type 12)
+  const updateModalLeaderboard = useCallback((results) => {
+    setServerData((prev) => ({
+      ...prev,
+      modalLeaderboardResults: results,
+      lastMessageType: 12,
+      lastUpdateTime: new Date().toISOString(),
+    }));
+    console.log("[ServerData] Modal Leaderboard (Type 12) updated:", results);
+  }, []);
+
   // تابع برای به‌روزرسانی سوال فعلی (Type 2)
   const updateCurrentQuestion = useCallback((question) => {
     setServerData((prev) => ({
@@ -106,6 +118,15 @@ export const ServerDataProvider = ({ children }) => {
           }
           break;
 
+        case 12: // Modal Leaderboard Results
+          console.log("[ServerData] Type 12 received, message:", message);
+          if (message.results) {
+            updateModalLeaderboard(message.results);
+          } else {
+            console.warn("[ServerData] Type 12 received but no results field");
+          }
+          break;
+
         case 2: // New Question
           updateCurrentQuestion(message);
           break;
@@ -141,6 +162,7 @@ export const ServerDataProvider = ({ children }) => {
       updateUsers,
       updateQuestionResults,
       updateLeaderboard,
+      updateModalLeaderboard,
       updateCurrentQuestion,
       updatePartialQuestionResults,
     ]
@@ -153,6 +175,7 @@ export const ServerDataProvider = ({ children }) => {
       questionResults: null,
       partialQuestionResults: null,
       leaderboardResults: null,
+      modalLeaderboardResults: null,
       currentQuestion: null,
       lastMessageType: null,
       lastUpdateTime: null,
@@ -167,6 +190,7 @@ export const ServerDataProvider = ({ children }) => {
     questionResults: serverData.questionResults,
     partialQuestionResults: serverData.partialQuestionResults,
     leaderboardResults: serverData.leaderboardResults,
+    modalLeaderboardResults: serverData.modalLeaderboardResults,
     currentQuestion: serverData.currentQuestion,
     lastMessageType: serverData.lastMessageType,
     lastUpdateTime: serverData.lastUpdateTime,
@@ -176,6 +200,7 @@ export const ServerDataProvider = ({ children }) => {
     updateQuestionResults,
     updatePartialQuestionResults,
     updateLeaderboard,
+    updateModalLeaderboard,
     updateCurrentQuestion,
     processMessage,
     clearData,

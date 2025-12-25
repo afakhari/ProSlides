@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
+import { getColorForUser } from "../../../lib/colorUtils";
 // LeaderboardModal was removed; modal UI now lives on Manager LeaderBoard page
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
@@ -23,7 +24,8 @@ export default function ManagerPickAnswerQuestion({
   roomId,
 }) {
   const { isConnected, sendNavigation, sendEnd, lastMessage } = useWebSocket();
-  const { questionResults, processMessage } = useServerData();
+  const { questionResults, modalLeaderboardResults, processMessage } =
+    useServerData();
 
   // Calculate current question number and details from currentSlide
   const currentQuestionIndex = currentSlide - 1;
@@ -423,7 +425,108 @@ export default function ManagerPickAnswerQuestion({
         onEnd={handleEnd}
       />
 
-      {/* Leaderboard modal removed - manager LeaderBoard page now contains modal UI */}
+      {/* Leaderboard Modal using type 12 data */}
+      {showLeaderboard && (
+        <div
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
+          onClick={() => setShowLeaderboard(false)}
+        >
+          <div
+            className="bg-gray-900 rounded-xl p-8 max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto no-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <span className="text-4xl">🏆</span>
+                <div>
+                  <h2 className="text-white text-3xl font-bold">Leaderboard</h2>
+                  <p className="text-gray-400 text-sm">
+                    {(modalLeaderboardResults || []).length} players
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowLeaderboard(false)}
+                className="text-white hover:text-gray-300 text-3xl border-none bg-transparent cursor-pointer leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {(() => {
+                const modalPlayers = modalLeaderboardResults || [];
+                console.log(
+                  "[PickAnswerQuestion] Modal players:",
+                  modalPlayers
+                );
+                const maxScore = Math.max(
+                  ...modalPlayers.map((p) => p.total_points || 0),
+                  0
+                );
+                console.log("[PickAnswerQuestion] Max score:", maxScore);
+
+                // درصد امتیاز نسبت به نفر اول
+                const calcPercent = (score) => {
+                  if (maxScore === 0) return 0;
+                  return (score / maxScore) * 100;
+                };
+
+                return modalPlayers.map((player) => {
+                  const score = player.total_points || 0;
+                  const barWidth = calcPercent(score);
+                  const hasScore = score > 0;
+                  const playerColor = getColorForUser(player.user_id);
+
+                  return (
+                    <div
+                      key={player.user_id}
+                      className="flex items-center gap-4 relative"
+                    >
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0"
+                        style={{
+                          backgroundColor: playerColor,
+                          boxShadow: `0 4px 12px ${playerColor}60`,
+                        }}
+                      >
+                        {player.rank}
+                      </div>
+                      <div className="flex-1 relative h-16 flex items-center">
+                        {hasScore ? (
+                          <div
+                            className="rounded-lg h-16 transition-all duration-1000 flex items-center px-4 gap-3"
+                            style={{
+                              backgroundColor: playerColor,
+                              width: `${Math.max(barWidth, 15)}%`,
+                              boxShadow: `0 4px 15px ${playerColor}80, 0 2px 8px ${playerColor}60`,
+                            }}
+                          >
+                            <span className="text-2xl">{player.character}</span>
+                            <span className="text-white font-semibold text-lg">
+                              {player.name}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3 px-4">
+                            <span className="text-2xl">{player.character}</span>
+                            <span className="text-white font-semibold text-lg">
+                              {player.name}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-white font-bold text-xl shrink-0 w-20 text-right">
+                        {Math.round(score)}p
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
