@@ -812,7 +812,7 @@ class ContentViewSet(viewsets.ViewSet):
 
 
 class PlayerSessionViewSet(viewsets.ModelViewSet):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     """
     مدیریت سشن‌های بازیکنان
 
@@ -841,7 +841,7 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
             return PlayerSession.objects.none()
-        return Quiz.objects.filter(owner=self.request.user)
+        return PlayerSession.objects.filter(quiz__owner=self.request.user)
 
 
 class LeaderboardReceiveView(viewsets.ViewSet):

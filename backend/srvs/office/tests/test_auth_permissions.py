@@ -30,7 +30,8 @@ def test_owner_can_list_own_quizzes(api_client: APIClient):
 
     resp = api_client.get("/api/quizzes/")
     assert resp.status_code == 200
-    assert len(resp.data) == 1
+    assert resp.data["count"] == 1
+    assert len(resp.data["results"]) == 1
 
 
 @pytest.mark.django_db
