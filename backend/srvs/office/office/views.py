@@ -6,7 +6,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db import transaction
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError, transaction
 from django.db.models import Count, F, Max, Sum
 from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
@@ -22,8 +23,91 @@ from .pagination import StandardResultsSetPagination
 logger = logging.getLogger(__name__)
 
 
+PAGINATION_PARAMS = [
+    openapi.Parameter(
+        "page",
+        openapi.IN_QUERY,
+        description="Page number",
+        type=openapi.TYPE_INTEGER,
+    ),
+    openapi.Parameter(
+        "page_size",
+        openapi.IN_QUERY,
+        description="Page size (max 100)",
+        type=openapi.TYPE_INTEGER,
+    ),
+]
+
+
+def paginated_response_schema(items_schema):
+    return openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            "count": openapi.Schema(type=openapi.TYPE_INTEGER),
+            "page": openapi.Schema(type=openapi.TYPE_INTEGER),
+            "page_size": openapi.Schema(type=openapi.TYPE_INTEGER),
+            "total_pages": openapi.Schema(type=openapi.TYPE_INTEGER),
+            "next": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+            "previous": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+            "results": openapi.Schema(
+                type=openapi.TYPE_ARRAY,
+                items=items_schema,
+            ),
+        },
+    )
+QUIZ_ITEM_SCHEMA = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "title": openapi.Schema(type=openapi.TYPE_STRING),
+        "created_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+        "updated_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+        "author": openapi.Schema(type=openapi.TYPE_STRING),
+        "access_code": openapi.Schema(type=openapi.TYPE_STRING),
+        "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "music_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "background_color": openapi.Schema(type=openapi.TYPE_STRING),
+        "background_image_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "slides": openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT)),
+    },
+)
+
+SLIDE_ITEM_SCHEMA = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        "slide_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "slide_type": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "order": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "show_leaderboard_after": openapi.Schema(type=openapi.TYPE_BOOLEAN),
+        "title": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "content_text": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "content_image_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "question": openapi.Schema(type=openapi.TYPE_OBJECT, nullable=True),
+        "leaderboard": openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT)),
+    },
+)
+
+PLAYER_SESSION_ITEM_SCHEMA = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        "rust_session_id": openapi.Schema(type=openapi.TYPE_STRING),
+        "quiz": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "player_name": openapi.Schema(type=openapi.TYPE_STRING),
+        "avatar": openapi.Schema(type=openapi.TYPE_STRING),
+    },
+)
+
+
 def touch_quiz(quiz_id):
     Quiz.objects.filter(pk=quiz_id).update(updated_at=timezone.now())
+
+
+def _format_django_validation_error(exc):
+    if getattr(exc, "message_dict", None):
+        return exc.message_dict
+    if getattr(exc, "messages", None):
+        return {"detail": exc.messages}
+    return {"detail": str(exc)}
 
 
 class QuizViewSet(viewsets.ModelViewSet):
@@ -66,46 +150,48 @@ class QuizViewSet(viewsets.ModelViewSet):
         return f"{base_title} (copy{max_copy + 1})"
 
     @swagger_auto_schema(
-        operation_description="Return quiz list for user panel.",
-        manual_parameters=[
-            openapi.Parameter(
-                "page",
-                openapi.IN_QUERY,
-                description="Page number",
-                type=openapi.TYPE_INTEGER,
-            ),
-            openapi.Parameter(
-                "page_size",
-                openapi.IN_QUERY,
-                description="Page size (max 100)",
-                type=openapi.TYPE_INTEGER,
-            ),
-        ],
+        operation_description="List quizzes.",
+        manual_parameters=PAGINATION_PARAMS,
         responses={
             200: openapi.Response(
                 "Paginated quiz list",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        "count": openapi.Schema(type=openapi.TYPE_INTEGER),
-                        "page": openapi.Schema(type=openapi.TYPE_INTEGER),
-                        "page_size": openapi.Schema(type=openapi.TYPE_INTEGER),
-                        "total_pages": openapi.Schema(type=openapi.TYPE_INTEGER),
-                        "next": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
-                        "previous": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
-                        "results": openapi.Schema(
-                            type=openapi.TYPE_ARRAY,
-                            items=openapi.Schema(type=openapi.TYPE_OBJECT),
-                        ),
-                    },
+                schema=paginated_response_schema(QUIZ_ITEM_SCHEMA),
+            )
+        },
+        tags=["Quizzes"],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Return quiz list for user panel.",
+        manual_parameters=PAGINATION_PARAMS,
+        responses={
+            200: openapi.Response(
+                "Paginated quiz list",
+                schema=paginated_response_schema(
+                    openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "quiz_name": openapi.Schema(type=openapi.TYPE_STRING),
+                            "last_update": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                            "created_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                            "access_code": openapi.Schema(type=openapi.TYPE_STRING),
+                            "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "slides_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                        },
+                    )
                 ),
             )
         },
+        tags=["Quizzes"],
     )
     @action(detail=False, methods=['get'], url_path='list')
     def list_quizzes(self, request):
         queryset = self._filter_quizzes_for_request(request, self.get_queryset())
         queryset = queryset.annotate(slides_count=Count('slides', distinct=True))
+        queryset = queryset.order_by('-created_at')
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = QuizListSerializer(page, many=True)
@@ -246,16 +332,21 @@ class QuizViewSet(viewsets.ModelViewSet):
                         faster_answers_more_points=question.faster_answers_more_points,
                         partial_scoring=question.partial_scoring,
                     )
-                    options = [
-                        Option(
-                            question=new_question,
-                            text=option.text,
-                            is_correct=option.is_correct,
-                            votes=0,
-                            image_url=option.image_url,
+                    options = []
+                    for idx, option in enumerate(
+                        question.options.all().order_by('order', 'id'),
+                        start=1,
+                    ):
+                        options.append(
+                            Option(
+                                question=new_question,
+                                order=option.order or idx,
+                                text=option.text,
+                                is_correct=option.is_correct,
+                                votes=0,
+                                image_url=option.image_url,
+                            )
                         )
-                        for option in question.options.all()
-                    ]
                     if options:
                         Option.objects.bulk_create(options)
 
@@ -272,6 +363,20 @@ class SlideViewSet(viewsets.ModelViewSet):
     serializer_class = SlideSerializer
     pagination_class = StandardResultsSetPagination
 
+    @swagger_auto_schema(
+        operation_description="List slides for a quiz.",
+        manual_parameters=PAGINATION_PARAMS,
+        responses={
+            200: openapi.Response(
+                "Paginated slide list",
+                schema=paginated_response_schema(SLIDE_ITEM_SCHEMA),
+            )
+        },
+        tags=["Slides"],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
     def get_queryset(self):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
@@ -284,11 +389,22 @@ class SlideViewSet(viewsets.ModelViewSet):
         if order is not None and order < 1:
             raise ValidationError({'order': 'must be a positive integer'})
 
-        with transaction.atomic():
-            if order is not None:
-                Slide.objects.filter(quiz=quiz, order__gte=order).update(order=F('order') + 1)
-            instance = serializer.save(quiz=quiz, order=order)
-            touch_quiz(quiz.pk)
+        try:
+            with transaction.atomic():
+                if order is not None:
+                    Slide.objects.filter(quiz=quiz, order__gte=order).update(order=F('order') + 1)
+                instance = serializer.save(quiz=quiz, order=order)
+                touch_quiz(quiz.pk)
+        except DjangoValidationError as exc:
+            raise ValidationError(_format_django_validation_error(exc))
+        except IntegrityError:
+            logger.exception(
+                "Slide constraint violation during create for quiz_id=%s",
+                quiz.id,
+            )
+            raise ValidationError(
+                {"detail": "Slide order conflicts with an existing slide."}
+            )
 
     def _reorder_existing(self, quiz, instance, new_order):
         """Shift other slides to keep order unique when one slide moves."""
@@ -327,6 +443,21 @@ class SlideViewSet(viewsets.ModelViewSet):
                 self._reorder_existing(quiz, instance, new_order)
                 serializer.save(quiz=quiz, order=new_order)
                 touch_quiz(quiz.pk)
+        except DjangoValidationError as exc:
+            return Response(_format_django_validation_error(exc), status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError:
+            logger.exception(
+                "Slide order constraint violation for slide_id=%s quiz_id=%s",
+                instance.id,
+                quiz.id,
+            )
+            return Response(
+                {
+                    "error": "Failed to update slide",
+                    "detail": "Slide order conflicts with an existing slide.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except ValidationError as exc:
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
@@ -334,7 +465,10 @@ class SlideViewSet(viewsets.ModelViewSet):
                 "Failed to update slide_id=%s quiz_id=%s", instance.id, quiz.id
             )
             return Response(
-                {'error': 'Failed to update slide'},
+                {
+                    "error": "Failed to update slide",
+                    "detail": "Unexpected server error while updating the slide.",
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -407,13 +541,34 @@ class QuestionViewSet(viewsets.ViewSet):
             try:
                 serializer.save(slide=slide)
                 touch_quiz(slide.quiz_id)
+            except DjangoValidationError as exc:
+                return Response(
+                    _format_django_validation_error(exc),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except IntegrityError:
+                logger.exception(
+                    "Question constraint violation for slide_id=%s quiz_pk=%s",
+                    slide_pk,
+                    quiz_pk,
+                )
+                return Response(
+                    {
+                        "error": "Failed to create question",
+                        "detail": "Question data violates database constraints.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             except Exception:
                 logger.exception(
                     "Failed to create question for slide_id=%s quiz_pk=%s",
                     slide_pk, quiz_pk
                 )
                 return Response(
-                    {'error': 'Failed to create question'},
+                    {
+                        "error": "Failed to create question",
+                        "detail": "Unexpected server error while creating the question.",
+                    },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -437,13 +592,34 @@ class QuestionViewSet(viewsets.ViewSet):
             try:
                 serializer.save()
                 touch_quiz(question.slide.quiz_id)
+            except DjangoValidationError as exc:
+                return Response(
+                    _format_django_validation_error(exc),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except IntegrityError:
+                logger.exception(
+                    "Question constraint violation for slide_id=%s quiz_pk=%s",
+                    slide_pk,
+                    quiz_pk,
+                )
+                return Response(
+                    {
+                        "error": "Failed to update question",
+                        "detail": "Question data violates database constraints.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             except Exception:
                 logger.exception(
                     "Failed to update question slide_id=%s quiz_pk=%s",
                     slide_pk, quiz_pk
                 )
                 return Response(
-                    {'error': 'Failed to update question'},
+                    {
+                        "error": "Failed to update question",
+                        "detail": "Unexpected server error while updating the question.",
+                    },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             return Response(serializer.data)
@@ -472,13 +648,34 @@ class QuestionViewSet(viewsets.ViewSet):
             try:
                 serializer.save()
                 touch_quiz(question.slide.quiz_id)
+            except DjangoValidationError as exc:
+                return Response(
+                    _format_django_validation_error(exc),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except IntegrityError:
+                logger.exception(
+                    "Question constraint violation for slide_id=%s quiz_pk=%s",
+                    slide_pk,
+                    quiz_pk,
+                )
+                return Response(
+                    {
+                        "error": "Failed to update question",
+                        "detail": "Question data violates database constraints.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             except Exception:
                 logger.exception(
                     "Failed to partially update question slide_id=%s quiz_pk=%s",
                     slide_pk, quiz_pk
                 )
                 return Response(
-                    {'error': 'Failed to update question'},
+                    {
+                        "error": "Failed to update question",
+                        "detail": "Unexpected server error while updating the question.",
+                    },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             return Response(serializer.data)
@@ -500,8 +697,9 @@ class QuestionViewSet(viewsets.ViewSet):
         try:
             question = Question.objects.get(
                 slide_id=slide_pk, slide__quiz_id=quiz_pk)
+            quiz_id = question.slide.quiz_id
             question.delete()
-            touch_quiz(question.slide.quiz_id)
+            touch_quiz(quiz_id)
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Question.DoesNotExist:
             return Response(
@@ -539,6 +737,17 @@ class OptionViewSet(viewsets.ModelViewSet):
         try:
             serializer.save(question=question)
             touch_quiz(question.slide.quiz_id)
+        except DjangoValidationError as exc:
+            raise ValidationError(_format_django_validation_error(exc))
+        except IntegrityError:
+            logger.exception(
+                "Option constraint violation for question slide_id=%s quiz_pk=%s",
+                self.kwargs['slide_pk'],
+                self.kwargs['quiz_pk'],
+            )
+            raise ValidationError(
+                {"detail": "Option data violates database constraints."}
+            )
         except Exception:
             logger.exception(
                 "Failed to create option for question slide_id=%s quiz_pk=%s",
@@ -599,12 +808,33 @@ class ContentViewSet(viewsets.ViewSet):
                 'content_image_url', slide.content_image_url)
             slide.save()
             touch_quiz(slide.quiz_id)
+        except DjangoValidationError as exc:
+            return Response(
+                _format_django_validation_error(exc),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except IntegrityError:
+            logger.exception(
+                "Content constraint violation for slide_id=%s quiz_pk=%s",
+                slide_pk,
+                quiz_pk,
+            )
+            return Response(
+                {
+                    "error": "Failed to update content",
+                    "detail": "Content data violates database constraints.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception:
             logger.exception(
                 "Failed to update content slide_id=%s quiz_pk=%s", slide_pk, quiz_pk
             )
             return Response(
-                {'error': 'Failed to update content'},
+                {
+                    "error": "Failed to update content",
+                    "detail": "Unexpected server error while updating content.",
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -627,12 +857,33 @@ class ContentViewSet(viewsets.ViewSet):
             slide.content_image_url = None
             slide.save()
             touch_quiz(slide.quiz_id)
+        except DjangoValidationError as exc:
+            return Response(
+                _format_django_validation_error(exc),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except IntegrityError:
+            logger.exception(
+                "Content constraint violation for slide_id=%s quiz_pk=%s",
+                slide_pk,
+                quiz_pk,
+            )
+            return Response(
+                {
+                    "error": "Failed to delete content",
+                    "detail": "Content data violates database constraints.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception:
             logger.exception(
                 "Failed to delete content slide_id=%s quiz_pk=%s", slide_pk, quiz_pk
             )
             return Response(
-                {'error': 'Failed to delete content'},
+                {
+                    "error": "Failed to delete content",
+                    "detail": "Unexpected server error while deleting content.",
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         return Response({'status': 'content deleted'})
@@ -647,6 +898,20 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
     queryset = PlayerSession.objects.all()
     serializer_class = PlayerSessionSerializer
     pagination_class = StandardResultsSetPagination
+
+    @swagger_auto_schema(
+        operation_description="List player sessions.",
+        manual_parameters=PAGINATION_PARAMS,
+        responses={
+            200: openapi.Response(
+                "Paginated player session list",
+                schema=paginated_response_schema(PLAYER_SESSION_ITEM_SCHEMA),
+            )
+        },
+        tags=["Players"],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
         # برای Swagger
@@ -671,8 +936,18 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Schema(
                         type=openapi.TYPE_OBJECT,
+                        required=[
+                            'rust_session_id',
+                            'player_name',
+                            'avatar',
+                            'score',
+                            'time_taken',
+                            'rank',
+                        ],
                         properties={
                             'rust_session_id': openapi.Schema(type=openapi.TYPE_STRING),
+                            'player_name': openapi.Schema(type=openapi.TYPE_STRING),
+                            'avatar': openapi.Schema(type=openapi.TYPE_STRING),
                             'score': openapi.Schema(type=openapi.TYPE_INTEGER),
                             'time_taken': openapi.Schema(type=openapi.TYPE_NUMBER),
                             'rank': openapi.Schema(type=openapi.TYPE_INTEGER),
@@ -681,7 +956,41 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                 )
             }
         ),
-        responses={200: "لیدربرد با موفقیت ذخیره شد"}
+        responses={
+            200: openapi.Response(
+                "Leaderboard stored",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_STRING),
+                        'saved_entries': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'total_entries': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'errors': openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(type=openapi.TYPE_OBJECT),
+                        ),
+                    },
+                ),
+            ),
+            207: openapi.Response(
+                "Leaderboard partially stored",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_STRING),
+                        'saved_entries': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'total_entries': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'errors': openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(type=openapi.TYPE_OBJECT),
+                        ),
+                    },
+                ),
+            ),
+            400: openapi.Response("Invalid payload"),
+            404: openapi.Response("No question found for this slide"),
+        },
+        tags=["Leaderboard"]
     )
     def create(self, request, quiz_pk=None, slide_pk=None):
         """دریافت لیدربرد از Rust"""
@@ -704,17 +1013,39 @@ class LeaderboardReceiveView(viewsets.ViewSet):
         leaderboard_data = serializer.validated_data.get('leaderboard', [])
         if not leaderboard_data:
             return Response(
-                {'error': 'leaderboard list is empty'},
+                {'error': 'leaderboard list is empty; provide at least one entry'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         saved_count = 0
         errors = []
-        for entry in leaderboard_data:
+        for idx, entry in enumerate(leaderboard_data, start=1):
             try:
                 rust_id = entry.get('rust_session_id')
                 if not rust_id:
-                    errors.append({'detail': 'rust_session_id missing in entry'})
+                    errors.append(
+                        {'index': idx, 'detail': 'rust_session_id missing in entry'}
+                    )
+                    continue
+                player_name = entry.get('player_name')
+                avatar = entry.get('avatar')
+                if not player_name:
+                    errors.append(
+                        {
+                            'index': idx,
+                            'rust_session_id': rust_id,
+                            'detail': 'player_name missing in entry',
+                        }
+                    )
+                    continue
+                if not avatar:
+                    errors.append(
+                        {
+                            'index': idx,
+                            'rust_session_id': rust_id,
+                            'detail': 'avatar missing in entry',
+                        }
+                    )
                     continue
 
                 player_session = PlayerSession.objects.filter(
@@ -722,31 +1053,51 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                 ).first()
 
                 if player_session:
-                    Leaderboard.objects.update_or_create(
-                        question=question,
-                        rust_session_id=rust_id,
-                        defaults={
-                            'player_name': player_session.player_name,
-                            'avatar': player_session.avatar,
-                            'score': entry['score'],
-                            'time_taken': entry['time_taken'],
-                            'rank': entry['rank']
-                        }
-                    )
-                    saved_count += 1
+                    if player_session.quiz_id != question.slide.quiz_id:
+                        errors.append(
+                            {
+                                'index': idx,
+                                'rust_session_id': rust_id,
+                                'detail': 'player_session belongs to another quiz'
+                            }
+                        )
+                        continue
+                    updates = {}
+                    if player_session.player_name != player_name:
+                        updates['player_name'] = player_name
+                    if player_session.avatar != avatar:
+                        updates['avatar'] = avatar
+                    if updates:
+                        PlayerSession.objects.filter(pk=player_session.pk).update(**updates)
+                        for key, value in updates.items():
+                            setattr(player_session, key, value)
                 else:
-                    errors.append(
-                        {
-                            'rust_session_id': rust_id,
-                            'detail': 'player_session not found'
-                        }
+                    player_session = PlayerSession.objects.create(
+                        rust_session_id=rust_id,
+                        quiz=question.slide.quiz,
+                        player_name=player_name,
+                        avatar=avatar,
                     )
+
+                Leaderboard.objects.update_or_create(
+                    question=question,
+                    rust_session_id=rust_id,
+                    defaults={
+                        'player_name': player_name,
+                        'avatar': avatar,
+                        'score': entry['score'],
+                        'time_taken': entry['time_taken'],
+                        'rank': entry['rank']
+                    }
+                )
+                saved_count += 1
             except Exception:
                 logger.exception(
                     "Failed to save leaderboard entry for question_id=%s", question.pk
                 )
                 errors.append(
                     {
+                        'index': idx,
                         'rust_session_id': entry.get('rust_session_id'),
                         'detail': 'internal error while saving entry'
                     }
