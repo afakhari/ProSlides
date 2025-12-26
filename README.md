@@ -1,6 +1,9 @@
 # ProSlides
 a live interactive quiz
 
+## Deployment
+See `DEPLOYMENT.md` for how to run the Django backend in production.
+
 ## Seed Demo Data
 
 This project provides a management command to generate bulk demo data.
