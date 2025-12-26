@@ -10,11 +10,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.throttling import ScopedRateThrottle
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from django.db import transaction
 from django.db.models import Count, F, Max, Sum
 from django.utils import timezone
 from django.contrib.auth import get_user_model
@@ -135,6 +136,14 @@ def send_verification_email(user, code):
 
 def touch_quiz(quiz_id):
     Quiz.objects.filter(pk=quiz_id).update(updated_at=timezone.now())
+
+
+def _format_django_validation_error(exc):
+    if getattr(exc, "message_dict", None):
+        return exc.message_dict
+    if getattr(exc, "messages", None):
+        return {"detail": exc.messages}
+    return {"detail": str(exc)}
 
 
 class QuizViewSet(viewsets.ModelViewSet):
@@ -442,11 +451,22 @@ class SlideViewSet(viewsets.ModelViewSet):
         if order is not None and order < 1:
             raise ValidationError({'order': 'must be a positive integer'})
 
-        with transaction.atomic():
-            if order is not None:
-                Slide.objects.filter(quiz=quiz, order__gte=order).update(order=F('order') + 1)
-            serializer.save(quiz=quiz, order=order)
-            touch_quiz(quiz.pk)
+        try:
+            with transaction.atomic():
+                if order is not None:
+                    Slide.objects.filter(quiz=quiz, order__gte=order).update(order=F('order') + 1)
+                serializer.save(quiz=quiz, order=order)
+                touch_quiz(quiz.pk)
+        except DjangoValidationError as exc:
+            raise ValidationError(_format_django_validation_error(exc))
+        except IntegrityError:
+            logger.exception(
+                "Slide constraint violation during create for quiz_id=%s",
+                quiz.id,
+            )
+            raise ValidationError(
+                {"detail": "Slide order conflicts with an existing slide."}
+            )
 
     def _reorder_existing(self, quiz, instance, new_order):
         """Shift other slides to keep order unique when one slide moves."""
@@ -485,6 +505,21 @@ class SlideViewSet(viewsets.ModelViewSet):
                 self._reorder_existing(quiz, instance, new_order)
                 serializer.save(quiz=quiz, order=new_order)
                 touch_quiz(quiz.pk)
+        except DjangoValidationError as exc:
+            return Response(_format_django_validation_error(exc), status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError:
+            logger.exception(
+                "Slide order constraint violation for slide_id=%s quiz_id=%s",
+                instance.id,
+                quiz.id,
+            )
+            return Response(
+                {
+                    "error": "Failed to update slide",
+                    "detail": "Slide order conflicts with an existing slide.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except ValidationError as exc:
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
@@ -492,7 +527,10 @@ class SlideViewSet(viewsets.ModelViewSet):
                 "Failed to update slide_id=%s quiz_id=%s", instance.id, quiz.id
             )
             return Response(
-                {'error': 'Failed to update slide'},
+                {
+                    "error": "Failed to update slide",
+                    "detail": "Unexpected server error while updating the slide.",
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -567,13 +605,34 @@ class QuestionViewSet(viewsets.ViewSet):
             try:
                 serializer.save(slide=slide)
                 touch_quiz(slide.quiz_id)
+            except DjangoValidationError as exc:
+                return Response(
+                    _format_django_validation_error(exc),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except IntegrityError:
+                logger.exception(
+                    "Question constraint violation for slide_id=%s quiz_pk=%s",
+                    slide_pk,
+                    quiz_pk,
+                )
+                return Response(
+                    {
+                        "error": "Failed to create question",
+                        "detail": "Question data violates database constraints.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             except Exception:
                 logger.exception(
                     "Failed to create question for slide_id=%s quiz_pk=%s",
                     slide_pk, quiz_pk
                 )
                 return Response(
-                    {'error': 'Failed to create question'},
+                    {
+                        "error": "Failed to create question",
+                        "detail": "Unexpected server error while creating the question.",
+                    },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -598,13 +657,34 @@ class QuestionViewSet(viewsets.ViewSet):
             try:
                 serializer.save()
                 touch_quiz(question.slide.quiz_id)
+            except DjangoValidationError as exc:
+                return Response(
+                    _format_django_validation_error(exc),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except IntegrityError:
+                logger.exception(
+                    "Question constraint violation for slide_id=%s quiz_pk=%s",
+                    slide_pk,
+                    quiz_pk,
+                )
+                return Response(
+                    {
+                        "error": "Failed to update question",
+                        "detail": "Question data violates database constraints.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             except Exception:
                 logger.exception(
                     "Failed to update question slide_id=%s quiz_pk=%s",
                     slide_pk, quiz_pk
                 )
                 return Response(
-                    {'error': 'Failed to update question'},
+                    {
+                        "error": "Failed to update question",
+                        "detail": "Unexpected server error while updating the question.",
+                    },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             return Response(serializer.data)
@@ -634,13 +714,34 @@ class QuestionViewSet(viewsets.ViewSet):
             try:
                 serializer.save()
                 touch_quiz(question.slide.quiz_id)
+            except DjangoValidationError as exc:
+                return Response(
+                    _format_django_validation_error(exc),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except IntegrityError:
+                logger.exception(
+                    "Question constraint violation for slide_id=%s quiz_pk=%s",
+                    slide_pk,
+                    quiz_pk,
+                )
+                return Response(
+                    {
+                        "error": "Failed to update question",
+                        "detail": "Question data violates database constraints.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             except Exception:
                 logger.exception(
                     "Failed to partially update question slide_id=%s quiz_pk=%s",
                     slide_pk, quiz_pk
                 )
                 return Response(
-                    {'error': 'Failed to update question'},
+                    {
+                        "error": "Failed to update question",
+                        "detail": "Unexpected server error while updating the question.",
+                    },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             return Response(serializer.data)
@@ -709,6 +810,17 @@ class OptionViewSet(viewsets.ModelViewSet):
         try:
             serializer.save(question=question)
             touch_quiz(question.slide.quiz_id)
+        except DjangoValidationError as exc:
+            raise ValidationError(_format_django_validation_error(exc))
+        except IntegrityError:
+            logger.exception(
+                "Option constraint violation for question slide_id=%s quiz_pk=%s",
+                self.kwargs['slide_pk'],
+                self.kwargs['quiz_pk'],
+            )
+            raise ValidationError(
+                {"detail": "Option data violates database constraints."}
+            )
         except Exception:
             logger.exception(
                 "Failed to create option for question slide_id=%s quiz_pk=%s",
@@ -771,12 +883,33 @@ class ContentViewSet(viewsets.ViewSet):
                 'content_image_url', slide.content_image_url)
             slide.save()
             touch_quiz(slide.quiz_id)
+        except DjangoValidationError as exc:
+            return Response(
+                _format_django_validation_error(exc),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except IntegrityError:
+            logger.exception(
+                "Content constraint violation for slide_id=%s quiz_pk=%s",
+                slide_pk,
+                quiz_pk,
+            )
+            return Response(
+                {
+                    "error": "Failed to update content",
+                    "detail": "Content data violates database constraints.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception:
             logger.exception(
                 "Failed to update content slide_id=%s quiz_pk=%s", slide_pk, quiz_pk
             )
             return Response(
-                {'error': 'Failed to update content'},
+                {
+                    "error": "Failed to update content",
+                    "detail": "Unexpected server error while updating content.",
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -800,12 +933,33 @@ class ContentViewSet(viewsets.ViewSet):
             slide.content_image_url = None
             slide.save()
             touch_quiz(slide.quiz_id)
+        except DjangoValidationError as exc:
+            return Response(
+                _format_django_validation_error(exc),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except IntegrityError:
+            logger.exception(
+                "Content constraint violation for slide_id=%s quiz_pk=%s",
+                slide_pk,
+                quiz_pk,
+            )
+            return Response(
+                {
+                    "error": "Failed to delete content",
+                    "detail": "Content data violates database constraints.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception:
             logger.exception(
                 "Failed to delete content slide_id=%s quiz_pk=%s", slide_pk, quiz_pk
             )
             return Response(
-                {'error': 'Failed to delete content'},
+                {
+                    "error": "Failed to delete content",
+                    "detail": "Unexpected server error while deleting content.",
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         return Response({'status': 'content deleted'})
@@ -943,25 +1097,39 @@ class LeaderboardReceiveView(viewsets.ViewSet):
         leaderboard_data = serializer.validated_data.get('leaderboard', [])
         if not leaderboard_data:
             return Response(
-                {'error': 'leaderboard list is empty'},
+                {'error': 'leaderboard list is empty; provide at least one entry'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         saved_count = 0
         errors = []
-        for entry in leaderboard_data:
+        for idx, entry in enumerate(leaderboard_data, start=1):
             try:
                 rust_id = entry.get('rust_session_id')
                 if not rust_id:
-                    errors.append({'detail': 'rust_session_id missing in entry'})
+                    errors.append(
+                        {'index': idx, 'detail': 'rust_session_id missing in entry'}
+                    )
                     continue
                 player_name = entry.get('player_name')
                 avatar = entry.get('avatar')
                 if not player_name:
-                    errors.append({'rust_session_id': rust_id, 'detail': 'player_name missing in entry'})
+                    errors.append(
+                        {
+                            'index': idx,
+                            'rust_session_id': rust_id,
+                            'detail': 'player_name missing in entry',
+                        }
+                    )
                     continue
                 if not avatar:
-                    errors.append({'rust_session_id': rust_id, 'detail': 'avatar missing in entry'})
+                    errors.append(
+                        {
+                            'index': idx,
+                            'rust_session_id': rust_id,
+                            'detail': 'avatar missing in entry',
+                        }
+                    )
                     continue
 
                 player_session = PlayerSession.objects.filter(
@@ -972,6 +1140,7 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                     if player_session.quiz_id != question.slide.quiz_id:
                         errors.append(
                             {
+                                'index': idx,
                                 'rust_session_id': rust_id,
                                 'detail': 'player_session belongs to another quiz'
                             }
@@ -1012,6 +1181,7 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                 )
                 errors.append(
                     {
+                        'index': idx,
                         'rust_session_id': entry.get('rust_session_id'),
                         'detail': 'internal error while saving entry'
                     }
