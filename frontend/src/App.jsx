@@ -22,6 +22,7 @@ import { WebSocketProvider } from "./contexts/WebSocketContext";
 import { ServerDataProvider } from "./contexts/ServerDataContext";
 import { useServerData } from "./hooks/useServerData";
 import { useWebSocket } from "./hooks/useWebSocket";
+import { AudioProvider, useAudio } from "./contexts/AudioContext";
 
 import HomePage from "./pages/quiz/manager/HomePage";
 import EditorPage from "./pages/quiz/manager/EditorPage";
@@ -53,10 +54,12 @@ function PresentationRouter() {
   const wsRole = role === "player" ? "player" : "manager";
 
   return (
-    <WebSocketProvider role={wsRole}>
-      <AppPresentation roomId={roomId} role={role} />
-      <WSMessageHandler />
-    </WebSocketProvider>
+    <AudioProvider>
+      <WebSocketProvider role={wsRole}>
+        <AppPresentation roomId={roomId} role={role} />
+        <WSMessageHandler />
+      </WebSocketProvider>
+    </AudioProvider>
   );
 }
 
@@ -79,28 +82,60 @@ function AppPresentation({ roomId, role }) {
         const data = await res.json();
         if (!mounted) return;
         if (data && Array.isArray(data.slides)) {
-          // transform same as manager expects
+          // Transform API format to internal format
           const mappedSlides = data.slides.map((slide) => {
             if (slide.slide_type === 1 && slide.question) {
+              const q = slide.question;
               return {
                 slide_type: 1,
-                question_id: slide.slide_id,
-                question_text: slide.question.text,
-                question_time: slide.question.time_limit,
-                max_point: slide.question.max_point,
-                min_point: slide.question.min_point,
-                options: (slide.question.options || []).map((opt) => ({
+                slide_id: slide.slide_id,
+                question_id: q.question_id,
+                question_text: q.text,
+                question_title: q.title || "",
+                question_time: q.time_limit,
+                max_point: q.max_point,
+                min_point: q.min_point,
+                // New fields from API
+                question_type: q.question_type, // "single" or "multiple"
+                has_multiple: q.question_type === "multiple",
+                image_url: q.image_url || "",
+                faster_answers_more_points: q.faster_answers_more_points,
+                partial_scoring: q.partial_scoring,
+                show_leaderboard_after: slide.show_leaderboard_after,
+                // Leaderboard data from API
+                leaderboard: slide.leaderboard || [],
+                options: (q.options || []).map((opt) => ({
                   option_id: opt.option_id,
                   option_text: opt.text,
                   answer: opt.is_correct,
                   number_of_submits: opt.votes || 0,
+                  image_url: opt.image_url || "",
+                  order: opt.order,
                 })),
               };
             }
-            return { slide_type: 2 };
+            // Content slide or leaderboard slide
+            return {
+              slide_type: slide.slide_type || 2,
+              slide_id: slide.slide_id,
+              title: slide.title || "",
+              content_text: slide.content_text || "",
+              content_image_url: slide.content_image_url || "",
+              leaderboard: slide.leaderboard || [],
+            };
           });
-          setRemoteQuiz({ slides: mappedSlides });
-          console.log("[AppPresentation] remote quiz loaded", mappedSlides);
+
+          // Store quiz metadata as well
+          const quizData = {
+            quiz_id: data.quiz_id,
+            title: data.title,
+            background: data.background || { color: "#1e1e2e", image: "" },
+            music_url: data.music_url || "",
+            slides: mappedSlides,
+          };
+
+          setRemoteQuiz(quizData);
+          console.log("[AppPresentation] remote quiz loaded", quizData);
         }
       } catch (err) {
         console.warn("[AppPresentation] could not load remote quiz", err);
@@ -115,6 +150,14 @@ function AppPresentation({ roomId, role }) {
   const quiz = remoteQuiz ?? QuizSetup;
   const isRemoteReady = !!quiz; // Always ready (remote or fallback)
   const totalSlides = quiz.slides.length;
+
+  // Set quiz music when loaded
+  const { setQuizMusic } = useAudio();
+  useEffect(() => {
+    if (remoteQuiz?.music_url) {
+      setQuizMusic(remoteQuiz.music_url);
+    }
+  }, [remoteQuiz?.music_url, setQuizMusic]);
 
   const {
     currentQuestion,
@@ -169,6 +212,7 @@ function AppPresentation({ roomId, role }) {
             onPrevious={handlePrevious}
             currentSlide={currentSlide}
             totalSlides={totalSlides}
+            quiz={quiz}
           />
         );
       case "ManagerPickAnswerQuestion":
@@ -216,6 +260,7 @@ function AppPresentation({ roomId, role }) {
           roomId={roomId}
           question={currentQuestion}
           result={result}
+          quiz={quiz}
         />
       );
     }
@@ -230,11 +275,12 @@ function AppPresentation({ roomId, role }) {
         <PlayerLeaderBoard
           roomId={roomId}
           players={leaderboardResults.results || leaderboardResults}
+          quiz={quiz}
         />
       );
     }
 
-    return <PlayerJoinPage roomId={roomId} />;
+    return <PlayerJoinPage roomId={roomId} quiz={quiz} />;
   };
 
   /* ----------- Final Conditional Rendering ----------- */

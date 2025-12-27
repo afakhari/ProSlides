@@ -300,10 +300,18 @@ export default function ManagerPickAnswerQuestion({
     isRemoteReady,
   ]);
 
+  // Calculate dynamic background style from quiz data
+  const backgroundStyle = {
+    backgroundImage: quiz?.background?.image
+      ? `url('${quiz.background.image}')`
+      : "url('/bg.jpg')",
+    backgroundColor: quiz?.background?.color || "#1e1e2e",
+  };
+
   return (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      style={backgroundStyle}
     >
       <TopBar
         gameCode={gameCode}
@@ -319,7 +327,7 @@ export default function ManagerPickAnswerQuestion({
       />
 
       <div
-        className={` min-h-screen flex flex-col justify-around items-center transition-all duration-300 pt-20 ${
+        className={`h-screen flex flex-col items-center transition-all duration-300 pt-20 pb-24 overflow-hidden ${
           showQRModal ? "ml-[20%] w-[80%]" : "ml-0 w-full"
         }`}
       >
@@ -337,55 +345,93 @@ export default function ManagerPickAnswerQuestion({
 
         {isRemoteReady ? (
           <>
-            <h2 className="text-6xl font-bold text-white mb-10 mt-12">
+            {/* صورت سوال - بالا با فاصله بیشتر */}
+            <h2 className="text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-4 mt-8 text-center px-4 shrink-0">
               {currentQuestion.question_text}
             </h2>
 
             {/* تایمر */}
             {!showResults && timer > 0 && (
-              <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-white">
+              <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-white pointer-events-none z-10">
                 {timer}
               </div>
             )}
-            {/* نمودار */}
-            <div className="flex justify-around items-end w-full h-[700px] mb-10 px-4">
-              {currentQuestion.options.map((opt, index) => {
-                const isCorrect = correctIndexes.includes(index);
-                const isSelected = index === selected;
-                const totalVotes = votes.reduce((sum, v) => sum + v, 0);
-                const height =
-                  showResults && totalVotes > 0
-                    ? (votes[index] / totalVotes) * 100
-                    : 0;
 
-                return (
-                  <div
-                    key={index}
-                    className="flex flex-col items-center justify-end w-1/5 h-full"
-                  >
-                    {showResults && (
-                      <div className="mb-2 text-center text-4xl text-white font-semibold">
-                        {votes[index]}
-                      </div>
-                    )}
+            {/* بخش اصلی - عکس سوال سمت چپ، گزینه‌ها سمت راست */}
+            <div className="flex flex-1 w-full min-h-0 px-4 gap-6">
+              {/* عکس سوال - سمت چپ */}
+              {currentQuestion.image_url && (
+                <div className="flex items-center justify-center w-1/4 shrink-0">
+                  <img
+                    src={currentQuestion.image_url}
+                    alt="Question"
+                    className="max-h-full max-w-full rounded-xl shadow-lg object-contain"
+                  />
+                </div>
+              )}
+
+              {/* نمودار گزینه‌ها - سمت راست */}
+              <div
+                className={`flex justify-around items-end flex-1 min-h-0 ${
+                  !currentQuestion.image_url ? "w-full" : ""
+                }`}
+              >
+                {currentQuestion.options.map((opt, index) => {
+                  const isCorrect = correctIndexes.includes(index);
+                  const isSelected = index === selected;
+                  const totalVotes = votes.reduce((sum, v) => sum + v, 0);
+                  // ارتفاع فقط وقتی نتایج رسیده نمایش داده میشه
+                  const height =
+                    hasReceivedResults && totalVotes > 0
+                      ? (votes[index] / totalVotes) * 100
+                      : 0;
+                  const hasImage = opt.image_url && opt.image_url.length > 0;
+
+                  return (
                     <div
-                      className={`w-3/4 rounded-t-lg transition-all duration-1000
-                      ${isCorrect ? "bg-green-500" : "bg-pink-600"}
-                      ${
-                        isSelected && !isCorrect ? "ring-2 ring-pink-800" : ""
-                      }`}
-                      style={{ height: `${height}%` }}
-                    ></div>
-                    <p className="mt-5 text-gray-700 text-3xl font-semibold text-center">
-                      {opt.option_text}
-                    </p>
-                  </div>
-                );
-              })}
+                      key={index}
+                      className="flex flex-col items-center justify-end w-1/5 h-full"
+                    >
+                      {/* تعداد رای - فقط بعد از دریافت نتایج */}
+                      {hasReceivedResults && (
+                        <div className="mb-1 text-center text-2xl lg:text-4xl text-white font-semibold">
+                          {votes[index]}
+                        </div>
+                      )}
+
+                      {/* تصویر گزینه - چسبیده به بالای نوار با عرض یکسان */}
+                      {hasImage && (
+                        <img
+                          src={opt.image_url}
+                          alt={opt.option_text}
+                          className="w-3/4 h-20 lg:h-28 rounded-t-lg object-cover"
+                        />
+                      )}
+
+                      {/* نوار نمودار - فقط بعد از دریافت نتایج نمایش داده میشه */}
+                      <div
+                        className={`w-3/4 transition-all duration-1000 ${
+                          hasImage ? "rounded-b-lg" : "rounded-t-lg"
+                        }
+                        ${hasReceivedResults ? (isCorrect ? "bg-green-500" : "bg-red-500") : "bg-transparent"}
+                        ${
+                          isSelected && !isCorrect ? "ring-2 ring-pink-800" : ""
+                        }`}
+                        style={{ height: hasReceivedResults ? `${Math.max(height, 5)}%` : "0%" }}
+                      ></div>
+
+                      {/* متن گزینه */}
+                      <p className="mt-2 text-white text-xl lg:text-2xl font-semibold text-center">
+                        {opt.option_text}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-center w-full h-[700px] mb-10 px-4">
+          <div className="flex items-center justify-center w-full flex-1 min-h-0 mb-4 px-4">
             <div className="text-white/80 text-2xl">Loading quiz…</div>
           </div>
         )}

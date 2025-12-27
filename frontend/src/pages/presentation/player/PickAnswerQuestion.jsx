@@ -2,11 +2,20 @@ import { useRef, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 
-export default function PlayerPickAnswerQuestion({ question, result }) {
+export default function PlayerPickAnswerQuestion({ question, result, quiz }) {
   // `question` is the primary question object (type 2 incoming message)
   // `result` is optional and may come from type 8 (question results) or type 3 (options_result)
   // The ServerDataContext will supply either when available.
   if (!question) return null;
+
+  // لاگ برای دیباگ
+  console.log(
+    "[PlayerPickAnswerQuestion] question_id:",
+    question.question_id,
+    "result:",
+    result
+  );
+
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(question.question_time);
@@ -17,6 +26,9 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
   useEffect(() => {
     startTime.current = Date.now();
     setTimeLeft(question.question_time);
+    // ریست کردن state ها وقتی سوال عوض میشه
+    setSelectedOptions([]);
+    setSubmitted(false);
   }, [question.question_id, question.question_time]);
 
   useEffect(() => {
@@ -113,10 +125,18 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
   const showResults = timeLeft <= -1 || !!result;
   const options = question.options || [];
 
+  // Calculate dynamic background style from quiz data
+  const backgroundStyle = {
+    backgroundImage: quiz?.background?.image
+      ? `url('${quiz.background.image}')`
+      : "url('/bg.jpg')",
+    backgroundColor: quiz?.background?.color || "#1e1e2e",
+  };
+
   return (
     <div
       className="text-white h-screen w-screen bg-cover bg-center bg-no-repeat font-poppins"
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      style={backgroundStyle}
     >
       <header>
         <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
@@ -133,6 +153,16 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
           <div className=" text-3xl font-bold mb-2 text-center h-15">
             {question.question_text}
           </div>
+          {/* تصویر سوال */}
+          {question.image_url && (
+            <div className="mb-4 flex justify-center">
+              <img
+                src={question.image_url}
+                alt="Question"
+                className="max-h-36 max-w-xs rounded-xl shadow-lg object-contain"
+              />
+            </div>
+          )}
           {/* Progress Bar */}
           <div className="min-h-auto max-w-2xl">
             <div className="m-2.5 flex flex-col items-stretch gap-[0.5vh]">
@@ -158,24 +188,19 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
                 if (showResults) {
                   // Defensive: result or optionsResult may be undefined when results
                   // haven't arrived yet or differ in shape. Guard property access.
+                  // نتیجه از type:8 میاد با فرمت { option_id, number_of_submits }
+                  // جواب صحیح رو از خود گزینه‌های سوال میخونیم (goz.answer)
                   const foundOption = result?.optionsResult?.find(
                     (option) => option.option_id === goz.option_id
                   );
 
-                  // Only set icon if we actually have a result for this option
-                  if (foundOption) {
-                    icon = foundOption.answer ? "✅" : "❌";
+                  // نمایش آیکون بر اساس answer که از خود سوال میاد
+                  icon = goz.answer ? "✅" : "❌";
 
-                    if (selectedOptions.includes(goz) && submitted) {
-                      optionClass = foundOption.answer
-                        ? "bg-green-600 text-white"
-                        : "bg-red-600 text-white";
-                    }
-                  } else {
-                    // No result for this option yet — show neutral state
-                    if (selectedOptions.includes(goz) && submitted) {
-                      optionClass = "bg-gray-700 text-white";
-                    }
+                  if (selectedOptions.includes(goz) && submitted) {
+                    optionClass = goz.answer
+                      ? "bg-green-600 text-white"
+                      : "bg-red-600 text-white";
                   }
                 } else if (selectedOptions.includes(goz)) {
                   optionClass = "bg-[#6c2bd9]";
@@ -202,6 +227,14 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
                         </span>
                       )}
                     </span>
+                    {/* تصویر گزینه */}
+                    {goz.image_url && (
+                      <img
+                        src={goz.image_url}
+                        alt=""
+                        className="w-12 h-12 rounded-lg object-cover shrink-0"
+                      />
+                    )}
                     {goz.option_text}
                   </label>
                 );

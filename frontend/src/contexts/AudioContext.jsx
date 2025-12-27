@@ -14,8 +14,10 @@ export function useAudio() {
 
 export function AudioProvider({ children }) {
   const [isMuted, setIsMuted] = useState(true);
+  const [musicUrl, setMusicUrl] = useState(null);
   const audioContextRef = useRef(null);
   const gainNodeRef = useRef(null);
+  const audioElementRef = useRef(null);
   const oscillatorsRef = useRef([]);
   const presentationOscillatorsRef = useRef([]);
 
@@ -238,12 +240,25 @@ export function AudioProvider({ children }) {
 
   // Handle Mute Toggle
   const toggleMute = () => {
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+
+    // If we have a music URL, use the audio element
+    if (audioElementRef.current) {
+      if (newMuted) {
+        audioElementRef.current.pause();
+      } else {
+        audioElementRef.current.play().catch((err) => {
+          console.warn("[Audio] Could not play music:", err);
+        });
+      }
+      return;
+    }
+
+    // Fallback to generated music
     if (!audioContextRef.current) {
       initAudio();
     }
-
-    const newMuted = !isMuted;
-    setIsMuted(newMuted);
 
     if (
       audioContextRef.current &&
@@ -260,10 +275,37 @@ export function AudioProvider({ children }) {
     }
   };
 
+  // Set music URL from quiz data
+  const setQuizMusic = (url) => {
+    if (!url) return;
+
+    setMusicUrl(url);
+
+    // Create or update audio element
+    if (!audioElementRef.current) {
+      const audio = new Audio();
+      audio.loop = true;
+      audio.volume = 0.3;
+      audioElementRef.current = audio;
+    }
+
+    audioElementRef.current.src = url;
+
+    // If not muted, start playing
+    if (!isMuted) {
+      audioElementRef.current.play().catch((err) => {
+        console.warn("[Audio] Could not auto-play music:", err);
+      });
+    }
+
+    console.log("[Audio] Music URL set:", url);
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     const oscillators = oscillatorsRef.current;
     const audioContext = audioContextRef.current;
+    const audioElement = audioElementRef.current;
 
     return () => {
       // Clear any intervals
@@ -276,12 +318,19 @@ export function AudioProvider({ children }) {
       if (audioContext) {
         audioContext.close();
       }
+
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.src = "";
+      }
     };
   }, []);
 
   const value = {
     isMuted,
     toggleMute,
+    setQuizMusic,
+    musicUrl,
   };
 
   return (
