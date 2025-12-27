@@ -183,12 +183,27 @@ export default function PlayerPickAnswerQuestion({
                 <span>{question.max_point}p</span>
               </div>
 
-              <div className="border-white border-2 bg-[rgba(255,255,255,0.3)] h-2 rounded-[5px] mt-3 mb-5 overflow-hidden ">
+              <div className="border-white border-2 bg-[rgba(255,255,255,0.3)] h-2 rounded-[5px] mt-3 mb-5 overflow-hidden">
                 <div
                   className="h-full bg-purple-600"
-                  style={{ 
-                    width: `${progressPercent}%`,
-                    transition: 'width 0.1s linear'
+
+                  style={{
+                    width: "100%",
+                    // Use GPU-accelerated transform instead of animating width.
+                    transform: `scaleX(${Math.max(
+                      0,
+                      Math.min(1, progressPercent / 100)
+                    )})`,
+                    transformOrigin: "left",
+                    transition: "transform 120ms linear",
+                    willChange: "transform",
+                    backfaceVisibility: "hidden",
+                    WebkitTransform: `scaleX(${Math.max(
+                      0,
+                      Math.min(1, progressPercent / 100)
+                    )})`,
+                    WebkitTransformOrigin: "left",
+
                   }}
                 ></div>
               </div>
