@@ -23,7 +23,8 @@ export default function ManagerPickAnswerQuestion({
   isRemoteReady,
   roomId,
 }) {
-  const { isConnected, sendNavigation, sendEnd, lastMessage } = useWebSocket();
+  const { isConnected, sendNavigation, sendEnd, lastMessage, type8Message } =
+    useWebSocket();
   const { questionResults, modalLeaderboardResults, processMessage } =
     useServerData();
 
@@ -93,55 +94,125 @@ export default function ManagerPickAnswerQuestion({
     // ذخیره پیام در ServerData
     processMessage(lastMessage);
 
-    // Type 8: Question Results
+    // Type 8: Question Results - مستقیم اعمال کن
     if (lastMessage.type === 8) {
-      console.log("[PickAnswerQuestion] Type 8 received!");
+      console.log("[PickAnswerQuestion] ===== TYPE 8 RECEIVED =====");
+      console.log(
+        "[PickAnswerQuestion] Current question_id:",
+        currentQuestion.question_id
+      );
+      console.log(
+        "[PickAnswerQuestion] Message question_id:",
+        lastMessage.question_id
+      );
+      console.log(
+        "[PickAnswerQuestion] Current options:",
+        currentQuestion.options?.map((o) => o.option_id)
+      );
+      console.log(
+        "[PickAnswerQuestion] Server options:",
+        lastMessage.options?.map((o) => o.option_id)
+      );
+
       setHasReceivedResults(true);
 
       // Check if options array exists (from server)
       const serverResults = lastMessage.options || lastMessage.submit || [];
-      console.log("[PickAnswerQuestion] Question results:", serverResults);
-      console.log(
-        "[PickAnswerQuestion] Current question options:",
-        currentQuestion.options
-      );
 
-      // Combine mock data (previous results) with server results (new results)
+      // اگه currentQuestion.options خالی یا undefined باشه، مستقیم از serverResults استفاده کن
+      if (!currentQuestion.options || currentQuestion.options.length === 0) {
+        console.log(
+          "[PickAnswerQuestion] No current options, using server results directly"
+        );
+        const newVotes = serverResults.map((s) => s.number_of_submits || 0);
+        console.log("[PickAnswerQuestion] Direct votes:", newVotes);
+        setVotes(newVotes);
+        setShowResults(true);
+        return;
+      }
+
+      // فقط از داده سرور استفاده کن
       const newVotes = currentQuestion.options.map((option) => {
-        // Get mock data (if available)
-        const mockVote = option.number_of_submits ?? 0;
-
-        // Get server data
         const serverResult = serverResults.find(
-          (s) => s.option_id === option.option_id
+          (s) => String(s.option_id) === String(option.option_id)
         );
         const serverVote = serverResult
           ? serverResult.number_of_submits ?? serverResult.number_of_submit ?? 0
           : 0;
 
-        // Combine: mock + server
-        const combinedVote = mockVote + serverVote;
         console.log(
-          `[PickAnswerQuestion] Option ${option.option_id}: mock=${mockVote} + server=${serverVote} = ${combinedVote}`
+          `[PickAnswerQuestion] Option ${
+            option.option_id
+          }: found=${!!serverResult}, vote=${serverVote}`
         );
-
-        return combinedVote;
+        return serverVote;
       });
 
-      console.log("[PickAnswerQuestion] Combined votes:", newVotes);
-      console.log("[PickAnswerQuestion] Setting showResults to true");
+      console.log("[PickAnswerQuestion] Final votes:", newVotes);
       setVotes(newVotes);
       setShowResults(true);
     }
-  }, [lastMessage, currentQuestion.options, processMessage]);
+  }, [
+    lastMessage,
+    currentQuestion.options,
+    currentQuestion.question_id,
+    processMessage,
+  ]);
+
+  // ✅ useEffect مخصوص type8Message - این گم نمیشه!
+  useEffect(() => {
+    if (!type8Message) return;
+
+    // چک کن که question_id مچ باشه - اگه نه، نادیده بگیر
+    const msgQId = String(type8Message.question_id);
+    const currentQId = String(currentQuestion.question_id);
+
+    if (msgQId !== currentQId) {
+      console.log(
+        "[PickAnswerQuestion] type8Message question_id mismatch, ignoring. msg:",
+        msgQId,
+        "current:",
+        currentQId
+      );
+      return;
+    }
+
+    console.log("[PickAnswerQuestion] ===== TYPE 8 MESSAGE RECEIVED =====");
+    console.log("[PickAnswerQuestion] type8Message:", type8Message);
+
+    setHasReceivedResults(true);
+
+    const serverResults = type8Message.options || [];
+
+    // اگه options خالیه، مستقیم استفاده کن
+    if (!currentQuestion.options || currentQuestion.options.length === 0) {
+      const newVotes = serverResults.map((s) => s.number_of_submits || 0);
+      console.log("[PickAnswerQuestion] Direct votes:", newVotes);
+      setVotes(newVotes);
+      setShowResults(true);
+      return;
+    }
+
+    // مپ کن به options فعلی
+    const newVotes = currentQuestion.options.map((option) => {
+      const serverResult = serverResults.find(
+        (s) => String(s.option_id) === String(option.option_id)
+      );
+      return serverResult?.number_of_submits ?? 0;
+    });
+
+    console.log("[PickAnswerQuestion] Votes from type8Message:", newVotes);
+    setVotes(newVotes);
+    setShowResults(true);
+  }, [type8Message, currentQuestion.options, currentQuestion.question_id]);
 
   // Update votes from questionResults in ServerDataContext
   useEffect(() => {
-    if (
-      questionResults &&
-      questionResults.options &&
-      questionResults.options.length > 0
-    ) {
+    // Support both 'options' and 'optionsResult' field names
+    const resultsArray =
+      questionResults?.optionsResult || questionResults?.options;
+
+    if (questionResults && resultsArray && resultsArray.length > 0) {
       console.log(
         "[PickAnswerQuestion] Checking questionResults:",
         questionResults
@@ -165,9 +236,9 @@ export default function ManagerPickAnswerQuestion({
           // Get mock data (if available)
           const mockVote = option.number_of_submits ?? 0;
 
-          // Get server data
-          const serverResult = questionResults.options.find(
-            (s) => s.option_id === option.option_id
+          // Get server data - use String comparison for option_id
+          const serverResult = resultsArray.find(
+            (s) => String(s.option_id) === String(option.option_id)
           );
           const serverVote = serverResult
             ? serverResult.number_of_submits ??
@@ -413,11 +484,23 @@ export default function ManagerPickAnswerQuestion({
                         className={`w-3/4 transition-all duration-1000 ${
                           hasImage ? "rounded-b-lg" : "rounded-t-lg"
                         }
-                        ${hasReceivedResults ? (isCorrect ? "bg-green-500" : "bg-red-500") : "bg-transparent"}
+
+                        ${
+                          hasReceivedResults
+                            ? isCorrect
+                              ? "bg-green-500"
+                              : "bg-red-500"
+                            : "bg-transparent"
+                        }
                         ${
                           isSelected && !isCorrect ? "ring-2 ring-pink-800" : ""
                         }`}
-                        style={{ height: hasReceivedResults ? `${Math.max(height, 5)}%` : "0%" }}
+                        style={{
+                          height: hasReceivedResults
+                            ? `${Math.max(height, 5)}%`
+                            : "0%",
+                        }}
+
                       ></div>
 
                       {/* متن گزینه */}

@@ -1,26 +1,38 @@
 import { useRef, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useServerData } from "../../../hooks/useServerData";
 
-export default function PlayerPickAnswerQuestion({ question, result, quiz }) {
-  // `question` is the primary question object (type 2 incoming message)
-  // `result` is optional and may come from type 8 (question results) or type 3 (options_result)
-  // The ServerDataContext will supply either when available.
-  if (!question) return null;
+export default function PlayerPickAnswerQuestion({
+  question,
+  result: propResult,
+  quiz,
+}) {
+  // همه hooks باید قبل از conditional return باشن
+  const { questionResults, partialQuestionResults } = useServerData();
+  const { sendMessage, isConnected } = useWebSocket();
+
+
+  const [selectedOptions, setSelectedOptions] = useState([]);
+  const [submitted, setSubmitted] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(question?.question_time || 0);
+  const startTime = useRef(Date.now());
+
+  // result رو از چند منبع چک کن - مستقیم از context
+  const result = propResult || questionResults || partialQuestionResults;
 
   // لاگ برای دیباگ
   console.log(
     "[PlayerPickAnswerQuestion] question_id:",
-    question.question_id,
+    question?.question_id,
     "result:",
-    result
+    result,
+    "partialQuestionResults:",
+    partialQuestionResults
   );
 
-  const [selectedOptions, setSelectedOptions] = useState([]);
-  const [submitted, setSubmitted] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(question.question_time);
-  const startTime = useRef(Date.now());
-  const { sendMessage, isConnected } = useWebSocket();
+  // اگه question نیست، بعد از hooks برگرد
+  if (!question) return null;
 
   // ⏱ تایمر دقیق با اختلاف زمان واقعی (حتی اگر تب عوض شود یا فریز شود)
   useEffect(() => {
@@ -173,8 +185,11 @@ export default function PlayerPickAnswerQuestion({ question, result, quiz }) {
 
               <div className="border-white border-2 bg-[rgba(255,255,255,0.3)] h-2 rounded-[5px] mt-3 mb-5 overflow-hidden ">
                 <div
-                  className="h-full bg-purple-600 transition-width duration-1000 ease-linear"
-                  style={{ width: `${progressPercent}%` }}
+                  className="h-full bg-purple-600"
+                  style={{ 
+                    width: `${progressPercent}%`,
+                    transition: 'width 0.1s linear'
+                  }}
                 ></div>
               </div>
             </div>
@@ -185,20 +200,24 @@ export default function PlayerPickAnswerQuestion({ question, result, quiz }) {
                 let optionClass = "";
                 let icon = null;
 
-                if (showResults) {
-                  // Defensive: result or optionsResult may be undefined when results
-                  // haven't arrived yet or differ in shape. Guard property access.
-                  // نتیجه از type:8 میاد با فرمت { option_id, number_of_submits }
-                  // جواب صحیح رو از خود گزینه‌های سوال میخونیم (goz.answer)
-                  const foundOption = result?.optionsResult?.find(
-                    (option) => option.option_id === goz.option_id
+
+                if (showResults && result?.optionsResult) {
+                  // نتیجه از type:3 میاد با فرمت { option_id, answer: true/false }
+                  // مقایسه با تبدیل به string برای اطمینان
+                  const foundOption = result.optionsResult.find(
+                    (option) =>
+                      String(option.option_id) === String(goz.option_id)
                   );
 
-                  // نمایش آیکون بر اساس answer که از خود سوال میاد
-                  icon = goz.answer ? "✅" : "❌";
+                  // جواب صحیح از سرور (type:3)
+                  const isCorrect = foundOption?.answer === true;
+
+                  // نمایش آیکون بر اساس جواب از سرور
+                  icon = isCorrect ? "✅" : "❌";
 
                   if (selectedOptions.includes(goz) && submitted) {
-                    optionClass = goz.answer
+                    optionClass = isCorrect
+
                       ? "bg-green-600 text-white"
                       : "bg-red-600 text-white";
                   }
