@@ -31,7 +31,7 @@ from .serializers import (
     VerifyEmailSerializer, ResendVerificationSerializer,
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer
 )
-from .permissions import IsQuizOwner
+from .permissions import IsQuizOwner, IsExportServiceOrQuizOwner
 from .pagination import StandardResultsSetPagination
 
 User = get_user_model()
@@ -280,10 +280,23 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="صادرات کامل اطلاعات کوئیز برای Rust",
+        manual_parameters=[
+            openapi.Parameter(
+                "X-Export-Token",
+                openapi.IN_HEADER,
+                description="Service token for Rust export access (optional if authenticated).",
+                type=openapi.TYPE_STRING,
+                required=False,
+            )
+        ],
         responses={200: ExportSerializer},
         tags=["Quizzes"]
     )
-    @action(detail=True, methods=['get'])
+    @action(
+        detail=True,
+        methods=['get'],
+        permission_classes=[IsExportServiceOrQuizOwner],
+    )
     def export(self, request, pk=None):
         """
         صادرات کامل کوئیز برای اجرا در Rust
@@ -291,7 +304,10 @@ class QuizViewSet(viewsets.ModelViewSet):
         این endpoint تمام اطلاعات کوئیز شامل اسلایدها، سوالات و گزینه‌ها را 
         به فرمت مورد نیاز Rust برمی‌گرداند.
         """
-        quiz = self.get_object()
+        if getattr(request, "_export_service_token_valid", False):
+            quiz = get_object_or_404(Quiz, pk=pk)
+        else:
+            quiz = self.get_object()
         serializer = ExportSerializer(quiz)
         return Response(serializer.data)
 

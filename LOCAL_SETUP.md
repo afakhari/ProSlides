@@ -50,6 +50,7 @@ DEBUG=True
 DJANGO_SETTINGS_MODULE=backend.srvs.office.office.settings
 ALLOWED_HOSTS=127.0.0.1,localhost
 CORS_ALLOWED_ORIGINS=http://127.0.0.1:3000,http://localhost:3000
+EXPORT_SERVICE_TOKEN=dev-export-token
 ```
 
 Email behavior:
@@ -69,6 +70,13 @@ python backend/srvs/office/manage.py migrate
 ```
 python backend/srvs/office/manage.py runserver 127.0.0.1:8000
 ```
+
+## Export access for Rust (service token)
+Rust can request quiz export without user login by sending:
+```
+X-Export-Token: dev-export-token
+```
+If `EXPORT_SERVICE_TOKEN` is empty, service-token access is disabled.
 
 ## 8) Swagger and base URLs
 - Swagger UI: `http://127.0.0.1:8000/swagger`

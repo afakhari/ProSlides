@@ -32,6 +32,7 @@ DEBUG=False
 SECRET_KEY=change-me
 ALLOWED_HOSTS=your.domain,api.your.domain
 DJANGO_SETTINGS_MODULE=backend.srvs.office.office.settings.prod
+EXPORT_SERVICE_TOKEN=change-me-export-token
 ```
 
 Email + OTP (verification) settings:
@@ -61,6 +62,13 @@ CORS_ALLOW_ALL_ORIGINS=False
 CORS_ALLOW_CREDENTIALS=False
 LOG_LEVEL=INFO
 ```
+
+## Export access for Rust (service token)
+Rust can request quiz export without user login by sending:
+```
+X-Export-Token: change-me-export-token
+```
+If `EXPORT_SERVICE_TOKEN` is empty, service-token access is disabled.
 
 Notes:
 - `ALLOWED_HOSTS` is a comma-separated list.

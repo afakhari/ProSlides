@@ -61,12 +61,19 @@ def test_non_owner_cannot_create_slide_on_foreign_quiz(api_client: APIClient):
 
 
 @pytest.mark.django_db
-def test_export_requires_auth(api_client: APIClient):
+@override_settings(EXPORT_SERVICE_TOKEN="test-export-token")
+def test_export_requires_auth_or_service_token(api_client: APIClient):
     quiz = QuizFactory()
     SlideFactory(quiz=quiz, slide_type=1)
 
     resp = api_client.get(f"/api/quizzes/{quiz.id}/export/")
     assert resp.status_code in (401, 403)
+
+    token_resp = api_client.get(
+        f"/api/quizzes/{quiz.id}/export/",
+        HTTP_X_EXPORT_TOKEN="test-export-token",
+    )
+    assert token_resp.status_code == 200
 
     api_client.force_authenticate(user=quiz.owner)
     resp_auth = api_client.get(f"/api/quizzes/{quiz.id}/export/")
