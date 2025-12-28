@@ -131,7 +131,7 @@ class ExportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Quiz
-        fields = ['quiz_id', 'title', 'background', 'music_url', 'slides']
+        fields = ['quiz_id', 'title', 'access_code', 'background', 'music_url', 'slides']
 
     def get_background(self, obj):
         return {
