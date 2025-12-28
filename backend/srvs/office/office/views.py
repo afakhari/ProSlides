@@ -184,6 +184,51 @@ class QuizViewSet(viewsets.ModelViewSet):
         return f"{base_title} (copy{max_copy + 1})"
 
     @swagger_auto_schema(
+        operation_description="Resolve quiz_id by access_code.",
+        manual_parameters=[
+            openapi.Parameter(
+                "access_code",
+                openapi.IN_QUERY,
+                description="Quiz access code",
+                type=openapi.TYPE_STRING,
+                required=True,
+            )
+        ],
+        responses={
+            200: openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                },
+            ),
+            400: openapi.Response("Missing access_code"),
+            404: openapi.Response("Quiz not found"),
+        },
+        tags=["Quizzes"],
+    )
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='resolve-access-code',
+        permission_classes=[AllowAny],
+    )
+    def resolve_access_code(self, request):
+        access_code = request.query_params.get("access_code", "").strip()
+        if not access_code:
+            return Response(
+                {"detail": "access_code query parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        quiz = Quiz.objects.filter(access_code=access_code).values("id").first()
+        if not quiz:
+            return Response(
+                {"detail": "Quiz not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({"quiz_id": quiz["id"]})
+
+    @swagger_auto_schema(
         operation_description="List quizzes.",
         manual_parameters=PAGINATION_PARAMS,
         responses={
