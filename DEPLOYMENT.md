@@ -22,7 +22,7 @@ python -m pip install -e .
 ```
 
 ## 2) Configure environment
-`env.read_env()` loads `.env` automatically. Create a `.env` file and set
+`env.read_env()` loads `.env` automatically. Start from `.env.example` and set
 production values. Make sure your process has these variables set before it
 starts (systemd, container env, hosting dashboard, etc).
 
@@ -32,6 +32,28 @@ DEBUG=False
 SECRET_KEY=change-me
 ALLOWED_HOSTS=your.domain,api.your.domain
 DJANGO_SETTINGS_MODULE=backend.srvs.office.office.settings.prod
+EXPORT_SERVICE_TOKEN=change-me-export-token
+```
+
+Email + OTP (verification) settings:
+```
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=465
+EMAIL_HOST_USER=your_username
+EMAIL_HOST_PASSWORD=your_password
+EMAIL_USE_SSL=True
+EMAIL_USE_TLS=False
+DEFAULT_FROM_EMAIL=no-reply@your.domain
+PASSWORD_RESET_URL_TEMPLATE=https://your.domain/reset-password?uid={uid}&token={token}
+```
+
+OTP behavior controls (optional, defaults in code):
+```
+EMAIL_VERIFICATION_CODE_TTL_MINUTES=10
+EMAIL_VERIFICATION_RESEND_SECONDS=60
+EMAIL_VERIFICATION_MAX_ATTEMPTS=5
+AUTH_REQUIRE_EMAIL_VERIFICATION=True
 ```
 
 Other optional production settings:
@@ -41,13 +63,21 @@ CORS_ALLOW_CREDENTIALS=False
 LOG_LEVEL=INFO
 ```
 
+## Rust service token (export + leaderboard)
+Rust can request quiz export and submit leaderboard updates by sending:
+```
+X-Export-Token: change-me-export-token
+```
+If `EXPORT_SERVICE_TOKEN` is empty, service-token access is disabled.
+
 Notes:
 - `ALLOWED_HOSTS` is a comma-separated list.
 - For production, `DEBUG` must be `False`.
 - Database settings are not env-driven; defaults to SQLite at
   `backend/srvs/office/db.sqlite3`. Update `backend/srvs/office/office/settings/base.py`
   if you need Postgres/MySQL.
-- This branch does not include auth/OTP email settings.
+- These are the only Django-related env vars read by this service (per
+  `backend/srvs/office/office/settings/base.py` and `prod.py`).
 
 ## 3) Run migrations
 Run from the repo root so Django can resolve `backend.*` imports. If your

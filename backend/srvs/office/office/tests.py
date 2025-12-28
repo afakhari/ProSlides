@@ -2,7 +2,7 @@ from contextlib import contextmanager
 import logging
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -219,6 +219,7 @@ class OfficeAPITests(TestCase):
             response = self.client.post(url, payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    @override_settings(EXPORT_SERVICE_TOKEN="test-export-token")
     def test_leaderboard_receive_creates_entries(self):
         url = reverse(
             "question-leaderboard",
@@ -236,7 +237,12 @@ class OfficeAPITests(TestCase):
                 }
             ]
         }
-        response = self.client.post(url, payload, format="json")
+        response = self.client.post(
+            url,
+            payload,
+            format="json",
+            HTTP_X_EXPORT_TOKEN="test-export-token",
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.assertTrue(PlayerSession.objects.filter(rust_session_id="player-1").exists())

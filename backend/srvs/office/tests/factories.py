@@ -1,7 +1,20 @@
 import factory
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 
 from backend.srvs.office.office import models
+
+User = get_user_model()
+
+
+class UserFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = User
+        skip_postgeneration_save = True
+
+    username = factory.Sequence(lambda n: f"user{n}")
+    email = factory.LazyAttribute(lambda o: f"{o.username}@example.com")
+    password = factory.PostGenerationMethodCall("set_password", "password123")
 
 
 class QuizFactory(factory.django.DjangoModelFactory):
@@ -14,6 +27,7 @@ class QuizFactory(factory.django.DjangoModelFactory):
     music_url = None
     background_color = "#FFFFFF"
     background_image_url = None
+    owner = factory.SubFactory(UserFactory)
 
 
 class SlideFactory(factory.django.DjangoModelFactory):

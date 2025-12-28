@@ -94,6 +94,16 @@ urlpatterns = [
         name='question-results'
     ),
 
+    # Auth
+    re_path(r'^api/auth/register/?$', views.RegisterView.as_view(), name='auth-register'),
+    re_path(r'^api/auth/verify/?$', views.VerifyEmailView.as_view(), name='auth-verify'),
+    re_path(r'^api/auth/verify/resend/?$', views.ResendVerificationView.as_view(), name='auth-verify-resend'),
+    re_path(r'^api/auth/password/reset/?$', views.PasswordResetRequestView.as_view(), name='auth-password-reset'),
+    re_path(r'^api/auth/password/reset/confirm/?$', views.PasswordResetConfirmView.as_view(), name='auth-password-reset-confirm'),
+    re_path(r'^api/auth/logout/?$', views.LogoutView.as_view(), name='auth-logout'),
+    re_path(r'^api/auth/token/?$', views.ThrottledTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    re_path(r'^api/auth/token/refresh/?$', views.ThrottledTokenRefreshView.as_view(), name='token_refresh'),
+
     # API routes
     path('api/', include(router.urls)),
     re_path(r'^api$', RedirectView.as_view(url='/api/', permanent=False)),

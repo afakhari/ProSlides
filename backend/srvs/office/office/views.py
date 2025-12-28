@@ -1,25 +1,40 @@
 import logging
 import re
-
+import secrets
 from rest_framework import viewsets, status
+from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
-from django.shortcuts import get_object_or_404
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
+from django.conf import settings
+from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
+from django.shortcuts import get_object_or_404
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.db.models import Count, F, Max, Sum
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard, EmailVerification
 from .serializers import (
     QuizSerializer, SlideSerializer, QuestionSerializer, OptionSerializer,
     ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer,
-    QuestionResultsReceiveSerializer, QuizListSerializer
+    QuestionResultsReceiveSerializer, RegisterSerializer, QuizListSerializer,
+    VerifyEmailSerializer, ResendVerificationSerializer,
+    PasswordResetRequestSerializer, PasswordResetConfirmSerializer
 )
+from .permissions import IsQuizOwner, IsExportServiceOrQuizOwner, IsServiceToken
 from .pagination import StandardResultsSetPagination
+
+User = get_user_model()
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +71,8 @@ def paginated_response_schema(items_schema):
             ),
         },
     )
+
+
 QUIZ_ITEM_SCHEMA = openapi.Schema(
     type=openapi.TYPE_OBJECT,
     properties={
@@ -99,6 +116,24 @@ PLAYER_SESSION_ITEM_SCHEMA = openapi.Schema(
 )
 
 
+def generate_verification_code():
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def send_verification_email(user, code):
+    ttl_minutes = settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
+    send_mail(
+        subject="Your ProSlides verification code",
+        message=(
+            "Your verification code is {code}. "
+            "It expires in {ttl} minutes."
+        ).format(code=code, ttl=ttl_minutes),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+
+
 def touch_quiz(quiz_id):
     Quiz.objects.filter(pk=quiz_id).update(updated_at=timezone.now())
 
@@ -111,6 +146,23 @@ def _format_django_validation_error(exc):
     return {"detail": str(exc)}
 
 
+def _enforce_single_choice_correct(question, exclude_option_id=None):
+    if question.question_type != "single":
+        return
+    existing = Option.objects.filter(question=question, is_correct=True)
+    if exclude_option_id is not None:
+        existing = existing.exclude(pk=exclude_option_id)
+    if existing.exists():
+        raise ValidationError({"detail": "Single choice questions can only have one correct option."})
+
+
+def _enforce_slide_type(slide, expected_type, expected_label):
+    if slide.slide_type != expected_type:
+        raise ValidationError(
+            {"detail": f"Slide type must be '{expected_label}' for this endpoint."}
+        )
+
+
 class QuizViewSet(viewsets.ModelViewSet):
     """
     مدیریت کوئیزها
@@ -119,13 +171,129 @@ class QuizViewSet(viewsets.ModelViewSet):
     """
     queryset = Quiz.objects.all()
     serializer_class = QuizSerializer
+    permission_classes = [IsAuthenticated]
+    swagger_tags = ["Quizzes"]
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
             return Quiz.objects.none()
-        return super().get_queryset()
+        return Quiz.objects.filter(owner=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+    def _next_copy_title(self, title):
+        match = re.match(r'^(.*)\s\(copy\d+\)$', title)
+        base_title = match.group(1) if match else title
+
+        pattern = re.compile(rf'^{re.escape(base_title)} \(copy(\d+)\)$')
+        existing = Quiz.objects.filter(
+            owner=self.request.user,
+            title__startswith=f"{base_title} (copy"
+        ).values_list('title', flat=True)
+        max_copy = 0
+        for existing_title in existing:
+            matched = pattern.match(existing_title)
+            if matched:
+                max_copy = max(max_copy, int(matched.group(1)))
+        return f"{base_title} (copy{max_copy + 1})"
+
+    @swagger_auto_schema(
+        operation_description="Resolve quiz_id by access_code.",
+        manual_parameters=[
+            openapi.Parameter(
+                "access_code",
+                openapi.IN_QUERY,
+                description="Quiz access code",
+                type=openapi.TYPE_STRING,
+                required=True,
+            )
+        ],
+        responses={
+            200: openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                },
+            ),
+            400: openapi.Response("Missing access_code"),
+            404: openapi.Response("Quiz not found"),
+        },
+        tags=["Quizzes"],
+    )
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='resolve-access-code',
+        permission_classes=[AllowAny],
+    )
+    def resolve_access_code(self, request):
+        access_code = request.query_params.get("access_code", "").strip()
+        if not access_code:
+            return Response(
+                {"detail": "access_code query parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        quiz = Quiz.objects.filter(access_code=access_code).values("id").first()
+        if not quiz:
+            return Response(
+                {"detail": "Quiz not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({"quiz_id": quiz["id"]})
+
+    @swagger_auto_schema(
+        operation_description="List quizzes.",
+        manual_parameters=PAGINATION_PARAMS,
+        responses={
+            200: openapi.Response(
+                "Paginated quiz list",
+                schema=paginated_response_schema(QUIZ_ITEM_SCHEMA),
+            )
+        },
+        tags=["Quizzes"],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Return quiz list for user panel.",
+        manual_parameters=PAGINATION_PARAMS,
+        responses={
+            200: openapi.Response(
+                "Paginated quiz list",
+                schema=paginated_response_schema(
+                    openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "quiz_name": openapi.Schema(type=openapi.TYPE_STRING),
+                            "last_update": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                            "created_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                            "access_code": openapi.Schema(type=openapi.TYPE_STRING),
+                            "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "slides_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                        },
+                    )
+                ),
+            )
+        },
+        tags=["Quizzes"],
+    )
+    @action(detail=False, methods=['get'], url_path='list')
+    def list_quizzes(self, request):
+        queryset = self.get_queryset()
+        queryset = queryset.annotate(slides_count=Count('slides', distinct=True))
+        queryset = queryset.order_by('-created_at')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = QuizListSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = QuizListSerializer(queryset, many=True)
+        return Response(serializer.data)
 
     def _filter_quizzes_for_request(self, request, queryset):
         if request.user and request.user.is_authenticated:
@@ -247,9 +415,23 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="صادرات کامل اطلاعات کوئیز برای Rust",
-        responses={200: ExportSerializer}
+        manual_parameters=[
+            openapi.Parameter(
+                "X-Export-Token",
+                openapi.IN_HEADER,
+                description="Service token for Rust export access (optional if authenticated).",
+                type=openapi.TYPE_STRING,
+                required=False,
+            )
+        ],
+        responses={200: ExportSerializer},
+        tags=["Quizzes"]
     )
-    @action(detail=True, methods=['get'])
+    @action(
+        detail=True,
+        methods=['get'],
+        permission_classes=[IsExportServiceOrQuizOwner],
+    )
     def export(self, request, pk=None):
         """
         صادرات کامل کوئیز برای اجرا در Rust
@@ -257,13 +439,39 @@ class QuizViewSet(viewsets.ModelViewSet):
         این endpoint تمام اطلاعات کوئیز شامل اسلایدها، سوالات و گزینه‌ها را 
         به فرمت مورد نیاز Rust برمی‌گرداند.
         """
-        quiz = self.get_object()
+        if getattr(request, "_export_service_token_valid", False):
+            quiz = get_object_or_404(Quiz, pk=pk)
+        else:
+            quiz = self.get_object()
         serializer = ExportSerializer(quiz)
         return Response(serializer.data)
 
     @swagger_auto_schema(
         operation_description="Calculate final leaderboard for a quiz.",
-        responses={200: openapi.Response("Final leaderboard")}
+        responses={
+            200: openapi.Response(
+                "Final leaderboard",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "leaderboard": openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(
+                                type=openapi.TYPE_OBJECT,
+                                properties={
+                                    "rust_session_id": openapi.Schema(type=openapi.TYPE_STRING),
+                                    "player_name": openapi.Schema(type=openapi.TYPE_STRING),
+                                    "avatar": openapi.Schema(type=openapi.TYPE_STRING),
+                                    "score": openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    "rank": openapi.Schema(type=openapi.TYPE_INTEGER),
+                                },
+                            ),
+                        )
+                    },
+                ),
+            )
+        },
+        tags=["Leaderboard"]
     )
     @action(detail=True, methods=['get'], url_path='final-leaderboard')
     def final_leaderboard(self, request, pk=None):
@@ -313,7 +521,8 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="Reset quiz results and participants.",
-        responses={200: openapi.Response("Results reset")}
+        responses={200: openapi.Response("Results reset")},
+        tags=["Quizzes"]
     )
     @action(detail=True, methods=['post'], url_path='reset-result')
     def reset_result(self, request, pk=None):
@@ -338,7 +547,8 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="Duplicate a quiz with all slides/questions/options.",
-        responses={201: QuizSerializer}
+        responses={201: QuizSerializer},
+        tags=["Quizzes"]
     )
     @action(detail=True, methods=['post'], url_path='duplicate')
     def duplicate(self, request, pk=None):
@@ -347,6 +557,7 @@ class QuizViewSet(viewsets.ModelViewSet):
             new_quiz = Quiz.objects.create(
                 title=self._next_copy_title(quiz.title),
                 author=quiz.author,
+                owner=quiz.owner,
                 music_url=quiz.music_url,
                 background_color=quiz.background_color,
                 background_image_url=quiz.background_image_url,
@@ -407,6 +618,7 @@ class SlideViewSet(viewsets.ModelViewSet):
     هر کوئیز می‌تواند چندین اسلاید از نوع سوال یا محتوا داشته باشد.
     """
     serializer_class = SlideSerializer
+    swagger_tags = ["Slides"]
     pagination_class = StandardResultsSetPagination
 
     @swagger_auto_schema(
@@ -427,10 +639,10 @@ class SlideViewSet(viewsets.ModelViewSet):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
             return Slide.objects.none()
-        return Slide.objects.filter(quiz_id=self.kwargs['quiz_pk'])
+        return Slide.objects.filter(quiz_id=self.kwargs['quiz_pk'], quiz__owner=self.request.user)
 
     def perform_create(self, serializer):
-        quiz = get_object_or_404(Quiz, pk=self.kwargs['quiz_pk'])
+        quiz = get_object_or_404(Quiz, pk=self.kwargs['quiz_pk'], owner=self.request.user)
         order = serializer.validated_data.get('order')
         if order is not None and order < 1:
             raise ValidationError({'order': 'must be a positive integer'})
@@ -439,7 +651,7 @@ class SlideViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
                 if order is not None:
                     Slide.objects.filter(quiz=quiz, order__gte=order).update(order=F('order') + 1)
-                instance = serializer.save(quiz=quiz, order=order)
+                serializer.save(quiz=quiz, order=order)
                 touch_quiz(quiz.pk)
         except DjangoValidationError as exc:
             raise ValidationError(_format_django_validation_error(exc))
@@ -542,7 +754,8 @@ class QuestionViewSet(viewsets.ViewSet):
         responses={
             200: QuestionSerializer,
             404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
-        }
+        },
+        tags=["Questions"]
     )
     def retrieve(self, request, quiz_pk=None, slide_pk=None):
         """
@@ -550,7 +763,8 @@ class QuestionViewSet(viewsets.ViewSet):
         """
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk, slide__quiz_id=quiz_pk, slide__quiz__owner=request.user)
+            _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(question)
             return Response(serializer.data)
         except Question.DoesNotExist:
@@ -565,7 +779,8 @@ class QuestionViewSet(viewsets.ViewSet):
         responses={
             201: QuestionSerializer,
             400: openapi.Response("اسلاید از قبل سوال دارد")
-        }
+        },
+        tags=["Questions"]
     )
     def create(self, request, quiz_pk=None, slide_pk=None):
         """
@@ -573,7 +788,8 @@ class QuestionViewSet(viewsets.ViewSet):
 
         هر اسلاید فقط می‌تواند یک سوال داشته باشد.
         """
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
+        _enforce_slide_type(slide, 1, "question")
 
         with transaction.atomic():
             if Question.objects.filter(slide_id=slide_pk).exists():
@@ -625,16 +841,26 @@ class QuestionViewSet(viewsets.ViewSet):
         responses={
             200: QuestionSerializer,
             404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
-        }
+        },
+        tags=["Questions"]
     )
     def update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت کامل سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk, slide__quiz_id=quiz_pk, slide__quiz__owner=request.user)
+            _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(
                 question, data=request.data, partial=False)
             serializer.is_valid(raise_exception=True)
+            new_type = serializer.validated_data.get("question_type", question.question_type)
+            if new_type == "single":
+                correct_count = Option.objects.filter(question=question, is_correct=True).count()
+                if correct_count > 1:
+                    return Response(
+                        {"detail": "Single choice questions can only have one correct option."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             try:
                 serializer.save()
                 touch_quiz(question.slide.quiz_id)
@@ -681,16 +907,26 @@ class QuestionViewSet(viewsets.ViewSet):
         responses={
             200: QuestionSerializer,
             404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
-        }
+        },
+        tags=["Questions"]
     )
     def partial_update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت جزئی سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk, slide__quiz_id=quiz_pk, slide__quiz__owner=request.user)
+            _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(
                 question, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
+            new_type = serializer.validated_data.get("question_type", question.question_type)
+            if new_type == "single":
+                correct_count = Option.objects.filter(question=question, is_correct=True).count()
+                if correct_count > 1:
+                    return Response(
+                        {"detail": "Single choice questions can only have one correct option."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             try:
                 serializer.save()
                 touch_quiz(question.slide.quiz_id)
@@ -736,13 +972,18 @@ class QuestionViewSet(viewsets.ViewSet):
         responses={
             204: "سوال با موفقیت حذف شد",
             404: openapi.Response("سوالی برای این اسلاید پیدا نشد")
-        }
+        },
+        tags=["Questions"]
     )
     def destroy(self, request, quiz_pk=None, slide_pk=None):
         """حذف سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+                slide__quiz__owner=request.user
+            )
+            _enforce_slide_type(question.slide, 1, "question")
             quiz_id = question.slide.quiz_id
             question.delete()
             touch_quiz(quiz_id)
@@ -761,6 +1002,7 @@ class OptionViewSet(viewsets.ModelViewSet):
     هر سوال می‌تواند چندین گزینه داشته باشد.
     """
     serializer_class = OptionSerializer
+    swagger_tags = ["Options"]
 
     def get_queryset(self):
         # برای Swagger
@@ -770,7 +1012,8 @@ class OptionViewSet(viewsets.ModelViewSet):
         question = get_object_or_404(
             Question,
             slide_id=self.kwargs['slide_pk'],
-            slide__quiz_id=self.kwargs['quiz_pk']
+            slide__quiz_id=self.kwargs['quiz_pk'],
+            slide__quiz__owner=self.request.user
         )
         return Option.objects.filter(question=question)
 
@@ -778,8 +1021,11 @@ class OptionViewSet(viewsets.ModelViewSet):
         question = get_object_or_404(
             Question,
             slide_id=self.kwargs['slide_pk'],
-            slide__quiz_id=self.kwargs['quiz_pk']
+            slide__quiz_id=self.kwargs['quiz_pk'],
+            slide__quiz__owner=self.request.user
         )
+        if serializer.validated_data.get("is_correct"):
+            _enforce_single_choice_correct(question)
         try:
             serializer.save(question=question)
             touch_quiz(question.slide.quiz_id)
@@ -802,6 +1048,9 @@ class OptionViewSet(viewsets.ModelViewSet):
             raise
 
     def perform_update(self, serializer):
+        instance = serializer.instance
+        if serializer.validated_data.get("is_correct"):
+            _enforce_single_choice_correct(instance.question, exclude_option_id=instance.pk)
         instance = serializer.save()
         touch_quiz(instance.question.slide.quiz_id)
 
@@ -820,11 +1069,13 @@ class ContentViewSet(viewsets.ViewSet):
 
     @swagger_auto_schema(
         operation_description="دریافت محتوای اسلاید",
-        responses={200: openapi.Response("محتوا دریافت شد")}
+        responses={200: openapi.Response("محتوا دریافت شد")},
+        tags=["Content"]
     )
     def retrieve(self, request, quiz_pk=None, slide_pk=None):
         """دریافت محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
+        _enforce_slide_type(slide, 2, "content")
         return Response({
             'title': slide.title,
             'content_text': slide.content_text,
@@ -841,11 +1092,13 @@ class ContentViewSet(viewsets.ViewSet):
                 'content_image_url': openapi.Schema(type=openapi.TYPE_STRING),
             }
         ),
-        responses={200: "محتوا با موفقیت آپدیت شد"}
+        responses={200: "محتوا با موفقیت آپدیت شد"},
+        tags=["Content"]
     )
     def update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
+        _enforce_slide_type(slide, 2, "content")
         try:
             slide.title = request.data.get('title', slide.title)
             slide.content_text = request.data.get(
@@ -892,11 +1145,13 @@ class ContentViewSet(viewsets.ViewSet):
 
     @swagger_auto_schema(
         operation_description="حذف محتوای اسلاید",
-        responses={200: "محتوا با موفقیت حذف شد"}
+        responses={200: "محتوا با موفقیت حذف شد"},
+        tags=["Content"]
     )
     def destroy(self, request, quiz_pk=None, slide_pk=None):
         """حذف محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
+        _enforce_slide_type(slide, 2, "content")
         try:
             slide.title = None
             slide.content_text = None
@@ -936,6 +1191,7 @@ class ContentViewSet(viewsets.ViewSet):
 
 
 class PlayerSessionViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
     """
     مدیریت سشن‌های بازیکنان
 
@@ -943,6 +1199,7 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
     """
     queryset = PlayerSession.objects.all()
     serializer_class = PlayerSessionSerializer
+    swagger_tags = ["Players"]
     pagination_class = StandardResultsSetPagination
 
     @swagger_auto_schema(
@@ -963,17 +1220,30 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
             return PlayerSession.objects.none()
-        return super().get_queryset()
+        return PlayerSession.objects.filter(quiz__owner=self.request.user)
 
 
 
 class LeaderboardReceiveView(viewsets.ViewSet):
+    permission_classes = [IsServiceToken]
     """
     دریافت لیدربرد از Rust
     """
 
     @swagger_auto_schema(
-        operation_description="دریافت لیدربرد از Rust",
+        operation_description=(
+            "Receive leaderboard entries for a question. "
+            "Either rust_session_id or user_id is required per entry (rust_session_id preferred)."
+        ),
+        manual_parameters=[
+            openapi.Parameter(
+                "X-Export-Token",
+                openapi.IN_HEADER,
+                description="Service token required to submit leaderboard updates.",
+                type=openapi.TYPE_STRING,
+                required=True,
+            )
+        ],
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['leaderboard'],
@@ -983,7 +1253,6 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                     items=openapi.Schema(
                         type=openapi.TYPE_OBJECT,
                         required=[
-                            'rust_session_id',
                             'player_name',
                             'avatar',
                             'score',
@@ -992,15 +1261,19 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                         ],
                         properties={
                             'rust_session_id': openapi.Schema(type=openapi.TYPE_STRING),
+                            'user_id': openapi.Schema(
+                                type=openapi.TYPE_STRING,
+                                description='Legacy alias for rust_session_id.',
+                            ),
                             'player_name': openapi.Schema(type=openapi.TYPE_STRING),
                             'avatar': openapi.Schema(type=openapi.TYPE_STRING),
                             'score': openapi.Schema(type=openapi.TYPE_INTEGER),
                             'time_taken': openapi.Schema(type=openapi.TYPE_NUMBER),
                             'rank': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        }
-                    )
+                        },
+                    ),
                 )
-            }
+            },
         ),
         responses={
             200: openapi.Response(
@@ -1263,3 +1536,440 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
             {'status': 'results saved', 'updated_options': len(option_ids)},
             status=status.HTTP_200_OK,
         )
+
+
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    @swagger_auto_schema(
+        operation_description="Register a new user and send a verification code.",
+        request_body=RegisterSerializer,
+        responses={
+            201: openapi.Response(
+                "Verification code sent",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "username": openapi.Schema(type=openapi.TYPE_STRING),
+                        "email": openapi.Schema(type=openapi.TYPE_STRING),
+                        "is_active": openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        "verification_sent": openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                    },
+                ),
+                examples={
+                    "application/json": {
+                        "username": "newuser",
+                        "email": "new@example.com",
+                        "is_active": False,
+                        "verification_sent": True,
+                    }
+                },
+            )
+        },
+        tags=["Auth"]
+    )
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        if settings.AUTH_REQUIRE_EMAIL_VERIFICATION:
+            verification = EmailVerification.objects.create(
+                user=user,
+                code=generate_verification_code(),
+                expires_at=timezone.now() + timezone.timedelta(
+                    minutes=settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
+                ),
+            )
+            send_verification_email(user, verification.code)
+        else:
+            user.is_active = True
+            user.save(update_fields=["is_active"])
+
+        return Response(
+            {
+                "username": user.username,
+                "email": user.email,
+                "is_active": user.is_active,
+                "verification_sent": settings.AUTH_REQUIRE_EMAIL_VERIFICATION,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class VerifyEmailView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth_verify"
+
+    @swagger_auto_schema(
+        operation_description="Verify a user's email with a code.",
+        request_body=VerifyEmailSerializer,
+        responses={
+            200: openapi.Response(
+                "Email verified",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Email verified"}},
+            ),
+            400: openapi.Response(
+                "Invalid or expired code",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Invalid email or code"}},
+            ),
+            429: openapi.Response(
+                "Too many failed attempts",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Too many failed attempts"}},
+            ),
+        },
+        tags=["Auth"]
+    )
+    def post(self, request):
+        serializer = VerifyEmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        code = serializer.validated_data["code"]
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            return Response(
+                {"detail": "Invalid email or code"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if user.is_active:
+            return Response({"detail": "Email already verified"})
+
+        verification = EmailVerification.objects.filter(user=user, is_verified=False).first()
+        if not verification or verification.code is None:
+            return Response(
+                {"detail": "Verification code not found"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if verification.is_expired():
+            return Response(
+                {"detail": "Verification code expired"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if verification.attempts >= settings.EMAIL_VERIFICATION_MAX_ATTEMPTS:
+            return Response(
+                {"detail": "Too many failed attempts"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        if code != verification.code:
+            verification.attempts += 1
+            verification.save(update_fields=["attempts"])
+            return Response(
+                {"detail": "Invalid email or code"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+        verification.is_verified = True
+        verification.verified_at = timezone.now()
+        verification.code = None
+        verification.save(update_fields=["is_verified", "verified_at", "code"])
+
+        return Response({"detail": "Email verified"})
+
+
+class ResendVerificationView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth_verify"
+
+    @swagger_auto_schema(
+        operation_description="Resend email verification code.",
+        request_body=ResendVerificationSerializer,
+        responses={
+            200: openapi.Response(
+                "Verification code sent",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Verification code sent"}},
+            ),
+            429: openapi.Response(
+                "Please wait before requesting a new code",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Please wait before requesting a new code."}},
+            ),
+        },
+        tags=["Auth"]
+    )
+    def post(self, request):
+        serializer = ResendVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            return Response(
+                {"detail": "If the account exists, a code was sent."},
+                status=status.HTTP_200_OK,
+            )
+
+        if user.is_active:
+            return Response({"detail": "Email already verified"})
+
+        verification, _ = EmailVerification.objects.get_or_create(
+            user=user,
+            defaults={
+                "code": generate_verification_code(),
+                "expires_at": timezone.now() + timezone.timedelta(
+                    minutes=settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
+                ),
+            },
+        )
+
+        resend_wait = settings.EMAIL_VERIFICATION_RESEND_SECONDS
+        if verification.sent_at and (timezone.now() - verification.sent_at).total_seconds() < resend_wait:
+            return Response(
+                {"detail": "Please wait before requesting a new code."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        verification.code = generate_verification_code()
+        verification.attempts = 0
+        verification.is_verified = False
+        verification.expires_at = timezone.now() + timezone.timedelta(
+            minutes=settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
+        )
+        verification.save()
+        send_verification_email(user, verification.code)
+
+        return Response({"detail": "Verification code sent"})
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
+
+    @swagger_auto_schema(
+        operation_description="Request a password reset link.",
+        request_body=PasswordResetRequestSerializer,
+        responses={
+            200: openapi.Response(
+                "If the account exists, a reset link was sent",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "If the account exists, a reset link was sent"}},
+            )
+        },
+        tags=["Auth"]
+    )
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        user = User.objects.filter(email__iexact=email).first()
+        if user and user.is_active:
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            reset_link = settings.PASSWORD_RESET_URL_TEMPLATE.format(uid=uid, token=token)
+            send_mail(
+                subject="ProSlides password reset",
+                message=(
+                    "Use the link below to reset your password:\n{link}"
+                ).format(link=reset_link),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+
+        return Response({"detail": "If the account exists, a reset link was sent"})
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
+
+    @swagger_auto_schema(
+        operation_description="Confirm password reset using uid and token.",
+        request_body=PasswordResetConfirmSerializer,
+        responses={
+            200: openapi.Response(
+                "Password updated",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Password updated"}},
+            ),
+            400: openapi.Response(
+                "Invalid token",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Invalid token"}},
+            ),
+        },
+        tags=["Auth"]
+    )
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uid = serializer.validated_data["uid"]
+        token = serializer.validated_data["token"]
+        new_password = serializer.validated_data["new_password"]
+
+        try:
+            user_id = urlsafe_base64_decode(uid).decode()
+        except Exception:
+            return Response({"detail": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(pk=user_id).first()
+        if not user:
+            return Response({"detail": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not default_token_generator.check_token(user, token):
+            return Response({"detail": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+        return Response({"detail": "Password updated"})
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Blacklist a refresh token.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=["refresh"],
+            properties={
+                "refresh": openapi.Schema(type=openapi.TYPE_STRING),
+            },
+        ),
+        responses={
+            200: openapi.Response(
+                "Logged out",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Logged out"}},
+            ),
+            400: openapi.Response(
+                "Invalid token",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Invalid token"}},
+            ),
+        },
+        tags=["Auth"]
+    )
+    def post(self, request):
+        refresh = request.data.get("refresh")
+        if not refresh:
+            return Response(
+                {"detail": "refresh token is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            token = RefreshToken(refresh)
+            token.blacklist()
+        except Exception:
+            return Response({"detail": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": "Logged out"})
+
+
+class ThrottledTokenObtainPairView(TokenObtainPairView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    @swagger_auto_schema(
+        operation_description="Obtain access and refresh tokens.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=["username", "password"],
+            properties={
+                "username": openapi.Schema(type=openapi.TYPE_STRING),
+                "password": openapi.Schema(type=openapi.TYPE_STRING),
+            },
+        ),
+        responses={
+            200: openapi.Response(
+                "Tokens",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "access": openapi.Schema(type=openapi.TYPE_STRING),
+                        "refresh": openapi.Schema(type=openapi.TYPE_STRING),
+                    },
+                ),
+                examples={
+                    "application/json": {
+                        "access": "jwt-access-token",
+                        "refresh": "jwt-refresh-token",
+                    }
+                },
+            ),
+            401: openapi.Response("Invalid credentials"),
+        },
+        tags=["Auth"]
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
+
+class ThrottledTokenRefreshView(TokenRefreshView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    @swagger_auto_schema(
+        operation_description="Refresh access token using a refresh token.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=["refresh"],
+            properties={
+                "refresh": openapi.Schema(type=openapi.TYPE_STRING),
+            },
+        ),
+        responses={
+            200: openapi.Response(
+                "Access token",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "access": openapi.Schema(type=openapi.TYPE_STRING),
+                    },
+                ),
+                examples={"application/json": {"access": "new-jwt-access-token"}},
+            ),
+            401: openapi.Response("Invalid token"),
+        },
+        tags=["Auth"]
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
