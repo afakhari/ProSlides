@@ -4,7 +4,7 @@ import EmojiPicker from "emoji-picker-react";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 
-export default function PlayerJoinPage({ roomId, ...inp }) {
+export default function PlayerJoinPage({ roomId, quiz, ...inp }) {
   const [players, setPlayers] = useState([]);
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("🧙");
@@ -94,11 +94,19 @@ export default function PlayerJoinPage({ roomId, ...inp }) {
     }
   }, [lastMessage, processMessage]);
 
+  // Calculate dynamic background style from quiz data
+  const backgroundStyle = {
+    backgroundImage: quiz?.background?.image
+      ? `url('${quiz.background.image}')`
+      : "url('/bg.jpg')",
+    backgroundColor: quiz?.background?.color || "#1e1e2e",
+  };
+
   // Stay on "Get ready to play!" until server sends next command (no auto-exit)
   return !joined ? (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      style={backgroundStyle}
     >
       <div className="flex flex-col items-center justify-center">
         <header>
@@ -167,7 +175,7 @@ export default function PlayerJoinPage({ roomId, ...inp }) {
   ) : (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      style={backgroundStyle}
     >
       <header>
         <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl">

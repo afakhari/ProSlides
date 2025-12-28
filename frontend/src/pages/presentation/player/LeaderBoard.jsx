@@ -51,7 +51,7 @@ import { getColorForUser } from "../../../lib/colorUtils";
 //   },
 // ];
 
-function PlayerLeaderBoard({ players }) {
+function PlayerLeaderBoard({ players, quiz }) {
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
   const [displayedPlayers, setDisplayedPlayers] = useState([]);
@@ -121,10 +121,18 @@ function PlayerLeaderBoard({ players }) {
     };
   }, [players, currentUserId]);
 
+  // Calculate dynamic background style from quiz data
+  const backgroundStyle = {
+    backgroundImage: quiz?.background?.image
+      ? `url('${quiz.background.image}')`
+      : "url('/bg.jpg')",
+    backgroundColor: quiz?.background?.color || "#1e1e2e",
+  };
+
   return (
     <div
       className="h-screen overflow-hidden bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      style={backgroundStyle}
     >
       <header>
         <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">

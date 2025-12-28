@@ -29,6 +29,7 @@ export default function ManagerJoinPage({
   onPrevious,
   currentSlide = 1,
   totalSlides = 3,
+  quiz,
 }) {
   const { isConnected, connect, sendNavigation, sendEnd, lastMessage } =
     useWebSocket();
@@ -285,10 +286,18 @@ export default function ManagerJoinPage({
     setPreviousUserCount(currentUserCount);
   }, [previousUserCount, displayUsers]);
 
+  // Calculate dynamic background style from quiz data
+  const backgroundStyle = {
+    backgroundImage: quiz?.background?.image
+      ? `url('${quiz.background.image}')`
+      : "url('/bg.jpg')",
+    backgroundColor: quiz?.background?.color || "#1e1e2e",
+  };
+
   return (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat "
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      style={backgroundStyle}
     >
       <div
         className={`w-full pt-16! sm:pt-36 md:pt-40 pb-24 px-4 sm:px-3 flex ${

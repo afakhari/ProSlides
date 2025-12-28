@@ -150,7 +150,7 @@ export const ServerDataProvider = ({ children }) => {
         case 8: // Question Results
           updateQuestionResults({
             question_id: message.question_id,
-            options: message.options || message.submit || [],
+            optionsResult: message.options || message.submit || [],
           });
           break;
 
