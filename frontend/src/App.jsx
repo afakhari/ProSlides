@@ -1,49 +1,43 @@
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  useParams,
-} from "react-router-dom";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 
-import ManagerJoinPage from "./pages/presentation/manager/JoinPage";
-import ManagerPickAnswerQuestion from "./pages/presentation/manager/PickAnswerQuestion";
-import ManagerLeaderBoard from "./pages/presentation/manager/LeaderBoard";
-import ManagerPlayerLeaderBoard from "./pages/presentation/manager/PlayerLeaderBoard";
+// Source data for lobby and players
+const User_adding = {
+  type: 13,
+  Users: [
+    // { user_id: 1, name: "ali", character: "@" },
+    // { user_id: 2, name: "ahmad", character: "😊" },
+    // { user_id: 4, name: "mike", character: "⭐" },
+    // { user_id: 5, name: "mike", character: "⭐" },
+    // { user_id: 6, name: "mike", character: "⭐" },
+    // { user_id: 7, name: "mike", character: "⭐" },
+    // { user_id: 8, name: "mike", character: "⭐" },
+    // { user_id: 9, name: "mike", character: "⭐" },
+    // { user_id: 10, name: "mike", character: "⭐" },
+    // { user_id: 11, name: "mike", character: "⭐" },
+    // { user_id: 12, name: "mike", character: "⭐" },
+    // { user_id: 13, name: "mike", character: "⭐" },
+    // { user_id: 14, name: "mike", character: "⭐" },
+    // { user_id: 15, name: "mike", character: "⭐" },
+    // { user_id: 16, name: "mike", character: "⭐" },
+    // { user_id: 17, name: "mike", character: "⭐" },
+  ],
+};
 
-import PlayerJoinPage from "./pages/presentation/player/JoinPage";
-import PlayerPickAnswerQuestion from "./pages/presentation/player/PickAnswerQuestion";
-import PlayerLeaderBoard from "./pages/presentation/player/LeaderBoard";
-
-import Waiting from "./pages/loading/LoadingPage";
-
-import { QuizSetup } from "./data/mockData";
-import { WebSocketProvider } from "./contexts/WebSocketContext";
-import { ServerDataProvider } from "./contexts/ServerDataContext";
-import { useServerData } from "./hooks/useServerData";
-import { useWebSocket } from "./hooks/useWebSocket";
-import { AudioProvider, useAudio } from "./contexts/AudioContext";
-
-import HomePage from "./pages/quiz/manager/HomePage";
-import EditorPage from "./pages/quiz/manager/EditorPage";
+// Calculate players ready based on the User_adding.type
+function calculatePlayersReady({ type, Users }) {
+  // Extendable rule-set; for now, type 1 => count all users
+  switch (type) {
+    case 1:
+    default:
+      return Users?.length ?? 0;
+  }
+}
 
 export default function App() {
-  return (
-    <Router>
-      <ServerDataProvider>
-        <Routes>
-          <Route
-            path="/:roomId/:role/presentation"
-            element={<PresentationRouter />}
-          />
-          {/* Manager/Role panel (supports both /manager and any role param) */}
-          <Route path="/:roomId/:role/panel" element={<HomePage />} />
-          <Route path="/:roomId/:role/panel/editor" element={<EditorPage />} />
-          {/* Catch-all route for any undefined path */}
-          <Route path="*" element={<Waiting />} />
-        </Routes>
-      </ServerDataProvider>
-    </Router>
+  const [page, setPage] = useState("lobby"); // 'lobby' | 'quiz'
+  const [newUserId, setNewUserId] = useState(null);
+  const [previousUserCount, setPreviousUserCount] = useState(
+    User_adding.Users.length
   );
 
   /* ------------------------ Router Wrapper ------------------------ */
