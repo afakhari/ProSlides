@@ -111,4 +111,4 @@ def test_leaderboard_receive_requires_service_token(api_client):
         payload,
         format="json",
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 401
