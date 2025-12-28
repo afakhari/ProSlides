@@ -195,3 +195,12 @@ class LeaderboardReceiveItemSerializer(serializers.Serializer):
 
 class LeaderboardReceiveSerializer(serializers.Serializer):
     leaderboard = LeaderboardReceiveItemSerializer(many=True)
+
+
+class QuestionOptionResultSerializer(serializers.Serializer):
+    option_id = serializers.IntegerField(min_value=1)
+    number_of_submits = serializers.IntegerField(min_value=0)
+
+
+class QuestionResultsReceiveSerializer(serializers.Serializer):
+    options = QuestionOptionResultSerializer(many=True)

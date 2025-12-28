@@ -43,6 +43,9 @@ content_view = views.ContentViewSet.as_view({
 # Leaderboard view
 leaderboard_view = views.LeaderboardReceiveView.as_view({'post': 'create'})
 
+# Question results (votes) view
+question_results_view = views.QuestionResultsReceiveView.as_view({'post': 'create'})
+
 # Question endpoints
 question_view = views.QuestionViewSet.as_view({
     'get': 'retrieve',
@@ -84,6 +87,11 @@ urlpatterns = [
         r'^api/quizzes/(?P<quiz_pk>\d+)/slides/(?P<slide_pk>\d+)/question/leaderboard/?$',
         leaderboard_view,
         name='question-leaderboard'
+    ),
+    re_path(
+        r'^api/quizzes/(?P<quiz_pk>\d+)/slides/(?P<slide_pk>\d+)/question/results/?$',
+        question_results_view,
+        name='question-results'
     ),
 
     # API routes
