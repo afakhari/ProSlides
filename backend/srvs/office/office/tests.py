@@ -1,3 +1,6 @@
+from contextlib import contextmanager
+import logging
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -5,6 +8,17 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from .models import Quiz, Slide, Question, Option, Leaderboard, PlayerSession
+
+
+@contextmanager
+def suppress_request_warnings():
+    logger = logging.getLogger("django.request")
+    previous_level = logger.level
+    logger.setLevel(logging.ERROR)
+    try:
+        yield
+    finally:
+        logger.setLevel(previous_level)
 
 
 class OfficeAPITests(TestCase):
@@ -201,7 +215,8 @@ class OfficeAPITests(TestCase):
         payload = {
             "options": [{"option_id": self.option1.id, "number_of_submits": 1}]
         }
-        response = self.client.post(url, payload, format="json")
+        with suppress_request_warnings():
+            response = self.client.post(url, payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_leaderboard_receive_creates_entries(self):
