@@ -111,6 +111,13 @@ def _format_django_validation_error(exc):
     return {"detail": str(exc)}
 
 
+def _enforce_slide_type(slide, expected_type, expected_label):
+    if slide.slide_type != expected_type:
+        raise ValidationError(
+            {"detail": f"Slide type must be '{expected_label}' for this endpoint."}
+        )
+
+
 class QuizViewSet(viewsets.ModelViewSet):
     """
     مدیریت کوئیزها
@@ -551,6 +558,7 @@ class QuestionViewSet(viewsets.ViewSet):
         try:
             question = Question.objects.get(
                 slide_id=slide_pk, slide__quiz_id=quiz_pk)
+            _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(question)
             return Response(serializer.data)
         except Question.DoesNotExist:
@@ -574,6 +582,7 @@ class QuestionViewSet(viewsets.ViewSet):
         هر اسلاید فقط می‌تواند یک سوال داشته باشد.
         """
         slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        _enforce_slide_type(slide, 1, "question")
 
         with transaction.atomic():
             if Question.objects.filter(slide_id=slide_pk).exists():
@@ -632,6 +641,7 @@ class QuestionViewSet(viewsets.ViewSet):
         try:
             question = Question.objects.get(
                 slide_id=slide_pk, slide__quiz_id=quiz_pk)
+            _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(
                 question, data=request.data, partial=False)
             serializer.is_valid(raise_exception=True)
@@ -688,6 +698,7 @@ class QuestionViewSet(viewsets.ViewSet):
         try:
             question = Question.objects.get(
                 slide_id=slide_pk, slide__quiz_id=quiz_pk)
+            _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(
                 question, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
@@ -742,7 +753,10 @@ class QuestionViewSet(viewsets.ViewSet):
         """حذف سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk
+            )
+            _enforce_slide_type(question.slide, 1, "question")
             quiz_id = question.slide.quiz_id
             question.delete()
             touch_quiz(quiz_id)
@@ -825,6 +839,7 @@ class ContentViewSet(viewsets.ViewSet):
     def retrieve(self, request, quiz_pk=None, slide_pk=None):
         """دریافت محتوای اسلاید"""
         slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        _enforce_slide_type(slide, 2, "content")
         return Response({
             'title': slide.title,
             'content_text': slide.content_text,
@@ -846,6 +861,7 @@ class ContentViewSet(viewsets.ViewSet):
     def update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت محتوای اسلاید"""
         slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        _enforce_slide_type(slide, 2, "content")
         try:
             slide.title = request.data.get('title', slide.title)
             slide.content_text = request.data.get(
@@ -897,6 +913,7 @@ class ContentViewSet(viewsets.ViewSet):
     def destroy(self, request, quiz_pk=None, slide_pk=None):
         """حذف محتوای اسلاید"""
         slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        _enforce_slide_type(slide, 2, "content")
         try:
             slide.title = None
             slide.content_text = None
