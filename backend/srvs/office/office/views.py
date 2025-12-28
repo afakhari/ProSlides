@@ -31,7 +31,7 @@ from .serializers import (
     VerifyEmailSerializer, ResendVerificationSerializer,
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer
 )
-from .permissions import IsQuizOwner, IsExportServiceOrQuizOwner
+from .permissions import IsQuizOwner, IsExportServiceOrQuizOwner, IsServiceToken
 from .pagination import StandardResultsSetPagination
 
 User = get_user_model()
@@ -1060,7 +1060,7 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
 
 
 class LeaderboardReceiveView(viewsets.ViewSet):
-    permission_classes = [AllowAny]
+    permission_classes = [IsServiceToken]
     """
     دریافت لیدربرد از Rust
     """
@@ -1070,6 +1070,15 @@ class LeaderboardReceiveView(viewsets.ViewSet):
             "Receive leaderboard entries for a question. "
             "Either rust_session_id or user_id is required per entry (rust_session_id preferred)."
         ),
+        manual_parameters=[
+            openapi.Parameter(
+                "X-Export-Token",
+                openapi.IN_HEADER,
+                description="Service token required to submit leaderboard updates.",
+                type=openapi.TYPE_STRING,
+                required=True,
+            )
+        ],
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['leaderboard'],

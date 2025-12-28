@@ -63,8 +63,8 @@ CORS_ALLOW_CREDENTIALS=False
 LOG_LEVEL=INFO
 ```
 
-## Export access for Rust (service token)
-Rust can request quiz export without user login by sending:
+## Rust service token (export + leaderboard)
+Rust can request quiz export and submit leaderboard updates by sending:
 ```
 X-Export-Token: change-me-export-token
 ```

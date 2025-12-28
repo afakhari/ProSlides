@@ -71,8 +71,8 @@ python backend/srvs/office/manage.py migrate
 python backend/srvs/office/manage.py runserver 127.0.0.1:8000
 ```
 
-## Export access for Rust (service token)
-Rust can request quiz export without user login by sending:
+## Rust service token (export + leaderboard)
+Rust can request quiz export and submit leaderboard updates by sending:
 ```
 X-Export-Token: dev-export-token
 ```

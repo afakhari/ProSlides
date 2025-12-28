@@ -1,4 +1,5 @@
 import pytest
+from django.test import override_settings
 
 from backend.srvs.office.office.models import Leaderboard
 from backend.srvs.office.tests.factories import (
@@ -29,6 +30,7 @@ def test_quiz_list_requires_authentication(api_client):
 
 
 @pytest.mark.django_db
+@override_settings(EXPORT_SERVICE_TOKEN="test-export-token")
 def test_leaderboard_receive_validates_quiz_pk(api_client):
     quiz1 = QuizFactory()
     quiz2 = QuizFactory()
@@ -52,6 +54,7 @@ def test_leaderboard_receive_validates_quiz_pk(api_client):
         f"/api/quizzes/{quiz2.id}/slides/{question.slide_id}/question/leaderboard/",
         payload,
         format="json",
+        HTTP_X_EXPORT_TOKEN="test-export-token",
     )
     assert resp.status_code == 404
 
