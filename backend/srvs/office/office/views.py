@@ -295,6 +295,124 @@ class QuizViewSet(viewsets.ModelViewSet):
         serializer = QuizListSerializer(queryset, many=True)
         return Response(serializer.data)
 
+    def _filter_quizzes_for_request(self, request, queryset):
+        if request.user and request.user.is_authenticated:
+            return queryset.filter(author=request.user.username)
+        author = request.query_params.get('author')
+        if author:
+            return queryset.filter(author=author)
+        return queryset
+
+    def _next_copy_title(self, title):
+        match = re.match(r'^(.*)\s\(copy\d+\)$', title)
+        base_title = match.group(1) if match else title
+
+        pattern = re.compile(rf'^{re.escape(base_title)} \(copy(\d+)\)$')
+        existing = Quiz.objects.filter(
+            title__startswith=f"{base_title} (copy"
+        ).values_list('title', flat=True)
+        max_copy = 0
+        for existing_title in existing:
+            matched = pattern.match(existing_title)
+            if matched:
+                max_copy = max(max_copy, int(matched.group(1)))
+        return f"{base_title} (copy{max_copy + 1})"
+
+    @swagger_auto_schema(
+        operation_description="Resolve quiz_id by access_code.",
+        manual_parameters=[
+            openapi.Parameter(
+                "access_code",
+                openapi.IN_QUERY,
+                description="Quiz access code",
+                type=openapi.TYPE_STRING,
+                required=True,
+            )
+        ],
+        responses={
+            200: openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                },
+            ),
+            400: openapi.Response("Missing access_code"),
+            404: openapi.Response("Quiz not found"),
+        },
+        tags=["Quizzes"],
+    )
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='resolve-access-code',
+        permission_classes=[AllowAny],
+    )
+    def resolve_access_code(self, request):
+        access_code = request.query_params.get("access_code", "").strip()
+        if not access_code:
+            return Response(
+                {"detail": "access_code query parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        quiz = Quiz.objects.filter(access_code=access_code).values("id").first()
+        if not quiz:
+            return Response(
+                {"detail": "Quiz not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({"quiz_id": quiz["id"]})
+
+    @swagger_auto_schema(
+        operation_description="List quizzes.",
+        manual_parameters=PAGINATION_PARAMS,
+        responses={
+            200: openapi.Response(
+                "Paginated quiz list",
+                schema=paginated_response_schema(QUIZ_ITEM_SCHEMA),
+            )
+        },
+        tags=["Quizzes"],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Return quiz list for user panel.",
+        manual_parameters=PAGINATION_PARAMS,
+        responses={
+            200: openapi.Response(
+                "Paginated quiz list",
+                schema=paginated_response_schema(
+                    openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "quiz_name": openapi.Schema(type=openapi.TYPE_STRING),
+                            "last_update": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                            "created_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                            "access_code": openapi.Schema(type=openapi.TYPE_STRING),
+                            "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "slides_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                        },
+                    )
+                ),
+            )
+        },
+        tags=["Quizzes"],
+    )
+    @action(detail=False, methods=['get'], url_path='list')
+    def list_quizzes(self, request):
+        queryset = self._filter_quizzes_for_request(request, self.get_queryset())
+        queryset = queryset.annotate(slides_count=Count('slides', distinct=True))
+        queryset = queryset.order_by('-created_at')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = QuizListSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = QuizListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
     @swagger_auto_schema(
         operation_description="صادرات کامل اطلاعات کوئیز برای Rust",
         manual_parameters=[
@@ -1103,6 +1221,7 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return PlayerSession.objects.none()
         return PlayerSession.objects.filter(quiz__owner=self.request.user)
+
 
 
 class LeaderboardReceiveView(viewsets.ViewSet):

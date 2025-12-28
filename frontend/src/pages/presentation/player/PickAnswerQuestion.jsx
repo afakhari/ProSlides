@@ -1,35 +1,82 @@
 import { useRef, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useServerData } from "../../../hooks/useServerData";
 
-export default function PlayerPickAnswerQuestion({ question, result }) {
-  // `question` is the primary question object (type 2 incoming message)
-  // `result` is optional and may come from type 8 (question results) or type 3 (options_result)
-  // The ServerDataContext will supply either when available.
-  if (!question) return null;
-  const [selectedOptions, setSelectedOptions] = useState([]);
-  const [submitted, setSubmitted] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(question.question_time);
-  const startTime = useRef(Date.now());
+export default function PlayerPickAnswerQuestion({
+  question,
+  result: propResult,
+  quiz,
+}) {
+  // همه hooks باید قبل از conditional return باشن
+  const { questionResults, partialQuestionResults } = useServerData();
   const { sendMessage, isConnected } = useWebSocket();
 
-  // ⏱ تایمر
+
+  const [selectedOptions, setSelectedOptions] = useState([]);
+  const [submitted, setSubmitted] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(question?.question_time || 0);
+  const startTime = useRef(Date.now());
+
+  // result رو از چند منبع چک کن - مستقیم از context
+  const result = propResult || questionResults || partialQuestionResults;
+
+  // لاگ برای دیباگ
+  console.log(
+    "[PlayerPickAnswerQuestion] question_id:",
+    question?.question_id,
+    "result:",
+    result,
+    "partialQuestionResults:",
+    partialQuestionResults
+  );
+
+  // اگه question نیست، بعد از hooks برگرد
+  if (!question) return null;
+
+  // ⏱ تایمر دقیق با اختلاف زمان واقعی (حتی اگر تب عوض شود یا فریز شود)
   useEffect(() => {
-    if (timeLeft > -1) {
-      const timer = setInterval(() => {
-        setTimeLeft((prev) => Math.round(prev * 10 - 1) / 10);
-      }, 100);
-      return () => clearInterval(timer);
-    }
-  }, [timeLeft]);
+    startTime.current = Date.now();
+    setTimeLeft(question.question_time);
+    // ریست کردن state ها وقتی سوال عوض میشه
+    setSelectedOptions([]);
+    setSubmitted(false);
+  }, [question.question_id, question.question_time]);
+
+  useEffect(() => {
+    let frameId;
+    let stopped = false;
+    const tick = () => {
+      if (stopped) return;
+      const elapsed = (Date.now() - startTime.current) / 1000;
+      const left = Math.max(0, question.question_time - elapsed);
+      setTimeLeft(left);
+      if (left > 0) {
+        frameId = requestAnimationFrame(tick);
+      }
+    };
+    tick();
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(frameId);
+    };
+  }, [question.question_id, question.question_time]);
 
   const handleSelect = (option) => {
     if (submitted || timeLeft <= -1) return;
-    setSelectedOptions((prev) =>
-      prev.includes(option)
-        ? prev.filter((item) => item !== option)
-        : [...prev, option]
-    );
+
+    // اگر has_multiple فالس باشد، فقط یک گزینه مجاز است
+    if (question.has_multiple === false) {
+      // اگر گزینه قبلاً انتخاب شده، پاک می‌کنیم (toggle off)
+      setSelectedOptions((prev) => (prev.includes(option) ? [] : [option]));
+    } else {
+      // اگر has_multiple ترو یا تعریف نشده باشد، رفتار قبلی (چند انتخابی)
+      setSelectedOptions((prev) =>
+        prev.includes(option)
+          ? prev.filter((item) => item !== option)
+          : [...prev, option]
+      );
+    }
   };
 
   const handleSubmit = () => {
@@ -86,13 +133,22 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
 
   const progressPercent =
     timeLeft >= 0 ? (timeLeft / question.question_time) * 100 : 0;
-  const showResults = timeLeft <= -1;
+  // نمایش جواب‌ها اگر تایمر تمام شد یا داده result رسید
+  const showResults = timeLeft <= -1 || !!result;
   const options = question.options || [];
+
+  // Calculate dynamic background style from quiz data
+  const backgroundStyle = {
+    backgroundImage: quiz?.background?.image
+      ? `url('${quiz.background.image}')`
+      : "url('/bg.jpg')",
+    backgroundColor: quiz?.background?.color || "#1e1e2e",
+  };
 
   return (
     <div
       className="text-white h-screen w-screen bg-cover bg-center bg-no-repeat font-poppins"
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      style={backgroundStyle}
     >
       <header>
         <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
@@ -109,6 +165,16 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
           <div className=" text-3xl font-bold mb-2 text-center h-15">
             {question.question_text}
           </div>
+          {/* تصویر سوال */}
+          {question.image_url && (
+            <div className="mb-4 flex justify-center">
+              <img
+                src={question.image_url}
+                alt="Question"
+                className="max-h-36 max-w-xs rounded-xl shadow-lg object-contain"
+              />
+            </div>
+          )}
           {/* Progress Bar */}
           <div className="min-h-auto max-w-2xl">
             <div className="m-2.5 flex flex-col items-stretch gap-[0.5vh]">
@@ -117,10 +183,28 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
                 <span>{question.max_point}p</span>
               </div>
 
-              <div className="border-white border-2 bg-[rgba(255,255,255,0.3)] h-2 rounded-[5px] mt-3 mb-5 overflow-hidden ">
+              <div className="border-white border-2 bg-[rgba(255,255,255,0.3)] h-2 rounded-[5px] mt-3 mb-5 overflow-hidden">
                 <div
-                  className="h-full bg-purple-600 transition-width duration-1000 ease-linear"
-                  style={{ width: `${progressPercent}%` }}
+                  className="h-full bg-purple-600"
+
+                  style={{
+                    width: "100%",
+                    // Use GPU-accelerated transform instead of animating width.
+                    transform: `scaleX(${Math.max(
+                      0,
+                      Math.min(1, progressPercent / 100)
+                    )})`,
+                    transformOrigin: "left",
+                    transition: "transform 120ms linear",
+                    willChange: "transform",
+                    backfaceVisibility: "hidden",
+                    WebkitTransform: `scaleX(${Math.max(
+                      0,
+                      Math.min(1, progressPercent / 100)
+                    )})`,
+                    WebkitTransformOrigin: "left",
+
+                  }}
                 ></div>
               </div>
             </div>
@@ -131,27 +215,26 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
                 let optionClass = "";
                 let icon = null;
 
-                if (showResults) {
-                  // Defensive: result or optionsResult may be undefined when results
-                  // haven't arrived yet or differ in shape. Guard property access.
-                  const foundOption = result?.optionsResult?.find(
-                    (option) => option.option_id === goz.option_id
+
+                if (showResults && result?.optionsResult) {
+                  // نتیجه از type:3 میاد با فرمت { option_id, answer: true/false }
+                  // مقایسه با تبدیل به string برای اطمینان
+                  const foundOption = result.optionsResult.find(
+                    (option) =>
+                      String(option.option_id) === String(goz.option_id)
                   );
 
-                  // Only set icon if we actually have a result for this option
-                  if (foundOption) {
-                    icon = foundOption.answer ? "✅" : "❌";
+                  // جواب صحیح از سرور (type:3)
+                  const isCorrect = foundOption?.answer === true;
 
-                    if (selectedOptions.includes(goz) && submitted) {
-                      optionClass = foundOption.answer
-                        ? "bg-green-600 text-white"
-                        : "bg-red-600 text-white";
-                    }
-                  } else {
-                    // No result for this option yet — show neutral state
-                    if (selectedOptions.includes(goz) && submitted) {
-                      optionClass = "bg-gray-700 text-white";
-                    }
+                  // نمایش آیکون بر اساس جواب از سرور
+                  icon = isCorrect ? "✅" : "❌";
+
+                  if (selectedOptions.includes(goz) && submitted) {
+                    optionClass = isCorrect
+
+                      ? "bg-green-600 text-white"
+                      : "bg-red-600 text-white";
                   }
                 } else if (selectedOptions.includes(goz)) {
                   optionClass = "bg-[#6c2bd9]";
@@ -178,6 +261,14 @@ export default function PlayerPickAnswerQuestion({ question, result }) {
                         </span>
                       )}
                     </span>
+                    {/* تصویر گزینه */}
+                    {goz.image_url && (
+                      <img
+                        src={goz.image_url}
+                        alt=""
+                        className="w-12 h-12 rounded-lg object-cover shrink-0"
+                      />
+                    )}
                     {goz.option_text}
                   </label>
                 );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
+import { getColorForUser } from "../../../lib/colorUtils";
 
 // const players = [
 //   {
@@ -50,12 +51,25 @@ import { useLocation, useNavigate } from "react-router-dom";
 //   },
 // ];
 
-function PlayerLeaderBoard({ players }) {
+function PlayerLeaderBoard({ players, quiz }) {
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
   const [displayedPlayers, setDisplayedPlayers] = useState([]);
   const [animateBars, setAnimateBars] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
   // const navigate = useNavigate();
+
+  console.log(
+    "[PlayerLeaderBoard] Rendering with",
+    players?.length || 0,
+    "players"
+  );
+
+  // خواندن user_id بازیکن فعلی از localStorage
+  useEffect(() => {
+    const userId = localStorage.getItem("user_id");
+    setCurrentUserId(userId);
+  }, []);
 
   const handleToggleBlur = (id) => {
     setHiddenNames((prev) =>
@@ -77,28 +91,48 @@ function PlayerLeaderBoard({ players }) {
   };
 
   useEffect(() => {
-    const withOld = players.map((p) => ({
+    // Ensure players have colors based on user_id
+    const processedPlayers = players.map((p) => ({
       ...p,
-      oldScore: p.total_points - p.new_points,
+      color: getColorForUser(p.user_id),
     }));
-    const sortedOld = [...withOld].sort((a, b) => b.oldScore - a.oldScore);
-    setDisplayedPlayers(sortedOld);
+    setDisplayedPlayers(processedPlayers);
 
+    // Trigger animation
+    setAnimateBars(false);
     const t = setTimeout(() => {
-      const sortedNew = [...players].sort(
-        (a, b) => b.total_points - a.total_points
-      );
-      setDisplayedPlayers(sortedNew);
       setAnimateBars(true);
-    }, 1200);
+    }, 500);
 
-    return () => clearTimeout(t);
-  }, []);
+    // اسکرول به خودم با تاخیر
+    const scrollTimeout = setTimeout(() => {
+      const myElement = document.getElementById(`player-${currentUserId}`);
+      if (myElement) {
+        myElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }, 800);
+
+    return () => {
+      clearTimeout(t);
+      clearTimeout(scrollTimeout);
+    };
+  }, [players, currentUserId]);
+
+  // Calculate dynamic background style from quiz data
+  const backgroundStyle = {
+    backgroundImage: quiz?.background?.image
+      ? `url('${quiz.background.image}')`
+      : "url('/bg.jpg')",
+    backgroundColor: quiz?.background?.color || "#1e1e2e",
+  };
 
   return (
     <div
       className="h-screen overflow-hidden bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      style={backgroundStyle}
     >
       <header>
         <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
@@ -127,55 +161,130 @@ function PlayerLeaderBoard({ players }) {
               <AnimatePresence>
                 {displayedPlayers.map((p) => {
                   const isHidden = hiddenNames.includes(p.rank);
-                  const widthPercent = calcPercent(p.total_points);
+                  const hasScore = p.total_points > 0;
+                  const widthPercent = hasScore
+                    ? calcPercent(p.total_points)
+                    : 0;
+                  const isCurrentUser = p.user_id === currentUserId;
 
                   return (
                     <motion.li
-                      key={p.rank}
+                      key={p.user_id || p.rank}
+                      id={`player-${p.user_id}`}
                       layout
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
+                      initial={{
+                        opacity: 0,
+                        x: -20,
+                        scale: isCurrentUser ? 0.9 : 1,
+                      }}
+                      animate={{
+                        opacity: 1,
+                        x: 0,
+                        scale: isCurrentUser ? 1.08 : 1,
+                      }}
                       exit={{ opacity: 0, x: 20 }}
                       transition={{
                         type: "spring",
                         stiffness: 120,
                         damping: 18,
                       }}
-                      className="flex justify-start items-center relative w-[90%] max-w-2xl mx-auto"
+                      className={`flex justify-start items-center relative w-[90%] max-w-2xl mx-auto rounded-xl ${
+                        isCurrentUser ? "z-20 my-2" : "z-10"
+                      }`}
+                      style={
+                        isCurrentUser
+                          ? {
+                              background: `linear-gradient(135deg, ${p.color}40, ${p.color}20)`,
+                              boxShadow: `0 0 30px ${p.color}80, 0 0 60px ${p.color}50, inset 0 1px 0 rgba(255, 255, 255, 0.2)`,
+                              border: `2px solid ${p.color}cc`,
+                              padding: "8px",
+                            }
+                          : {}
+                      }
                       onMouseEnter={() => setHovered(p.rank)}
                       onMouseLeave={() => setHovered(null)}
                     >
+                      {/* Glow effect for current user */}
+                      {isCurrentUser && (
+                        <motion.div
+                          className="absolute inset-0 rounded-xl pointer-events-none"
+                          animate={{
+                            boxShadow: [
+                              `0 0 20px ${p.color}60`,
+                              `0 0 40px ${p.color}90`,
+                              `0 0 20px ${p.color}60`,
+                            ],
+                          }}
+                          transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "easeInOut",
+                          }}
+                        />
+                      )}
+
                       {/* Rank */}
-                      <div className="text-white/90 text-lg font-semibold w-8 text-center rounded-full bg-white/20 mr-3 py-1">
+                      <div
+                        className={`text-lg font-bold w-10 h-10 flex items-center justify-center rounded-full mr-3`}
+                        style={{
+                          backgroundColor: p.color,
+                          color: "#fff",
+                          boxShadow: `0 4px 12px ${p.color}60`,
+                        }}
+                      >
                         {p.rank}
                       </div>
 
                       {/* Fixed-width translucent track */}
-                      <div className="relative overlay-hidden bg-white/10 w-full h-14 mr-3">
-                        {/* Colored fill */}
-                        <motion.div
-                          className={`absolute left-0 top-0 h-full z-10`}
-                          style={{ backgroundColor: p.color }}
-                          initial={{ width: 0 }}
-                          animate={{
-                            width: animateBars ? `${widthPercent}%` : 0,
-                          }}
-                          transition={{ duration: 1.3, ease: "easeOut" }}
-                        />
+                      <div
+                        className={`relative overlay-hidden w-full mr-3 rounded-lg ${
+                          isCurrentUser
+                            ? "bg-white/20 h-16"
+                            : "bg-white/10 h-14"
+                        }`}
+                      >
+                        {/* Colored fill - only show if score > 0 */}
+                        {hasScore && (
+                          <motion.div
+                            className={`absolute left-0 top-0 h-full z-10 rounded-lg`}
+                            style={{
+                              backgroundColor: p.color,
+                              boxShadow: `0 4px 15px ${p.color}80, 0 2px 8px ${p.color}60`,
+                            }}
+                            initial={{ width: 0 }}
+                            animate={{
+                              width: animateBars ? `${widthPercent}%` : 0,
+                            }}
+                            transition={{ duration: 1.3, ease: "easeOut" }}
+                          />
+                        )}
 
                         {/* Content on top */}
-                        <div className="relative z-20 flex items-center px-4 py-3 gap-4">
-                          <div className="player-avatar text-2xl">
+                        <div
+                          className={`relative z-20 flex items-center px-4 gap-4 h-full`}
+                        >
+                          <div
+                            className={`player-avatar ${
+                              isCurrentUser ? "text-3xl" : "text-2xl"
+                            }`}
+                          >
                             {p.character}
                           </div>
 
                           <div className="flex items-center space-x-3">
                             <div
-                              className={`text-white font-medium transition-all duration-200 ${
-                                isHidden ? "blur-sm select-none" : ""
-                              }`}
+                              className={`font-medium transition-all duration-200 ${
+                                isCurrentUser
+                                  ? "text-white text-lg font-bold"
+                                  : "text-white"
+                              } ${isHidden ? "blur-sm select-none" : ""}`}
                             >
                               {isHidden ? "****" : p.name}
+                              {isCurrentUser && (
+                                <span className="ml-2 text-yellow-400 text-sm animate-pulse">
+                                  ← You
+                                </span>
+                              )}
                             </div>
 
                             {hovered === p.rank && (
@@ -205,9 +314,9 @@ function PlayerLeaderBoard({ players }) {
                       </div>
 
                       {/* Score */}
-                      <div className="relative w-[15%] text-white font-semibold ml-3">
+                      <div className="relative w-[15%] font-semibold ml-3 text-white">
                         {Math.round(p.total_points)}p{" "}
-                        <span className="text-white/60 text-sm">
+                        <span className="text-sm text-white/60">
                           +{Math.round(p.new_points)}
                         </span>
                       </div>

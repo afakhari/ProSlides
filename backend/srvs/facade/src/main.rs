@@ -2,7 +2,7 @@ use actix::*;
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use serde::Serialize;
 use uuid::Uuid;
 use redis::{AsyncCommands};
@@ -14,7 +14,6 @@ mod models;
 mod utils;
 use utils::{
     get_quiz_setup,
-    save_quiz_setup,
 };
 use models::{
     PlayerSession,
@@ -36,24 +35,20 @@ use models::{
     QuizOption,
     ManagerSession,
 };
+use std::time::Instant;
 
-use crate::models::QuizSetup;
-use crate::utils::get_slide_index;
-// TODO: Fix static answer 
-// TODO: Fix change in the server
-// TODO: Fix 1 record remain in redis
 
 pub const REDIS_URL: Option<&str> = Some("redis://127.0.0.1/");
 
+
 impl Room {
-    pub fn new(session_id: String, quiz_setup: Option<QuizSetup>) -> Self {
+    pub fn new(session_id: String) -> Self {
         Room {
             players: HashSet::new(),
             manager: None,
             ok_responses: 0,
             last_question: None,
             redis_client: redis::Client::open(REDIS_URL.unwrap()).unwrap(),
-            quiz_setup: quiz_setup,
             session_id: session_id,
         }
     }
@@ -100,22 +95,22 @@ impl Handler<SendPlayerList> for Room {
         let session_id = data.session_id.clone();
         let client = self.redis_client.clone();
         let new_player = data.new_player.clone();
-        
+
         // let redis_client = self.
         actix_rt::spawn(async move {
             if manager.is_none() { return; }
             if let Ok(mut con) = client.get_multiplexed_async_connection().await {
-                
+
                 // Get all player keys
-                let pattern = format!("player:{session_id}:*");
-                let keys: Vec<String> = con.keys(&pattern).await.unwrap();
-                
+                let pattern = format!("players:{session_id}");
+                let keys: Vec<String> = con.smembers(&pattern).await.unwrap();
+
                 let mut users = vec![];
-                
+
                 for key in keys {
                     // Try to get redis string
                     let json_str: Result<String, _> = con.get(&key).await;
-                    
+
                     if let Ok(json) = json_str {
                         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json) {
                             if v.get("user_id").unwrap() != new_player.get("user_id").unwrap() {
@@ -126,13 +121,13 @@ impl Handler<SendPlayerList> for Room {
                 }
                 // Add new player manually
                 users.push(new_player);
-                
-                
+
+
                 let msg = PlayerListMsg {
                     r#type: 7,
                     users,
                 };
-                
+
                 let payload = serde_json::to_string(&msg).unwrap();
                 manager.unwrap().do_send(ManagerText(payload));
             }
@@ -195,7 +190,7 @@ impl Handler<PlayerOk> for Room {
         // When all players have responded
         if self.ok_responses == self.players.len() && self.players.len() > 0 {
             println!("✅ All players OK. Starting timer...");
-
+            /*
             let players = self.players.clone();
             let quiz_setup = self.quiz_setup.clone().unwrap();
             let redis_client = self.redis_client.clone();
@@ -203,40 +198,32 @@ impl Handler<PlayerOk> for Room {
             actix_rt::spawn(async move {
                 let slide = quiz_setup.slides[get_slide_index(&redis_client, &session_id).await as usize].clone();
                 if slide.slide_type == 3 { // leaderboard
-                    // pass
-                }
-                else if slide.slide_type == 2 { // content
-                    // pass
-                }
-                else if slide.slide_type == 1 { // question
-                    let question = slide.question.clone().unwrap();
+                // pass
+            }
+            else if slide.slide_type == 2 { // content
+            // pass
+        }
+        else if slide.slide_type == 1 { // question
+        let question = slide.question.clone().unwrap();
                     let question_time = question.time_limit.clone();
-                
+
                     let mut options: Vec<OptionResult> = Vec::new();
                     for option in question.options {
                         options.push(
-                            OptionResult { 
-                                option_id: option.option_id, 
+                            OptionResult {
+                                option_id: option.option_id,
                                 answer: option.is_correct,
                             }
                         );
                     }
-                    
+
                     let result = QuestionResult {
                         r#type: 3,
                         question_id: question.question_id,
                         options_result: options,
                     };
-                    
+
                     let result_json = serde_json::to_string(&result).unwrap();
-                    /*
-                    ctx.run_later(std::time::Duration::from_secs(question_time as u64), move |_, _| {
-                        println!("⏰ Sending result after {}s", question_time);
-                        for player in &players {
-                            player.do_send(PlayerText(result_json.clone()));
-                        }
-                    });
-                    */
                     tokio::time::sleep(std::time::Duration::from_secs(question_time as u64)).await;
                     println!("⏰ Sending result after {}s", question_time);
                     for player in &players {
@@ -244,6 +231,7 @@ impl Handler<PlayerOk> for Room {
                     }
                 }
             });
+            */
         }
     }
 }
@@ -254,6 +242,17 @@ struct AppState {
     rooms: Mutex<HashMap<String, Addr<Room>>>,
 }
 
+fn lock_rooms<T>(mutex: &Mutex<T>) -> MutexGuard<T> {
+    match mutex.lock() {
+        Ok(g) => g,
+        Err(e) => {
+            eprintln!("⚠️ Recovering poisoned mutex");
+            e.into_inner()
+        }
+    }
+}
+
+
 // ====== Route ======
 async fn ws_route(
     req: HttpRequest,
@@ -262,22 +261,24 @@ async fn ws_route(
     path: web::Path<(String, String)>, // (session_id, role)
 ) -> Result<HttpResponse, Error> {
     let (session_id, role) = path.into_inner();
-    let mut rooms = data.rooms.lock().unwrap();
-    let quiz_setup = get_quiz_setup(&session_id).await.unwrap();
+    // let mut rooms = data.rooms.lock().unwrap();
+    let mut rooms = lock_rooms(&data.rooms);
+
+
 
     let room = rooms
         .entry(session_id.clone())
-        .or_insert_with(|| Room::new(session_id.clone(), Some(quiz_setup.clone())).start())
+        .or_insert_with(|| Room::new(session_id.clone()).start())
         .clone();
     let redis_client = redis::Client::open(REDIS_URL.unwrap()).unwrap();
-    save_quiz_setup(&session_id, &quiz_setup, &redis_client).await.expect("Error in saving quiz");
     match role.as_str() {
         "manager" => actix_web_actors::ws::start(
             ManagerSession {
                 room: room,
-                session_id: session_id,
+                session_id: session_id.clone(),
                 redis_client: redis_client,
-                quiz_setup: quiz_setup,
+                quiz_setup: get_quiz_setup(&session_id).await.unwrap(),
+                hb: Instant::now(),  // Initialize heartbeat
             }, &req, stream),
         "player" => actix_web_actors::ws::start(
                 PlayerSession {
@@ -287,7 +288,8 @@ async fn ws_route(
                             character: None,
                             session_id: session_id,
                             redis_client: redis_client,
-                            quiz_setup: quiz_setup,
+                            quiz_setup: None,
+                            hb: Instant::now(),  // Initialize heartbeat
                         },
                         &req,
                         stream,

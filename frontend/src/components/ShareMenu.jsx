@@ -2,18 +2,27 @@ import { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import { X } from "lucide-react";
 
-
-export default function ShareMenu() {
-  const [open, setOpen] = useState(false);
+export default function ShareMenu({ isOpen, onClose, accessCode }) {
   const [section, setSection] = useState("invite"); // ← پیشفرض: invite audience
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(accessCode || "");
   const [qr, setQr] = useState("");
 
-  const BASE = "https://ahaslides.com/";
+  const BASE = "https://Proslides.com/";
+
+  // Update code when accessCode prop changes
+  useEffect(() => {
+    if (accessCode) {
+      setCode(accessCode);
+    }
+  }, [accessCode]);
 
   // --- Generate QR Code ---
   useEffect(() => {
-    if (!code) return;
+    if (!code || code.length < 5) {
+      setQr(""); // هنوز QR ساخته نشه
+      return;
+    }
+
     const full = BASE + code;
 
     QRCode.toDataURL(full, { margin: 2 })
@@ -21,106 +30,83 @@ export default function ShareMenu() {
       .catch((err) => console.error(err));
   }, [code]);
 
+  if (!isOpen) return null;
+
   return (
     <>
-      {/* Share Button */}
-    <button
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-5 py-2.5 
-                    bg-gradient-to-r from-pink-500 to-purple-600 
-                    hover:from-pink-600 hover:to-purple-700
-                    text-white font-semibold rounded-xl shadow-lg shadow-pink-300/40
-                    transition active:scale-95"
-        >
-
-        
-        Share
-    </button>
-
-
-
       {/* Modal */}
-      {open && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100]">
-          <div className="bg-white w-[750px] h-[500px] rounded-2xl shadow-xl flex overflow-hidden relative">
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100]">
+        <div className="bg-white w-[750px] h-[500px] rounded-2xl shadow-xl flex overflow-hidden relative">
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className="absolute right-5 top-5 text-gray-500 hover:text-black"
+          >
+            <X className="w-6 h-6" />
+          </button>
 
-            {/* Close button */}
-            <button
-              onClick={() => setOpen(false)}
-              className="absolute right-5 top-5 text-gray-500 hover:text-black"
-            >
-              <X className="w-6 h-6" />
-            </button>
+          {/* LEFT COLUMN — Menu */}
+          <div className="w-1/3 bg-pink-50 border-r p-5 flex flex-col gap-3">
+            <h2 className="text-lg font-semibold text-pink-700 mb-2">
+              Share options
+            </h2>
 
-            {/* LEFT COLUMN — Menu */}
-            <div className="w-1/3 bg-pink-50 border-r p-5 flex flex-col gap-3">
-              <h2 className="text-lg font-semibold text-pink-700 mb-2">Share options</h2>
+            <MenuItem
+              label="Invite audience"
+              active={section === "invite"}
+              onClick={() => setSection("invite")}
+            />
 
+            <MenuItem
+              label="Add collaborators"
+              active={section === "collab"}
+              onClick={() => setSection("collab")}
+            />
+
+            <MenuItem
+              label="Share slides"
+              active={section === "slides"}
+              onClick={() => setSection("slides")}
+            />
+
+            <MenuItem
+              label="Publish"
+              active={section === "publish"}
+              onClick={() => setSection("publish")}
+            />
+
+            <div className="border-t pt-3 mt-3">
               <MenuItem
-                label="Invite audience"
-                active={section === "invite"}
-                onClick={() => setSection("invite")}
+                label="Integrations"
+                active={section === "integration"}
+                onClick={() => setSection("integration")}
               />
-
-              <MenuItem
-                label="Add collaborators"
-                active={section === "collab"}
-                onClick={() => setSection("collab")}
-              />
-
-              <MenuItem
-                label="Share slides"
-                active={section === "slides"}
-                onClick={() => setSection("slides")}
-              />
-
-              <MenuItem
-                label="Publish"
-                active={section === "publish"}
-                onClick={() => setSection("publish")}
-              />
-
-              <div className="border-t pt-3 mt-3">
-                <MenuItem
-                  label="Integrations"
-                  active={section === "integration"}
-                  onClick={() => setSection("integration")}
-                />
-              </div>
             </div>
+          </div>
 
-            {/* RIGHT COLUMN — Dynamic Content */}
-            <div className="w-2/3 p-6 overflow-y-auto">
+          {/* RIGHT COLUMN — Dynamic Content */}
+          <div className="w-2/3 p-6 overflow-y-auto">
+            {section === "invite" && (
+              <InviteAudienceUI
+                BASE={BASE}
+                code={code}
+                setCode={setCode}
+                qr={qr}
+              />
+            )}
 
-              {section === "invite" && (
-                <InviteAudienceUI
-                  BASE={BASE}
-                  code={code}
-                  setCode={setCode}
-                  qr={qr}
-                />
-              )}
+            {section === "collab" && <Placeholder title="Add collaborators" />}
 
-              {section === "collab" && (
-                <Placeholder title="Add collaborators" />
-              )}
+            {section === "slides" && <Placeholder title="Share slides" />}
 
-              {section === "slides" && (
-                <Placeholder title="Share slides" />
-              )}
+            {section === "publish" && (
+              <Placeholder title="Publish your presentation" />
+            )}
 
-              {section === "publish" && (
-                <Placeholder title="Publish your presentation" />
-              )}
-
-              {section === "integration" && (
-                <Placeholder title="Integrations" />
-              )}
-            </div>
-
+            {section === "integration" && <Placeholder title="Integrations" />}
           </div>
         </div>
-      )}
+      </div>
     </>
   );
 }
@@ -131,7 +117,11 @@ function MenuItem({ label, active, onClick }) {
   return (
     <button
       className={`w-full text-left px-3 py-2 rounded-lg font-medium transition
-        ${active ? "bg-pink-200 text-pink-700" : "hover:bg-pink-100 text-gray-700"}`}
+        ${
+          active
+            ? "bg-pink-200 text-pink-700"
+            : "hover:bg-pink-100 text-gray-700"
+        }`}
       onClick={onClick}
     >
       {label}
@@ -143,7 +133,9 @@ function MenuItem({ label, active, onClick }) {
 function InviteAudienceUI({ BASE, code, setCode, qr }) {
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-800 mb-3">Invite audience</h2>
+      <h2 className="text-xl font-semibold text-gray-800 mb-3">
+        Invite audience
+      </h2>
 
       <p className="text-gray-600 text-sm">Audience can join at</p>
 
@@ -151,16 +143,24 @@ function InviteAudienceUI({ BASE, code, setCode, qr }) {
         <span className="text-gray-500">{BASE}</span>
         <input
           className="border rounded-lg px-2 py-1 w-40 focus:ring-2 focus:ring-pink-400"
-          placeholder="yourcode"
+          placeholder="room1"
           value={code}
           onChange={(e) => setCode(e.target.value.trim())}
         />
       </div>
-
+      {code.length > 0 && code.length < 5 && (
+        <p className="text-red-500 text-sm mt-3">
+          کد باید حداقل ۵ کاراکتر باشد.
+        </p>
+      )}
       {qr && (
         <div className="mt-6 flex flex-col items-center">
           <p className="text-sm text-gray-600 mb-2">or scan QR</p>
-          <img src={qr} alt="qr" className="w-44 h-44 border rounded-xl shadow" />
+          <img
+            src={qr}
+            alt="qr"
+            className="w-44 h-44 border rounded-xl shadow"
+          />
 
           <a
             download="qr.png"
@@ -175,7 +175,7 @@ function InviteAudienceUI({ BASE, code, setCode, qr }) {
   );
 }
 
-/* Placeholder components for unfinished sections */
+// Placeholder components for unfinished sections
 function Placeholder({ title }) {
   return (
     <div className="text-center text-gray-400 pt-20">

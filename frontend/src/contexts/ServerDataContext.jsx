@@ -9,6 +9,7 @@ export const ServerDataProvider = ({ children }) => {
     questionResults: null, // Type 8: نتایج سوال
     partialQuestionResults: null, // Type 3: partial/result for current question (options_result)
     leaderboardResults: null, // Type 1: نتایج لیدربورد
+    modalLeaderboardResults: null, // Type 12: نتایج لیدربورد برای modal
     currentQuestion: null, // Type 2: سوال فعلی
     lastMessageType: null, // آخرین type دریافتی
     lastUpdateTime: null, // زمان آخرین به‌روزرسانی
@@ -55,10 +56,22 @@ export const ServerDataProvider = ({ children }) => {
     setServerData((prev) => ({
       ...prev,
       leaderboardResults: results,
+      currentQuestion: null, // پاک کردن سوال فعلی تا لیدربورد نمایش داده شود
       lastMessageType: 1,
       lastUpdateTime: new Date().toISOString(),
     }));
     console.log("[ServerData] Leaderboard updated:", results);
+  }, []);
+
+  // تابع برای به‌روزرسانی لیدربورد modal (Type 12)
+  const updateModalLeaderboard = useCallback((results) => {
+    setServerData((prev) => ({
+      ...prev,
+      modalLeaderboardResults: results,
+      lastMessageType: 12,
+      lastUpdateTime: new Date().toISOString(),
+    }));
+    console.log("[ServerData] Modal Leaderboard (Type 12) updated:", results);
   }, []);
 
   // تابع برای به‌روزرسانی سوال فعلی (Type 2)
@@ -77,12 +90,40 @@ export const ServerDataProvider = ({ children }) => {
   // تابع کلی برای پردازش پیام از WebSocket
   const processMessage = useCallback(
     (message) => {
-      if (!message || !message.type) return;
+      if (!message) return;
+
+      // اگر پیام فقط results دارد و type ندارد، آن را به عنوان لیدربورد در نظر بگیر
+      if (!message.type && message.results && Array.isArray(message.results)) {
+        console.log(
+          "[ServerData] Leaderboard message received (no type field):",
+          message.results.length,
+          "players"
+        );
+        updateLeaderboard(message.results);
+        return;
+      }
+
+      if (!message.type) return;
 
       switch (message.type) {
         case 1: // Leaderboard Results
+        case 11: // Leaderboard Results (Type 11)
+          console.log("[ServerData] Type 1/11 received, message:", message);
           if (message.results) {
             updateLeaderboard(message.results);
+          } else {
+            console.warn(
+              "[ServerData] Type 1/11 received but no results field"
+            );
+          }
+          break;
+
+        case 12: // Modal Leaderboard Results
+          console.log("[ServerData] Type 12 received, message:", message);
+          if (message.results) {
+            updateModalLeaderboard(message.results);
+          } else {
+            console.warn("[ServerData] Type 12 received but no results field");
           }
           break;
 
@@ -109,7 +150,7 @@ export const ServerDataProvider = ({ children }) => {
         case 8: // Question Results
           updateQuestionResults({
             question_id: message.question_id,
-            options: message.options || message.submit || [],
+            optionsResult: message.options || message.submit || [],
           });
           break;
 
@@ -121,7 +162,9 @@ export const ServerDataProvider = ({ children }) => {
       updateUsers,
       updateQuestionResults,
       updateLeaderboard,
+      updateModalLeaderboard,
       updateCurrentQuestion,
+      updatePartialQuestionResults,
     ]
   );
 
@@ -132,6 +175,7 @@ export const ServerDataProvider = ({ children }) => {
       questionResults: null,
       partialQuestionResults: null,
       leaderboardResults: null,
+      modalLeaderboardResults: null,
       currentQuestion: null,
       lastMessageType: null,
       lastUpdateTime: null,
@@ -146,6 +190,7 @@ export const ServerDataProvider = ({ children }) => {
     questionResults: serverData.questionResults,
     partialQuestionResults: serverData.partialQuestionResults,
     leaderboardResults: serverData.leaderboardResults,
+    modalLeaderboardResults: serverData.modalLeaderboardResults,
     currentQuestion: serverData.currentQuestion,
     lastMessageType: serverData.lastMessageType,
     lastUpdateTime: serverData.lastUpdateTime,
@@ -155,6 +200,7 @@ export const ServerDataProvider = ({ children }) => {
     updateQuestionResults,
     updatePartialQuestionResults,
     updateLeaderboard,
+    updateModalLeaderboard,
     updateCurrentQuestion,
     processMessage,
     clearData,

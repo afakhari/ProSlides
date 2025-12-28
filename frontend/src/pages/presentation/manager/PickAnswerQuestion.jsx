@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
+import { getColorForUser } from "../../../lib/colorUtils";
 // LeaderboardModal was removed; modal UI now lives on Manager LeaderBoard page
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
@@ -22,8 +23,10 @@ export default function ManagerPickAnswerQuestion({
   isRemoteReady,
   roomId,
 }) {
-  const { isConnected, sendNavigation, lastMessage } = useWebSocket();
-  const { questionResults, processMessage } = useServerData();
+  const { isConnected, sendNavigation, sendEnd, lastMessage, type8Message } =
+    useWebSocket();
+  const { questionResults, modalLeaderboardResults, processMessage } =
+    useServerData();
 
   // Calculate current question number and details from currentSlide
   const currentQuestionIndex = currentSlide - 1;
@@ -43,9 +46,12 @@ export default function ManagerPickAnswerQuestion({
       };
   const options = currentQuestion.options?.map((opt) => opt.option_text) || [];
 
-  // Find correct answer index (only for question slides, not leaderboard)
-  const correctIndex =
-    currentQuestion?.options?.findIndex((opt) => opt.answer === true) ?? -1;
+  // پیدا کردن همه گزینه‌های صحیح (نه فقط یکی)
+  const correctIndexes =
+    currentQuestion?.options?.reduce((arr, opt, idx) => {
+      if (opt.answer === true) arr.push(idx);
+      return arr;
+    }, []) ?? [];
 
   const [selected, setSelected] = useState(null);
   const [voted, setVoted] = useState(false);
@@ -88,55 +94,125 @@ export default function ManagerPickAnswerQuestion({
     // ذخیره پیام در ServerData
     processMessage(lastMessage);
 
-    // Type 8: Question Results
+    // Type 8: Question Results - مستقیم اعمال کن
     if (lastMessage.type === 8) {
-      console.log("[PickAnswerQuestion] Type 8 received!");
+      console.log("[PickAnswerQuestion] ===== TYPE 8 RECEIVED =====");
+      console.log(
+        "[PickAnswerQuestion] Current question_id:",
+        currentQuestion.question_id
+      );
+      console.log(
+        "[PickAnswerQuestion] Message question_id:",
+        lastMessage.question_id
+      );
+      console.log(
+        "[PickAnswerQuestion] Current options:",
+        currentQuestion.options?.map((o) => o.option_id)
+      );
+      console.log(
+        "[PickAnswerQuestion] Server options:",
+        lastMessage.options?.map((o) => o.option_id)
+      );
+
       setHasReceivedResults(true);
 
       // Check if options array exists (from server)
       const serverResults = lastMessage.options || lastMessage.submit || [];
-      console.log("[PickAnswerQuestion] Question results:", serverResults);
-      console.log(
-        "[PickAnswerQuestion] Current question options:",
-        currentQuestion.options
-      );
 
-      // Combine mock data (previous results) with server results (new results)
+      // اگه currentQuestion.options خالی یا undefined باشه، مستقیم از serverResults استفاده کن
+      if (!currentQuestion.options || currentQuestion.options.length === 0) {
+        console.log(
+          "[PickAnswerQuestion] No current options, using server results directly"
+        );
+        const newVotes = serverResults.map((s) => s.number_of_submits || 0);
+        console.log("[PickAnswerQuestion] Direct votes:", newVotes);
+        setVotes(newVotes);
+        setShowResults(true);
+        return;
+      }
+
+      // فقط از داده سرور استفاده کن
       const newVotes = currentQuestion.options.map((option) => {
-        // Get mock data (if available)
-        const mockVote = option.number_of_submits ?? 0;
-
-        // Get server data
         const serverResult = serverResults.find(
-          (s) => s.option_id === option.option_id
+          (s) => String(s.option_id) === String(option.option_id)
         );
         const serverVote = serverResult
           ? serverResult.number_of_submits ?? serverResult.number_of_submit ?? 0
           : 0;
 
-        // Combine: mock + server
-        const combinedVote = mockVote + serverVote;
         console.log(
-          `[PickAnswerQuestion] Option ${option.option_id}: mock=${mockVote} + server=${serverVote} = ${combinedVote}`
+          `[PickAnswerQuestion] Option ${
+            option.option_id
+          }: found=${!!serverResult}, vote=${serverVote}`
         );
-
-        return combinedVote;
+        return serverVote;
       });
 
-      console.log("[PickAnswerQuestion] Combined votes:", newVotes);
-      console.log("[PickAnswerQuestion] Setting showResults to true");
+      console.log("[PickAnswerQuestion] Final votes:", newVotes);
       setVotes(newVotes);
       setShowResults(true);
     }
-  }, [lastMessage, currentQuestion.options, processMessage]);
+  }, [
+    lastMessage,
+    currentQuestion.options,
+    currentQuestion.question_id,
+    processMessage,
+  ]);
+
+  // ✅ useEffect مخصوص type8Message - این گم نمیشه!
+  useEffect(() => {
+    if (!type8Message) return;
+
+    // چک کن که question_id مچ باشه - اگه نه، نادیده بگیر
+    const msgQId = String(type8Message.question_id);
+    const currentQId = String(currentQuestion.question_id);
+
+    if (msgQId !== currentQId) {
+      console.log(
+        "[PickAnswerQuestion] type8Message question_id mismatch, ignoring. msg:",
+        msgQId,
+        "current:",
+        currentQId
+      );
+      return;
+    }
+
+    console.log("[PickAnswerQuestion] ===== TYPE 8 MESSAGE RECEIVED =====");
+    console.log("[PickAnswerQuestion] type8Message:", type8Message);
+
+    setHasReceivedResults(true);
+
+    const serverResults = type8Message.options || [];
+
+    // اگه options خالیه، مستقیم استفاده کن
+    if (!currentQuestion.options || currentQuestion.options.length === 0) {
+      const newVotes = serverResults.map((s) => s.number_of_submits || 0);
+      console.log("[PickAnswerQuestion] Direct votes:", newVotes);
+      setVotes(newVotes);
+      setShowResults(true);
+      return;
+    }
+
+    // مپ کن به options فعلی
+    const newVotes = currentQuestion.options.map((option) => {
+      const serverResult = serverResults.find(
+        (s) => String(s.option_id) === String(option.option_id)
+      );
+      return serverResult?.number_of_submits ?? 0;
+    });
+
+    console.log("[PickAnswerQuestion] Votes from type8Message:", newVotes);
+    setVotes(newVotes);
+    setShowResults(true);
+  }, [type8Message, currentQuestion.options, currentQuestion.question_id]);
 
   // Update votes from questionResults in ServerDataContext
   useEffect(() => {
-    if (
-      questionResults &&
-      questionResults.options &&
-      questionResults.options.length > 0
-    ) {
+    // Support both 'options' and 'optionsResult' field names
+    const resultsArray =
+      questionResults?.optionsResult || questionResults?.options;
+
+    if (questionResults && resultsArray && resultsArray.length > 0) {
       console.log(
         "[PickAnswerQuestion] Checking questionResults:",
         questionResults
@@ -160,9 +236,9 @@ export default function ManagerPickAnswerQuestion({
           // Get mock data (if available)
           const mockVote = option.number_of_submits ?? 0;
 
-          // Get server data
-          const serverResult = questionResults.options.find(
-            (s) => s.option_id === option.option_id
+          // Get server data - use String comparison for option_id
+          const serverResult = resultsArray.find(
+            (s) => String(s.option_id) === String(option.option_id)
           );
           const serverVote = serverResult
             ? serverResult.number_of_submits ??
@@ -231,6 +307,11 @@ export default function ManagerPickAnswerQuestion({
     if (onPrevious) onPrevious();
   };
 
+  const handleEnd = () => {
+    console.log("[PickAnswerQuestion] Sending end command to server");
+    sendEnd();
+  };
+
   // Debug: Log state changes
   useEffect(() => {
     console.log("[PickAnswerQuestion] State update:", {
@@ -290,10 +371,18 @@ export default function ManagerPickAnswerQuestion({
     isRemoteReady,
   ]);
 
+  // Calculate dynamic background style from quiz data
+  const backgroundStyle = {
+    backgroundImage: quiz?.background?.image
+      ? `url('${quiz.background.image}')`
+      : "url('/bg.jpg')",
+    backgroundColor: quiz?.background?.color || "#1e1e2e",
+  };
+
   return (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      style={backgroundStyle}
     >
       <TopBar
         gameCode={gameCode}
@@ -309,7 +398,7 @@ export default function ManagerPickAnswerQuestion({
       />
 
       <div
-        className={` min-h-screen flex flex-col justify-around items-center transition-all duration-300 pt-20 ${
+        className={`h-screen flex flex-col items-center transition-all duration-300 pt-20 pb-24 overflow-hidden ${
           showQRModal ? "ml-[20%] w-[80%]" : "ml-0 w-full"
         }`}
       >
@@ -327,55 +416,105 @@ export default function ManagerPickAnswerQuestion({
 
         {isRemoteReady ? (
           <>
-            <h2 className="text-6xl font-bold text-white mb-10 mt-12">
+            {/* صورت سوال - بالا با فاصله بیشتر */}
+            <h2 className="text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-4 mt-8 text-center px-4 shrink-0">
               {currentQuestion.question_text}
             </h2>
 
             {/* تایمر */}
             {!showResults && timer > 0 && (
-              <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-white">
+              <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-white pointer-events-none z-10">
                 {timer}
               </div>
             )}
-            {/* نمودار */}
-            <div className="flex justify-around items-end w-full h-[700px] mb-10 px-4">
-              {currentQuestion.options.map((opt, index) => {
-                const isCorrect = index === correctIndex;
-                const isSelected = index === selected;
-                const totalVotes = votes.reduce((sum, v) => sum + v, 0);
-                const height =
-                  showResults && totalVotes > 0
-                    ? (votes[index] / totalVotes) * 100
-                    : 0;
 
-                return (
-                  <div
-                    key={index}
-                    className="flex flex-col items-center justify-end w-1/5 h-full"
-                  >
-                    {showResults && (
-                      <div className="mb-2 text-center text-4xl text-white font-semibold">
-                        {votes[index]}
-                      </div>
-                    )}
+            {/* بخش اصلی - عکس سوال سمت چپ، گزینه‌ها سمت راست */}
+            <div className="flex flex-1 w-full min-h-0 px-4 gap-6">
+              {/* عکس سوال - سمت چپ */}
+              {currentQuestion.image_url && (
+                <div className="flex items-center justify-center w-1/4 shrink-0">
+                  <img
+                    src={currentQuestion.image_url}
+                    alt="Question"
+                    className="max-h-full max-w-full rounded-xl shadow-lg object-contain"
+                  />
+                </div>
+              )}
+
+              {/* نمودار گزینه‌ها - سمت راست */}
+              <div
+                className={`flex justify-around items-end flex-1 min-h-0 ${
+                  !currentQuestion.image_url ? "w-full" : ""
+                }`}
+              >
+                {currentQuestion.options.map((opt, index) => {
+                  const isCorrect = correctIndexes.includes(index);
+                  const isSelected = index === selected;
+                  const totalVotes = votes.reduce((sum, v) => sum + v, 0);
+                  // ارتفاع فقط وقتی نتایج رسیده نمایش داده میشه
+                  const height =
+                    hasReceivedResults && totalVotes > 0
+                      ? (votes[index] / totalVotes) * 100
+                      : 0;
+                  const hasImage = opt.image_url && opt.image_url.length > 0;
+
+                  return (
                     <div
-                      className={`w-3/4 rounded-t-lg transition-all duration-1000
-                      ${isCorrect ? "bg-green-500" : "bg-pink-600"}
-                      ${
-                        isSelected && !isCorrect ? "ring-2 ring-pink-800" : ""
-                      }`}
-                      style={{ height: `${height}%` }}
-                    ></div>
-                    <p className="mt-5 text-gray-700 text-3xl font-semibold text-center">
-                      {opt.option_text}
-                    </p>
-                  </div>
-                );
-              })}
+                      key={index}
+                      className="flex flex-col items-center justify-end w-1/5 h-full"
+                    >
+                      {/* تعداد رای - فقط بعد از دریافت نتایج */}
+                      {hasReceivedResults && (
+                        <div className="mb-1 text-center text-2xl lg:text-4xl text-white font-semibold">
+                          {votes[index]}
+                        </div>
+                      )}
+
+                      {/* تصویر گزینه - چسبیده به بالای نوار با عرض یکسان */}
+                      {hasImage && (
+                        <img
+                          src={opt.image_url}
+                          alt={opt.option_text}
+                          className="w-3/4 h-20 lg:h-28 rounded-t-lg object-cover"
+                        />
+                      )}
+
+                      {/* نوار نمودار - فقط بعد از دریافت نتایج نمایش داده میشه */}
+                      <div
+                        className={`w-3/4 transition-all duration-1000 ${
+                          hasImage ? "rounded-b-lg" : "rounded-t-lg"
+                        }
+
+                        ${
+                          hasReceivedResults
+                            ? isCorrect
+                              ? "bg-green-500"
+                              : "bg-red-500"
+                            : "bg-transparent"
+                        }
+                        ${
+                          isSelected && !isCorrect ? "ring-2 ring-pink-800" : ""
+                        }`}
+                        style={{
+                          height: hasReceivedResults
+                            ? `${Math.max(height, 5)}%`
+                            : "0%",
+                        }}
+
+                      ></div>
+
+                      {/* متن گزینه */}
+                      <p className="mt-2 text-white text-xl lg:text-2xl font-semibold text-center">
+                        {opt.option_text}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-center w-full h-[700px] mb-10 px-4">
+          <div className="flex items-center justify-center w-full flex-1 min-h-0 mb-4 px-4">
             <div className="text-white/80 text-2xl">Loading quiz…</div>
           </div>
         )}
@@ -412,9 +551,111 @@ export default function ManagerPickAnswerQuestion({
         onShowLeaderboard={() => setShowLeaderboard(true)}
         onNext={handleNext}
         onPrevious={handlePrevious}
+        onEnd={handleEnd}
       />
 
-      {/* Leaderboard modal removed - manager LeaderBoard page now contains modal UI */}
+      {/* Leaderboard Modal using type 12 data */}
+      {showLeaderboard && (
+        <div
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
+          onClick={() => setShowLeaderboard(false)}
+        >
+          <div
+            className="bg-gray-900 rounded-xl p-8 max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto no-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <span className="text-4xl">🏆</span>
+                <div>
+                  <h2 className="text-white text-3xl font-bold">Leaderboard</h2>
+                  <p className="text-gray-400 text-sm">
+                    {(modalLeaderboardResults || []).length} players
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowLeaderboard(false)}
+                className="text-white hover:text-gray-300 text-3xl border-none bg-transparent cursor-pointer leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {(() => {
+                const modalPlayers = modalLeaderboardResults || [];
+                console.log(
+                  "[PickAnswerQuestion] Modal players:",
+                  modalPlayers
+                );
+                const maxScore = Math.max(
+                  ...modalPlayers.map((p) => p.total_points || 0),
+                  0
+                );
+                console.log("[PickAnswerQuestion] Max score:", maxScore);
+
+                // درصد امتیاز نسبت به نفر اول
+                const calcPercent = (score) => {
+                  if (maxScore === 0) return 0;
+                  return (score / maxScore) * 100;
+                };
+
+                return modalPlayers.map((player) => {
+                  const score = player.total_points || 0;
+                  const barWidth = calcPercent(score);
+                  const hasScore = score > 0;
+                  const playerColor = getColorForUser(player.user_id);
+
+                  return (
+                    <div
+                      key={player.user_id}
+                      className="flex items-center gap-4 relative"
+                    >
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0"
+                        style={{
+                          backgroundColor: playerColor,
+                          boxShadow: `0 4px 12px ${playerColor}60`,
+                        }}
+                      >
+                        {player.rank}
+                      </div>
+                      <div className="flex-1 relative h-16 flex items-center">
+                        {hasScore ? (
+                          <div
+                            className="rounded-lg h-16 transition-all duration-1000 flex items-center px-4 gap-3"
+                            style={{
+                              backgroundColor: playerColor,
+                              width: `${Math.max(barWidth, 15)}%`,
+                              boxShadow: `0 4px 15px ${playerColor}80, 0 2px 8px ${playerColor}60`,
+                            }}
+                          >
+                            <span className="text-2xl">{player.character}</span>
+                            <span className="text-white font-semibold text-lg">
+                              {player.name}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3 px-4">
+                            <span className="text-2xl">{player.character}</span>
+                            <span className="text-white font-semibold text-lg">
+                              {player.name}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-white font-bold text-xl shrink-0 w-20 text-right">
+                        {Math.round(score)}p
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,29 +4,44 @@ use redis::{AsyncCommands};
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::utils::{
-    get_slide_index,
+    get_quiz_setup, get_slide_index, load_quiz_setup
 };
 use crate::models::{
-    PlayerText,
-    PlayerSession,
-    RegisterPlayer,
-    UnregisterPlayer,
-    PlayerOk,
-    PlayerInfo,
-    PlayerAnswer,
-    SendPlayerList,
-    QuestionResult,
-    OptionResult,
+    OptionResult, PlayerAnswer, PlayerInfo, PlayerOk, PlayerSession, PlayerText, QuestionResult, QuizSetup, RegisterPlayer, SendPlayerList, UnregisterPlayer
 };
+
+use std::time::{Duration, Instant};
+
+// Heartbeat interval and timeout
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
+
+// ...existing code...
+
+impl PlayerSession {
+    /// Sends ping to client every HEARTBEAT_INTERVAL seconds.
+    fn hb(&self, ctx: &mut ws::WebsocketContext<Self>) {
+        ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
+            if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
+                println!("⚠️ Player heartbeat failed, disconnecting!");
+                act.room.do_send(UnregisterPlayer(ctx.address()));
+                ctx.stop();
+                return;
+            }
+            ctx.ping(b"");
+        });
+    }
+}
 
 
 impl Actor for PlayerSession {
     type Context = ws::WebsocketContext<Self>;
-    
     fn started(&mut self, ctx: &mut Self::Context) {
+        // Start heartbeat
+        self.hb(ctx);
         self.room.do_send(RegisterPlayer(ctx.address()));
     }
-    
+
     fn stopped(&mut self, ctx: &mut Self::Context) {
         self.room.do_send(UnregisterPlayer(ctx.address()));
     }
@@ -52,7 +67,14 @@ impl Handler<PlayerText> for PlayerSession {
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        if let Ok(ws::Message::Text(text)) = msg {
+        if let Ok(ws::Message::Ping(msg)) = msg {
+            self.hb = Instant::now();
+            ctx.pong(&msg);
+        }
+        else if let Ok(ws::Message::Pong(_)) = msg {
+            self.hb = Instant::now();
+        }
+        else if let Ok(ws::Message::Text(text)) = msg {
             if let Ok(player_info) = serde_json::from_str::<PlayerInfo>(&text) {
                 if player_info.r#type == 6 { // Player registration
                     let name = player_info.name.clone();
@@ -79,12 +101,12 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                         "type": 10,
                         "name": name,
                         "character": character,
-                        "user_id": user_id
+                        "user_id": user_id,
                     });
                     let user_data = serde_json::json!({
                         "name": name,
                         "character": character,
-                        "user_id": user_id
+                        "user_id": user_id,
                     });
                     let session_id = self.session_id.clone();
 
@@ -122,17 +144,21 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
 //                 self.room.do_send(crate::PlayerOk(ctx.address()));
             } else if let Ok(answer) = serde_json::from_str::<PlayerAnswer>(&text) {
                 if answer.r#type == 4 { // Submit Question
-                    // self.room.do_send(crate::PlayerAnswerMessage(answer));
                     let session_id = self.session_id.clone();
                     let user_id = self.id.to_string();
                     let answer_clone = answer.clone();
                     let redis_client = self.redis_client.clone();
-                    let slides = self.quiz_setup.slides.clone();
+                    let existing_setup: Option<QuizSetup> = self.quiz_setup.clone();
                     
                     actix_rt::spawn(async move {
+                        let mut con = redis_client.get_multiplexed_async_connection().await.unwrap();
+                        let mut setup_quiz = existing_setup;
+                        if setup_quiz.is_none() {
+                            setup_quiz = load_quiz_setup(&session_id, &redis_client).await;
+                        }
+                        let slides = setup_quiz.unwrap().slides;
                         let slide = slides[get_slide_index(&redis_client, &session_id).await as usize].clone();
                         let question = slide.question.clone().unwrap();
-                        let mut con = redis_client.get_multiplexed_async_connection().await.unwrap();
 
                         let qkey = format!("question:{}:{}", session_id, answer.question_id);
 
@@ -212,6 +238,11 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                         let score = ratio * (max_point - min_point) + min_point;
                         let new_points = slope * score;
 
+                        let key = format!("leaderboard:{session_id}");
+                        let new_points_key = format!("new_points:{session_id}");
+
+                        con.zincr::<String, &str, f64, ()>(key, &user_id, new_points).await.expect("Error");
+                        con.hset::<String, &str, f64, ()>(new_points_key, &user_id, new_points).await.expect("Error");
                         // update player score
                         let pkey = format!("player:{session_id}:{user_id}");
                         let mut player: serde_json::Value = serde_json::from_str(&con.get::<_,String>(&pkey).await.unwrap()).unwrap();

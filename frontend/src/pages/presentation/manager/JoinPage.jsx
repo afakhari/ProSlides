@@ -29,8 +29,10 @@ export default function ManagerJoinPage({
   onPrevious,
   currentSlide = 1,
   totalSlides = 3,
+  quiz,
 }) {
-  const { isConnected, connect, sendNavigation, lastMessage } = useWebSocket();
+  const { isConnected, connect, sendNavigation, sendEnd, lastMessage } =
+    useWebSocket();
   const { users, processMessage } = useServerData();
 
   const [page, setPage] = useState("lobby"); // 'lobby' | 'quiz'
@@ -147,6 +149,11 @@ export default function ManagerJoinPage({
     if (onPrevious) onPrevious();
   };
 
+  const handleEnd = () => {
+    console.log("[JoinPage] Sending end command to server");
+    sendEnd();
+  };
+
   const handleStart = () => {
     const newNavigationData = createNextPrevious(
       5,
@@ -173,14 +180,14 @@ export default function ManagerJoinPage({
 
     if (type === "circle") {
       // Arrange in a circle
-      const radius = 120;
+      const radius = Math.min(200, 100 + total * 5);
       const angle = (index * 2 * Math.PI) / total;
       baseX = Math.cos(angle) * radius;
       baseY = Math.sin(angle) * radius;
     } else if (type === "diagonalCircle") {
       // Arrange in a diagonal circle (ellipse rotated)
-      const radiusX = 150;
-      const radiusY = 80;
+      const radiusX = Math.min(250, 150 + total * 3);
+      const radiusY = Math.min(150, 80 + total * 2);
       const angle = (index * 2 * Math.PI) / total;
       const x = Math.cos(angle) * radiusX;
       const y = Math.sin(angle) * radiusY;
@@ -190,12 +197,40 @@ export default function ManagerJoinPage({
       baseY = x * Math.sin(rotAngle) + y * Math.cos(rotAngle);
     } else if (type === "scatter") {
       // Scatter randomly across the entire main section
-      const seed = index * 2654435761; // Pseudo-random based on index
-      const pseudoRandomX = ((seed % 1000) / 1000) * 2 - 1;
-      const pseudoRandomY = (((seed * 7) % 1000) / 1000) * 2 - 1;
-      // Spread across a much larger area (full width and height of main section)
-      baseX = pseudoRandomX * 400; // Spread horizontally across ~800px
-      baseY = pseudoRandomY * 150; // Spread vertically across ~300px
+      // Use golden ratio for better distribution
+      const goldenRatio = 1.618033988749;
+      const seed = index * 2654435761;
+
+      // Calculate grid dimensions based on total players
+      const cols = Math.ceil(Math.sqrt(total * 1.5)); // More columns than rows
+      const rows = Math.ceil(total / cols);
+
+      // Grid position
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+
+      // Spread across full width (from -500 to +500) and height (from -180 to +180)
+      const totalWidth = 1000;
+      const totalHeight = 360;
+
+      const cellWidth = totalWidth / cols;
+      const cellHeight = totalHeight / rows;
+
+      // Random offset within cell using seed
+      const pseudoRandomX = ((seed % 1000) / 1000) * 0.6 - 0.3;
+      const pseudoRandomY = (((seed * 7) % 1000) / 1000) * 0.6 - 0.3;
+
+      // Calculate position: center of cell + random offset
+      baseX = (col - (cols - 1) / 2) * cellWidth + pseudoRandomX * cellWidth;
+      baseY = (row - (rows - 1) / 2) * cellHeight + pseudoRandomY * cellHeight;
+    }
+
+    // For scatter layout, don't apply offset to keep players centered
+    if (type === "scatter") {
+      return {
+        x: baseX,
+        y: baseY,
+      };
     }
 
     return {
@@ -251,10 +286,18 @@ export default function ManagerJoinPage({
     setPreviousUserCount(currentUserCount);
   }, [previousUserCount, displayUsers]);
 
+  // Calculate dynamic background style from quiz data
+  const backgroundStyle = {
+    backgroundImage: quiz?.background?.image
+      ? `url('${quiz.background.image}')`
+      : "url('/bg.jpg')",
+    backgroundColor: quiz?.background?.color || "#1e1e2e",
+  };
+
   return (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat "
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      style={backgroundStyle}
     >
       <div
         className={`w-full pt-16! sm:pt-36 md:pt-40 pb-24 px-4 sm:px-3 flex ${
@@ -298,9 +341,9 @@ export default function ManagerJoinPage({
             </div>
           </div>
 
-          <div className="min-h-[270px] max-h-[500px] flex items-center justify-center">
+          <div className="min-h-[400px] max-h-[600px] flex items-center justify-center overflow-visible">
             {page === "lobby" ? (
-              <div>
+              <div className="w-full">
                 {displayUsers.length === 0 && (
                   <div
                     className="text-xl md:text-2xl lg:text-3xl text-white/92 text-center animate-custom-pulse"
@@ -313,7 +356,7 @@ export default function ManagerJoinPage({
                   </div>
                 )}
                 {displayUsers.length > 0 && (
-                  <div className="relative w-full min-h-[500px] flex justify-center items-center overflow-visible">
+                  <div className="relative w-full min-h-[450px] flex justify-center items-center overflow-visible">
                     {displayUsers.map((user, index) => {
                       const isNewUser = user.user_id === newUserId;
                       const position = getPosition(
@@ -402,6 +445,7 @@ export default function ManagerJoinPage({
           isQROpen={showQRModal}
           onShowLeaderboard={() => setShowLeaderboard(true)}
           onNext={handleNext}
+          onEnd={handleEnd}
           // onPrevious=null
         />
 

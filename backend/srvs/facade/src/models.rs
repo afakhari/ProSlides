@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use actix::*;
 use uuid::Uuid;
 use std::collections::HashSet;
+use std::time::Instant;
+
 
 //
 // ==== Question struct ====
@@ -21,6 +23,7 @@ pub struct Question {
     pub question_time: u32,
     pub max_point: f64,
     pub min_point: f64,
+    pub has_multiple: bool,
     pub options: Vec<OptionItem>,
 }
 
@@ -93,7 +96,6 @@ pub struct QuizSetupMessage(pub QuizSetup);
 pub struct Room {
     pub players: HashSet<Addr<PlayerSession>>,
     pub manager: Option<Addr<ManagerSession>>,
-    pub quiz_setup: Option<QuizSetup>,
     pub ok_responses: usize,
     pub last_question: Option<Question>,
     pub redis_client: redis::Client,
@@ -139,8 +141,23 @@ pub struct Slide {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LeaderboardEntry {
-    // Your Django response shows: []
-    // If leaderboard has fields later, add them here.
+    #[serde(default)]
+    pub rust_session_id: String,
+    #[serde(default)]
+    pub player_name: String,
+    #[serde(default)]
+    pub avatar: String,
+    #[serde(default)]
+    pub score: u32,
+    #[serde(default)]
+    pub time_taken: f32,
+    #[serde(default)]
+    pub rank: u16,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct LeaderboardUpdate {
+    pub leaderboard: Vec<LeaderboardEntry>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -201,15 +218,9 @@ pub struct PlayerSession {
     pub character: Option<String>,
     pub session_id: String,
     pub redis_client: redis::Client,
-    pub quiz_setup: QuizSetup,
+    pub quiz_setup: Option<QuizSetup>,
+    pub hb: Instant,  // Add this field
 }
-/*
-#[derive(Deserialize)]
-pub struct PlayerAnswer {
-    pub question_id: i64,
-    pub options_result: Vec<OptionPick>
-}
-*/
 
 #[derive(Deserialize)]
 pub struct OptionPick {
@@ -217,7 +228,7 @@ pub struct OptionPick {
     picked: bool,
 }
 
-// 
+//
 
 #[derive(Message)]
 #[rtype(result = "()")]
@@ -235,11 +246,13 @@ pub struct UnregisterManager;
 #[rtype(result = "()")]
 pub struct BroadcastToPlayers(pub String);
 
+
 pub struct ManagerSession {
     pub room: Addr<Room>,
     pub session_id: String,
     pub redis_client: redis::Client,
     pub quiz_setup: QuizSetup,
+    pub hb: Instant,  // Add this field
 }
 
 #[derive(Message)]

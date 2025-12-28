@@ -5,6 +5,7 @@ export const WebSocketContext = createContext(null);
 export const WebSocketProvider = ({ children, role = "manager" }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
+  const [type8Message, setType8Message] = useState(null); // مخصوص type:8 که گم نشه
   const [connectionError, setConnectionError] = useState(null);
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
@@ -55,6 +56,11 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
         try {
           const data = JSON.parse(event.data);
           setLastMessage(data);
+          // ذخیره جداگانه type:8 تا با پیام‌های دیگه گم نشه
+          if (data.type === 8) {
+            console.log("📩 Type 8 stored separately");
+            setType8Message({ ...data, _timestamp: Date.now() });
+          }
         } catch {
           // Handle non-JSON messages (like "OK count: X")
           console.log("📩 Text message:", event.data);
@@ -107,6 +113,15 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
     return sendMessage(msg);
   };
 
+  // Send end command (for manager)
+  const sendEnd = () => {
+    const msg = {
+      type: 9,
+      action: "end",
+    };
+    return sendMessage(msg);
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -122,12 +137,14 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
   const value = {
     isConnected,
     lastMessage,
+    type8Message, // پیام type:8 جداگانه
     connectionError,
     sessionId,
     connect,
     disconnect,
     sendMessage,
     sendNavigation,
+    sendEnd,
   };
 
   return (
