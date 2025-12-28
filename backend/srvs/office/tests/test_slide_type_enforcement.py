@@ -1,15 +1,37 @@
-import pytest
+import uuid
 
-from backend.srvs.office.tests.factories import QuizFactory, SlideFactory, UserFactory
+import pytest
+from django.contrib.auth import get_user_model
+
+from backend.srvs.office.office.models import Quiz
+from backend.srvs.office.tests.factories import QuizFactory, SlideFactory
+
+
+def _create_owner():
+    User = get_user_model()
+    token = uuid.uuid4().hex[:8]
+    return User.objects.create_user(
+        username=f"owner_{token}",
+        password="pass1234",
+        email=f"owner_{token}@example.com",
+    )
+
+
+def _create_quiz(owner):
+    quiz_fields = {field.name for field in Quiz._meta.get_fields()}
+    if "owner" in quiz_fields:
+        return QuizFactory(owner=owner)
+    return QuizFactory()
 
 
 @pytest.mark.django_db
 def test_question_create_rejects_content_slide(api_client):
-    owner = UserFactory()
-    quiz = QuizFactory(owner=owner)
+    owner = _create_owner()
+    quiz = _create_quiz(owner)
     slide = SlideFactory(quiz=quiz, slide_type=2)
 
-    api_client.force_authenticate(user=owner)
+    if "owner" in {field.name for field in Quiz._meta.get_fields()}:
+        api_client.force_authenticate(user=owner)
     payload = {
         "title": "Bad Question",
         "text": "Should be rejected",
@@ -31,11 +53,12 @@ def test_question_create_rejects_content_slide(api_client):
 
 @pytest.mark.django_db
 def test_content_update_rejects_question_slide(api_client):
-    owner = UserFactory()
-    quiz = QuizFactory(owner=owner)
+    owner = _create_owner()
+    quiz = _create_quiz(owner)
     slide = SlideFactory(quiz=quiz, slide_type=1)
 
-    api_client.force_authenticate(user=owner)
+    if "owner" in {field.name for field in Quiz._meta.get_fields()}:
+        api_client.force_authenticate(user=owner)
     resp = api_client.put(
         f"/api/quizzes/{quiz.id}/slides/{slide.id}/content/",
         {"title": "Should be rejected"},
