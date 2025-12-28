@@ -27,9 +27,9 @@ from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard, E
 from .serializers import (
     QuizSerializer, SlideSerializer, QuestionSerializer, OptionSerializer,
     ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer,
-    RegisterSerializer, QuizListSerializer, VerifyEmailSerializer,
-    ResendVerificationSerializer, PasswordResetRequestSerializer,
-    PasswordResetConfirmSerializer
+    QuestionResultsReceiveSerializer, RegisterSerializer, QuizListSerializer,
+    VerifyEmailSerializer, ResendVerificationSerializer,
+    PasswordResetRequestSerializer, PasswordResetConfirmSerializer
 )
 from .permissions import IsQuizOwner
 from .pagination import StandardResultsSetPagination
@@ -1241,6 +1241,111 @@ class LeaderboardReceiveView(viewsets.ViewSet):
             response_data['errors'] = errors
             return Response(response_data, status=status.HTTP_207_MULTI_STATUS)
         return Response(response_data)
+
+
+class QuestionResultsReceiveView(viewsets.ViewSet):
+    """
+    Receive final question results and persist option votes.
+    """
+
+    @swagger_auto_schema(
+        operation_description="Store final question results (option votes).",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['options'],
+            properties={
+                'options': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        required=['option_id', 'number_of_submits'],
+                        properties={
+                            'option_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                            'number_of_submits': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        },
+                    ),
+                ),
+            },
+        ),
+        responses={
+            200: openapi.Response(
+                "Results stored",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_STRING),
+                        'updated_options': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    },
+                ),
+            ),
+            400: openapi.Response("Invalid payload"),
+            404: openapi.Response("No question found for this slide"),
+        },
+        tags=["Questions"],
+    )
+    def create(self, request, quiz_pk=None, slide_pk=None):
+        serializer = QuestionResultsReceiveSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            question = Question.objects.get(
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+            )
+        except Question.DoesNotExist:
+            return Response(
+                {'detail': 'No question found for this slide'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        options_data = serializer.validated_data.get('options', [])
+        if not options_data:
+            return Response(
+                {'detail': 'options list is empty; provide at least one entry'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        option_ids = [item['option_id'] for item in options_data]
+        if len(option_ids) != len(set(option_ids)):
+            return Response(
+                {'detail': 'Duplicate option_id values are not allowed.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        question_option_ids = list(
+            Option.objects.filter(question=question).values_list('id', flat=True)
+        )
+        provided_ids = set(option_ids)
+        expected_ids = set(question_option_ids)
+        if provided_ids != expected_ids:
+            missing = sorted(expected_ids - provided_ids)
+            extra = sorted(provided_ids - expected_ids)
+            return Response(
+                {
+                    'detail': 'options list must include every option for the question.',
+                    'missing_option_ids': missing,
+                    'unexpected_option_ids': extra,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        votes_map = {item['option_id']: item['number_of_submits'] for item in options_data}
+        with transaction.atomic():
+            options = list(
+                Option.objects
+                .select_for_update()
+                .filter(question=question, id__in=option_ids)
+            )
+            for option in options:
+                option.votes = votes_map.get(option.id, 0)
+            Option.objects.bulk_update(options, ['votes'])
+            touch_quiz(question.slide.quiz_id)
+
+        return Response(
+            {'status': 'results saved', 'updated_options': len(option_ids)},
+            status=status.HTTP_200_OK,
+        )
 
 
 class RegisterView(APIView):
