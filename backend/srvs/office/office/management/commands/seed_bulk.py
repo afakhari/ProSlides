@@ -249,6 +249,7 @@ class Command(BaseCommand):
                 option_rows = [
                     models.Option(
                         question=question,
+                        order=idx + 1,
                         text=f"Option {idx + 1}",
                         is_correct=idx in correct_indices,
                         votes=rng.randint(0, options["players_per_quiz"]),
