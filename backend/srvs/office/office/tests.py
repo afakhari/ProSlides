@@ -1,323 +1,217 @@
-import json
+from django.contrib.auth import get_user_model
 from django.test import TestCase
-from django.contrib.auth.models import User
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
-from .models import Quiz, PickAnswerQuestion, Option
+
+from .models import Quiz, Slide, Question, Option, Leaderboard, PlayerSession
 
 
-class QuizAPITests(TestCase):
+class OfficeAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
-
-        # ❌ حذف ساخت کاربر - حالا در views ساخته می‌شود
-        # فقط کوئیز و سوالات تستی ایجاد کنید
-        self.quiz = Quiz.objects.create(
-            title="آزمون ریاضی پایه",
-            created_by=User.objects.get(
-                username='default_user')  # استفاده از کاربر موجود
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="owner",
+            password="pass1234",
+            email="owner@example.com",
         )
+        self.client.force_authenticate(user=self.user)
 
-        self.question = PickAnswerQuestion.objects.create(
-            quiz=self.quiz,
-            title="سوال جمع ساده",
-            question_text="حاصل ۲ + ۲ چیست؟",
-            order=1
+        self.quiz = Quiz.objects.create(title="Test Quiz", owner=self.user)
+        self.slide = Slide.objects.create(quiz=self.quiz, slide_type=1, order=1)
+        self.question = Question.objects.create(
+            slide=self.slide,
+            question_type="single",
+            text="What is 2 + 2?",
+            min_point=0,
+            max_point=100,
+            time_limit=30,
+            faster_answers_more_points=False,
+            partial_scoring=False,
         )
-
         self.option1 = Option.objects.create(
             question=self.question,
-            text="۴",
-            is_correct=True
+            order=1,
+            text="4",
+            is_correct=True,
         )
         self.option2 = Option.objects.create(
             question=self.question,
-            text="۵",
-            is_correct=False
+            order=2,
+            text="5",
+            is_correct=False,
         )
 
-    def _get_response_data(self, response):
-        """کمک برای مدیریت pagination"""
-        if hasattr(response, 'data') and 'results' in response.data:
-            return response.data['results']
+    @staticmethod
+    def _get_results(response):
+        if isinstance(response.data, dict) and "results" in response.data:
+            return response.data["results"]
         return response.data
 
-    def test_create_quiz(self):
-        url = reverse('quiz-list')
-        data = {"title": "آزمون علوم تجربی"}
-
-        response = self.client.post(url, data, format='json')
-        print("Create Quiz Response:",
-              response.status_code, response.data)  # دیباگ
+    def test_quiz_crud(self):
+        create_url = reverse("quiz-list")
+        response = self.client.post(create_url, {"title": "New Quiz"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Quiz.objects.count(), 2)
-        self.assertEqual(response.data['title'], "آزمون علوم تجربی")
 
-    def test_get_quiz_list(self):
-        url = reverse('quiz-list')
-        response = self.client.get(url)
+        quiz_id = response.data.get("quiz_id") or response.data.get("id")
+        self.assertIsNotNone(quiz_id)
 
+        list_response = self.client.get(create_url)
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        quizzes = self._get_results(list_response)
+        self.assertTrue(any(q["quiz_id"] == quiz_id for q in quizzes))
+
+        detail_url = reverse("quiz-detail", kwargs={"pk": quiz_id})
+        patch_response = self.client.patch(
+            detail_url, {"title": "Updated Quiz"}, format="json"
+        )
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+
+        delete_response = self.client.delete(detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_resolve_access_code(self):
+        client = APIClient()
+        url = reverse("quiz-resolve-access-code")
+        response = client.get(url, {"access_code": self.quiz.access_code})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = self._get_response_data(response)
-        self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]['title'], "آزمون ریاضی پایه")
+        self.assertEqual(response.data["quiz_id"], self.quiz.id)
 
-    def test_get_quiz_detail(self):
-        url = reverse('quiz-detail', kwargs={'pk': self.quiz.pk})
-        response = self.client.get(url)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['title'], "آزمون ریاضی پایه")
-
-    def test_update_quiz(self):
-        url = reverse('quiz-detail', kwargs={'pk': self.quiz.pk})
-        data = {"title": "آزمون ریاضی پیشرفته"}
-
-        response = self.client.put(url, data, format='json')
-        print("Update Quiz Response:",
-              response.status_code, response.data)  # دیباگ
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        self.quiz.refresh_from_db()
-        self.assertEqual(self.quiz.title, "آزمون ریاضی پیشرفته")
-
-    def test_delete_quiz(self):
-        url = reverse('quiz-detail', kwargs={'pk': self.quiz.pk})
-        response = self.client.delete(url)
-
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(Quiz.objects.count(), 0)
-
-    def test_get_full_quiz(self):
-        url = reverse('quiz-full-quiz', kwargs={'pk': self.quiz.pk})
-        response = self.client.get(url)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['title'], "آزمون ریاضی پایه")
-        self.assertEqual(len(response.data['slides']), 1)
-
-    def test_create_question(self):
-        url = reverse('quiz-questions', kwargs={'quiz_pk': self.quiz.pk})
-        data = {
-            "title": "سوال تفریق",
-            "question_text": "حاصل ۵ - ۳ چیست؟",
-            "order": 2
-        }
-
-        response = self.client.post(url, data, format='json')
+    def test_slide_crud(self):
+        list_url = reverse("slide-list", kwargs={"quiz_pk": self.quiz.pk})
+        response = self.client.post(
+            list_url,
+            {"slide_type": 2, "order": 2, "title": "Intro"},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(PickAnswerQuestion.objects.count(), 2)
-        self.assertEqual(response.data['title'], "سوال تفریق")
+        slide_id = response.data["slide_id"]
 
-    def test_create_question_with_invalid_order_zero(self):
-        url = reverse('quiz-questions', kwargs={'quiz_pk': self.quiz.pk})
-        data = {
-            "title": "سوال نامعتبر",
-            "question_text": "متن سوال",
-            "order": 0
+        detail_url = reverse(
+            "slide-detail", kwargs={"quiz_pk": self.quiz.pk, "pk": slide_id}
+        )
+        patch_response = self.client.patch(
+            detail_url, {"title": "Intro Updated"}, format="json"
+        )
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+
+        delete_response = self.client.delete(detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_question_crud(self):
+        slide = Slide.objects.create(quiz=self.quiz, slide_type=1, order=2)
+        url = reverse("question-detail", kwargs={"quiz_pk": self.quiz.pk, "slide_pk": slide.pk})
+
+        payload = {
+            "title": "Question 2",
+            "text": "Another question?",
+            "question_type": "single",
+            "min_point": 0,
+            "max_point": 100,
+            "time_limit": 20,
+            "faster_answers_more_points": False,
+            "partial_scoring": False,
         }
-
-        response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_create_question_with_invalid_order_negative(self):
-        url = reverse('quiz-questions', kwargs={'quiz_pk': self.quiz.pk})
-        data = {
-            "title": "سوال نامعتبر",
-            "question_text": "متن سوال",
-            "order": -1
-        }
-
-        response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_create_question_with_duplicate_order(self):
-        url = reverse('quiz-questions', kwargs={'quiz_pk': self.quiz.pk})
-        data = {
-            "title": "سوال تکراری",
-            "question_text": "متن سوال تکراری",
-            "order": 1  # همان order سوال موجود
-        }
-
-        response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_get_question_list(self):
-        url = reverse('quiz-questions', kwargs={'quiz_pk': self.quiz.pk})
-        response = self.client.get(url)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = self._get_response_data(response)
-        self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]['title'], "سوال جمع ساده")
-
-    def test_get_question_detail(self):
-        url = reverse('quiz-question-detail', kwargs={
-            'quiz_pk': self.quiz.pk,
-            'pk': self.question.pk
-        })
-        response = self.client.get(url)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['title'], "سوال جمع ساده")
-
-    def test_update_question(self):
-        url = reverse('quiz-question-detail', kwargs={
-            'quiz_pk': self.quiz.pk,
-            'pk': self.question.pk
-        })
-        data = {
-            "title": "سوال جمع ویرایش شده",
-            "question_text": "حاصل ۳ + ۴ چیست؟",
-            "order": 1
-        }
-
-        response = self.client.put(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        self.question.refresh_from_db()
-        self.assertEqual(self.question.title, "سوال جمع ویرایش شده")
-
-    def test_partial_update_question(self):
-        url = reverse('quiz-question-detail', kwargs={
-            'quiz_pk': self.quiz.pk,
-            'pk': self.question.pk
-        })
-        data = {"title": "فقط عنوان تغییر کرد"}
-
-        response = self.client.patch(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        self.question.refresh_from_db()
-        self.assertEqual(self.question.title, "فقط عنوان تغییر کرد")
-
-    def test_delete_question(self):
-        url = reverse('quiz-question-detail', kwargs={
-            'quiz_pk': self.quiz.pk,
-            'pk': self.question.pk
-        })
-        response = self.client.delete(url)
-
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(PickAnswerQuestion.objects.count(), 0)
-
-    def test_create_option(self):
-        url = reverse('question-options', kwargs={
-            'quiz_pk': self.quiz.pk,
-            'question_pk': self.question.pk
-        })
-        data = {
-            "text": "گزینه تستی",
-            "is_correct": True
-        }
-
-        response = self.client.post(url, data, format='json')
+        response = self.client.post(url, payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Option.objects.count(), 3)
 
-    def test_get_option_list(self):
-        url = reverse('question-options', kwargs={
-            'quiz_pk': self.quiz.pk,
-            'question_pk': self.question.pk
-        })
+        get_response = self.client.get(url)
+        self.assertEqual(get_response.status_code, status.HTTP_200_OK)
+
+        patch_response = self.client.patch(url, {"text": "Updated text"}, format="json")
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+
+        delete_response = self.client.delete(url)
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_option_crud(self):
+        list_url = reverse(
+            "option-list", kwargs={"quiz_pk": self.quiz.pk, "slide_pk": self.slide.pk}
+        )
+        response = self.client.post(
+            list_url,
+            {"text": "Option C", "is_correct": False, "order": 3},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        option_id = response.data["option_id"]
+
+        detail_url = reverse(
+            "option-detail",
+            kwargs={"quiz_pk": self.quiz.pk, "slide_pk": self.slide.pk, "pk": option_id},
+        )
+        patch_response = self.client.patch(
+            detail_url, {"text": "Option C Updated"}, format="json"
+        )
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+
+        delete_response = self.client.delete(detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_export_includes_question_options(self):
+        url = reverse("quiz-export", kwargs={"pk": self.quiz.pk})
         response = self.client.get(url)
-
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = self._get_response_data(response)
-        self.assertEqual(len(data), 2)
-        self.assertEqual(data[0]['text'], "۴")
+        self.assertIn("slides", response.data)
 
-    def test_get_option_detail(self):
-        url = reverse('question-option-detail', kwargs={
-            'quiz_pk': self.quiz.pk,
-            'question_pk': self.question.pk,
-            'pk': self.option1.pk
-        })
-        response = self.client.get(url)
+        question_slide = next(
+            (slide for slide in response.data["slides"] if slide["slide_type"] == 1),
+            None,
+        )
+        self.assertIsNotNone(question_slide)
+        self.assertIn("question", question_slide)
+        self.assertEqual(len(question_slide["question"]["options"]), 2)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['text'], "۴")
-
-    def test_update_option(self):
-        url = reverse('question-option-detail', kwargs={
-            'quiz_pk': self.quiz.pk,
-            'question_pk': self.question.pk,
-            'pk': self.option1.pk
-        })
-        data = {
-            "text": "گزینه ویرایش شده",
-            "is_correct": False
+    def test_question_results_persists_votes(self):
+        url = reverse(
+            "question-results",
+            kwargs={"quiz_pk": self.quiz.pk, "slide_pk": self.slide.pk},
+        )
+        payload = {
+            "options": [
+                {"option_id": self.option1.id, "number_of_submits": 5},
+                {"option_id": self.option2.id, "number_of_submits": 2},
+            ]
         }
-
-        response = self.client.put(url, data, format='json')
+        response = self.client.post(url, payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.option1.refresh_from_db()
-        self.assertEqual(self.option1.text, "گزینه ویرایش شده")
+        self.option2.refresh_from_db()
+        self.assertEqual(self.option1.votes, 5)
+        self.assertEqual(self.option2.votes, 2)
 
-    def test_delete_option(self):
-        url = reverse('question-option-detail', kwargs={
-            'quiz_pk': self.quiz.pk,
-            'question_pk': self.question.pk,
-            'pk': self.option1.pk
-        })
-        response = self.client.delete(url)
-
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(Option.objects.count(), 1)
-
-    def test_complete_quiz_workflow(self):
-        # ۱. ایجاد کوئیز جدید
-        quiz_data = {"title": "آزمون جامع"}
-        quiz_response = self.client.post(
-            reverse('quiz-list'), quiz_data, format='json')
-
-        # دیباگ برای بررسی ساختار پاسخ
-        print("Quiz Response:", quiz_response.status_code, quiz_response.data)
-
-        # بررسی که کوئیز ایجاد شده است
-        self.assertEqual(quiz_response.status_code, status.HTTP_201_CREATED)
-        self.assertIn('id', quiz_response.data)
-        quiz_id = quiz_response.data['id']
-
-        # ۲. ایجاد سوال اول
-        question1_data = {
-            "title": "سوال اول",
-            "question_text": "متن سوال اول",
-            "order": 1
+    def test_question_results_requires_all_options(self):
+        url = reverse(
+            "question-results",
+            kwargs={"quiz_pk": self.quiz.pk, "slide_pk": self.slide.pk},
+        )
+        payload = {
+            "options": [{"option_id": self.option1.id, "number_of_submits": 1}]
         }
-        question1_response = self.client.post(
-            reverse('quiz-questions', kwargs={'quiz_pk': quiz_id}),
-            question1_data,
-            format='json'
-        )
+        response = self.client.post(url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-        # ۳. ایجاد سوال دوم
-        question2_data = {
-            "title": "سوال دوم",
-            "question_text": "متن سوال دوم",
-            "order": 2
+    def test_leaderboard_receive_creates_entries(self):
+        url = reverse(
+            "question-leaderboard",
+            kwargs={"quiz_pk": self.quiz.pk, "slide_pk": self.slide.pk},
+        )
+        payload = {
+            "leaderboard": [
+                {
+                    "rust_session_id": "player-1",
+                    "player_name": "Alice",
+                    "avatar": "A",
+                    "score": 120,
+                    "time_taken": 2.5,
+                    "rank": 1,
+                }
+            ]
         }
-        question2_response = self.client.post(
-            reverse('quiz-questions', kwargs={'quiz_pk': quiz_id}),
-            question2_data,
-            format='json'
-        )
+        response = self.client.post(url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # ۴. دریافت کامل کوئیز
-        full_quiz_response = self.client.get(
-            reverse('quiz-full-quiz', kwargs={'pk': quiz_id})
-        )
-
-        # بررسی نتایج
-        self.assertEqual(question1_response.status_code,
-                         status.HTTP_201_CREATED)
-        self.assertEqual(question2_response.status_code,
-                         status.HTTP_201_CREATED)
-        self.assertEqual(full_quiz_response.status_code, status.HTTP_200_OK)
-
-        # بررسی ساختار داده‌های برگشتی
-        full_quiz_data = full_quiz_response.data
-        self.assertEqual(full_quiz_data['title'], "آزمون جامع")
-        self.assertEqual(len(full_quiz_data['slides']), 2)
+        self.assertTrue(PlayerSession.objects.filter(rust_session_id="player-1").exists())
+        self.assertEqual(Leaderboard.objects.filter(question=self.question).count(), 1)
