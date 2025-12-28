@@ -63,10 +63,10 @@ class Command(BaseCommand):
         )
         models.Option.objects.bulk_create(
             [
-                models.Option(question=q1, text="Paris", is_correct=True, votes=8),
-                models.Option(question=q1, text="Berlin", is_correct=False, votes=1),
-                models.Option(question=q1, text="Madrid", is_correct=False, votes=1),
-                models.Option(question=q1, text="Rome", is_correct=False, votes=0),
+                models.Option(question=q1, order=1, text="Paris", is_correct=True, votes=8),
+                models.Option(question=q1, order=2, text="Berlin", is_correct=False, votes=1),
+                models.Option(question=q1, order=3, text="Madrid", is_correct=False, votes=1),
+                models.Option(question=q1, order=4, text="Rome", is_correct=False, votes=0),
             ]
         )
 
@@ -93,10 +93,10 @@ class Command(BaseCommand):
         )
         models.Option.objects.bulk_create(
             [
-                models.Option(question=q2, text="2", is_correct=True, votes=5),
-                models.Option(question=q2, text="3", is_correct=True, votes=4),
-                models.Option(question=q2, text="4", is_correct=False, votes=2),
-                models.Option(question=q2, text="5", is_correct=True, votes=3),
+                models.Option(question=q2, order=1, text="2", is_correct=True, votes=5),
+                models.Option(question=q2, order=2, text="3", is_correct=True, votes=4),
+                models.Option(question=q2, order=3, text="4", is_correct=False, votes=2),
+                models.Option(question=q2, order=4, text="5", is_correct=True, votes=3),
             ]
         )
 
