@@ -111,6 +111,16 @@ def _format_django_validation_error(exc):
     return {"detail": str(exc)}
 
 
+def _enforce_single_choice_correct(question, exclude_option_id=None):
+    if question.question_type != "single":
+        return
+    existing = Option.objects.filter(question=question, is_correct=True)
+    if exclude_option_id is not None:
+        existing = existing.exclude(pk=exclude_option_id)
+    if existing.exists():
+        raise ValidationError({"detail": "Single choice questions can only have one correct option."})
+
+
 def _enforce_slide_type(slide, expected_type, expected_label):
     if slide.slide_type != expected_type:
         raise ValidationError(
@@ -645,6 +655,14 @@ class QuestionViewSet(viewsets.ViewSet):
             serializer = QuestionSerializer(
                 question, data=request.data, partial=False)
             serializer.is_valid(raise_exception=True)
+            new_type = serializer.validated_data.get("question_type", question.question_type)
+            if new_type == "single":
+                correct_count = Option.objects.filter(question=question, is_correct=True).count()
+                if correct_count > 1:
+                    return Response(
+                        {"detail": "Single choice questions can only have one correct option."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             try:
                 serializer.save()
                 touch_quiz(question.slide.quiz_id)
@@ -702,6 +720,14 @@ class QuestionViewSet(viewsets.ViewSet):
             serializer = QuestionSerializer(
                 question, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
+            new_type = serializer.validated_data.get("question_type", question.question_type)
+            if new_type == "single":
+                correct_count = Option.objects.filter(question=question, is_correct=True).count()
+                if correct_count > 1:
+                    return Response(
+                        {"detail": "Single choice questions can only have one correct option."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             try:
                 serializer.save()
                 touch_quiz(question.slide.quiz_id)
@@ -794,6 +820,8 @@ class OptionViewSet(viewsets.ModelViewSet):
             slide_id=self.kwargs['slide_pk'],
             slide__quiz_id=self.kwargs['quiz_pk']
         )
+        if serializer.validated_data.get("is_correct"):
+            _enforce_single_choice_correct(question)
         try:
             serializer.save(question=question)
             touch_quiz(question.slide.quiz_id)
@@ -816,6 +844,9 @@ class OptionViewSet(viewsets.ModelViewSet):
             raise
 
     def perform_update(self, serializer):
+        instance = serializer.instance
+        if serializer.validated_data.get("is_correct"):
+            _enforce_single_choice_correct(instance.question, exclude_option_id=instance.pk)
         instance = serializer.save()
         touch_quiz(instance.question.slide.quiz_id)
 
