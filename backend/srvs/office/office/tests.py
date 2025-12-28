@@ -18,7 +18,13 @@ class OfficeAPITests(TestCase):
         )
         self.client.force_authenticate(user=self.user)
 
-        self.quiz = Quiz.objects.create(title="Test Quiz", owner=self.user)
+        quiz_fields = {field.name for field in Quiz._meta.get_fields()}
+        quiz_kwargs = {"title": "Test Quiz"}
+        if "author" in quiz_fields:
+            quiz_kwargs["author"] = self.user.username
+        if "owner" in quiz_fields:
+            quiz_kwargs["owner"] = self.user
+        self.quiz = Quiz.objects.create(**quiz_kwargs)
         self.slide = Slide.objects.create(quiz=self.quiz, slide_type=1, order=1)
         self.question = Question.objects.create(
             slide=self.slide,
@@ -51,7 +57,11 @@ class OfficeAPITests(TestCase):
 
     def test_quiz_crud(self):
         create_url = reverse("quiz-list")
-        response = self.client.post(create_url, {"title": "New Quiz"}, format="json")
+        response = self.client.post(
+            create_url,
+            {"title": "New Quiz", "author": self.user.username},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         quiz_id = response.data.get("quiz_id") or response.data.get("id")
