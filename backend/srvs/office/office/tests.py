@@ -164,6 +164,7 @@ class OfficeAPITests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("slides", response.data)
+        self.assertEqual(response.data["access_code"], self.quiz.access_code)
 
         question_slide = next(
             (slide for slide in response.data["slides"] if slide["slide_type"] == 1),
