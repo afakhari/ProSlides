@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useAudio } from "../contexts/AudioContext";
 
 export default function TopBar({
-  gameCode = "1",
+  accessCode = "",
   showQRButton = true,
   onQRToggle = null,
   isQROpen = false,
@@ -11,7 +11,8 @@ export default function TopBar({
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
 
-  const joinUrl = `proslides.ir/${gameCode}/player/presentation`;
+  // استفاده از access_code برای لینک پلیر
+  const joinUrl = `proslides.ir/${accessCode}`;
 
   // Function to copy link to clipboard
   const copyToClipboard = () => {
@@ -63,7 +64,7 @@ export default function TopBar({
             className="cursor-pointer hover:text-blue-200 transition-colors relative"
             title="Click to copy"
           >
-            proslides.ir/{gameCode}/player/presentation
+            proslides.ir/{accessCode}
             {copiedLink && (
               <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
                 Copied!

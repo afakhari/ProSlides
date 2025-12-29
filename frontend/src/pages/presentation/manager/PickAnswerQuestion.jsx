@@ -385,14 +385,14 @@ export default function ManagerPickAnswerQuestion({
       style={backgroundStyle}
     >
       <TopBar
-        gameCode={gameCode}
+        accessCode={quiz?.access_code}
         showQRButton={true}
         onQRToggle={setShowQRModal}
         isQROpen={showQRModal}
       />
 
       <QRSidebar
-        gameCode={gameCode}
+        accessCode={quiz?.access_code}
         isOpen={showQRModal}
         onClose={() => setShowQRModal(false)}
       />
@@ -500,7 +500,6 @@ export default function ManagerPickAnswerQuestion({
                             ? `${Math.max(height, 5)}%`
                             : "0%",
                         }}
-
                       ></div>
 
                       {/* متن گزینه */}

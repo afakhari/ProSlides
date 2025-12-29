@@ -97,6 +97,42 @@ export default function QuizManager({ onNewPresentation }) {
     onClose: null,
   });
   const menuButtonRefs = useRef({});
+  const [creatingQuiz, setCreatingQuiz] = useState(false);
+
+  // Create a new quiz via API and navigate to editor
+  const handleNewPresentation = async () => {
+    try {
+      setCreatingQuiz(true);
+      const response = await fetch("https://api.proslides.ir/api/quizzes/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: "Untitled Presentation",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to create quiz: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const newQuizId = data.quiz_id;
+
+      if (newQuizId) {
+        // Navigate to editor with new quiz ID
+        onNewPresentation(newQuizId);
+      } else {
+        throw new Error("No quiz_id returned from API");
+      }
+    } catch (err) {
+      console.error("Error creating new quiz:", err);
+      setError(err.message);
+    } finally {
+      setCreatingQuiz(false);
+    }
+  };
 
   // Helper function to show confirmation dialog
   const showConfirmDialog = (config) => {
@@ -488,7 +524,11 @@ export default function QuizManager({ onNewPresentation }) {
 
   // Handle present click
   const handlePresent = (quizId) => {
-    navigate(`/${quizId}/manager/presentation/`);
+    navigate(`/manager/presentation/${quizId}/`);
+  };
+  // Handle edit click
+  const handleEdit = (quizId) => {
+    navigate(`/manager/panel/${quizId}/`);
   };
 
   // Check menu position and adjust if needed
@@ -624,10 +664,19 @@ export default function QuizManager({ onNewPresentation }) {
             <div className="flex items-center justify-between mb-6">
               <div className="flex gap-3">
                 <Button
-                  onClick={onNewPresentation}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-lg flex items-center gap-2"
+                  onClick={handleNewPresentation}
+                  disabled={creatingQuiz}
+                  className="bg-blue-800 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span className="text-xl mb-1">+</span> New presentation
+                  {creatingQuiz ? (
+                    <>
+                      <span className="animate-spin">⏳</span> Creating...
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xl mb-1">+</span> New presentation
+                    </>
+                  )}
                 </Button>
                 {/* <Button
                   variant="outline"
@@ -844,8 +893,14 @@ export default function QuizManager({ onNewPresentation }) {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2 justify-end">
                           <Button
+                            onClick={() => handleEdit(quiz.id)}
+                            className="bg-blue-800 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            Edit
+                          </Button>
+                          <Button
                             onClick={() => handlePresent(quiz.id)}
-                            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="bg-purple-800 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity"
                           >
                             Present
                           </Button>
