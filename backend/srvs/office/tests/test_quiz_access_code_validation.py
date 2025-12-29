@@ -6,7 +6,6 @@ from backend.srvs.office.tests.factories import QuizFactory, UserFactory
 @pytest.mark.django_db
 def test_quiz_create_rejects_invalid_access_code(api_client):
     user = UserFactory()
-    api_client.force_authenticate(user=user)
     payload = {
         "title": "Invalid code quiz",
         "access_code": "bad code!",
@@ -19,7 +18,6 @@ def test_quiz_create_rejects_invalid_access_code(api_client):
 @pytest.mark.django_db
 def test_quiz_create_rejects_duplicate_access_code(api_client):
     quiz = QuizFactory(access_code="ABCD12")
-    api_client.force_authenticate(user=quiz.owner)
     payload = {
         "title": "Duplicate code quiz",
         "access_code": quiz.access_code,

@@ -6,7 +6,6 @@ from backend.srvs.office.tests.factories import QuestionFactory, OptionFactory
 @pytest.mark.django_db
 def test_question_results_rejects_empty_options(api_client):
     question = QuestionFactory()
-    api_client.force_authenticate(user=question.slide.quiz.owner)
     resp = api_client.post(
         f"/api/quizzes/{question.slide.quiz_id}/slides/{question.slide_id}/question/results/",
         {"options": []},
@@ -19,7 +18,6 @@ def test_question_results_rejects_empty_options(api_client):
 def test_question_results_rejects_duplicate_option_ids(api_client):
     question = QuestionFactory()
     option = OptionFactory(question=question)
-    api_client.force_authenticate(user=question.slide.quiz.owner)
     payload = {"options": [{"option_id": option.id, "number_of_submits": 1},
                            {"option_id": option.id, "number_of_submits": 2}]}
     resp = api_client.post(
@@ -35,7 +33,6 @@ def test_question_results_requires_all_options(api_client):
     question = QuestionFactory()
     opt1 = OptionFactory(question=question)
     opt2 = OptionFactory(question=question)
-    api_client.force_authenticate(user=question.slide.quiz.owner)
     payload = {"options": [{"option_id": opt1.id, "number_of_submits": 1}]}
     resp = api_client.post(
         f"/api/quizzes/{question.slide.quiz_id}/slides/{question.slide_id}/question/results/",
@@ -51,7 +48,6 @@ def test_question_results_updates_votes(api_client):
     question = QuestionFactory()
     opt1 = OptionFactory(question=question, votes=0)
     opt2 = OptionFactory(question=question, votes=0)
-    api_client.force_authenticate(user=question.slide.quiz.owner)
     payload = {
         "options": [
             {"option_id": opt1.id, "number_of_submits": 3},

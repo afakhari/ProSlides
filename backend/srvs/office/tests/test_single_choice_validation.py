@@ -36,8 +36,6 @@ def test_single_choice_rejects_second_correct_option(api_client):
     slide = SlideFactory(quiz=quiz, slide_type=1)
     question = QuestionFactory(slide=slide, question_type="single")
 
-    if "owner" in {field.name for field in Quiz._meta.get_fields()}:
-        api_client.force_authenticate(user=owner)
     create_url = f"/api/quizzes/{quiz.id}/slides/{slide.id}/question/options/"
 
     first_resp = api_client.post(
@@ -64,8 +62,6 @@ def test_switch_to_single_rejects_multiple_correct_options(api_client):
     OptionFactory(question=question, is_correct=True)
     OptionFactory(question=question, is_correct=True)
 
-    if "owner" in {field.name for field in Quiz._meta.get_fields()}:
-        api_client.force_authenticate(user=owner)
     update_url = f"/api/quizzes/{quiz.id}/slides/{slide.id}/question/"
     resp = api_client.patch(
         update_url,

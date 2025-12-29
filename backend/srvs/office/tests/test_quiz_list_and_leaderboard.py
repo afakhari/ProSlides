@@ -1,5 +1,4 @@
 import pytest
-from django.test import override_settings
 
 from backend.srvs.office.office.models import Leaderboard, PlayerSession
 from backend.srvs.office.tests.factories import (
@@ -17,15 +16,14 @@ def test_quiz_list_returns_results(api_client):
     quiz = QuizFactory(owner=owner)
     QuizFactory()
 
-    api_client.force_authenticate(user=owner)
     resp = api_client.get("/api/quizzes/list/")
     assert resp.status_code == 200
-    assert resp.data["count"] == 1
-    assert resp.data["results"][0]["quiz_id"] == quiz.id
+    assert resp.data["count"] == 2
+    returned_ids = {item["quiz_id"] for item in resp.data["results"]}
+    assert quiz.id in returned_ids
 
 
 @pytest.mark.django_db
-@override_settings(EXPORT_SERVICE_TOKEN="test-export-token")
 def test_leaderboard_receive_validates_quiz_pk(api_client):
     quiz1 = QuizFactory()
     quiz2 = QuizFactory()
@@ -49,7 +47,6 @@ def test_leaderboard_receive_validates_quiz_pk(api_client):
         f"/api/quizzes/{quiz2.id}/slides/{question.slide_id}/question/leaderboard/",
         payload,
         format="json",
-        HTTP_X_EXPORT_TOKEN="test-export-token",
     )
     assert resp.status_code == 404
 
@@ -125,7 +122,6 @@ def test_final_leaderboard_tie_ranking(api_client):
         rank=1,
     )
 
-    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.get(f"/api/quizzes/{quiz.id}/final-leaderboard/")
     assert resp.status_code == 200
 

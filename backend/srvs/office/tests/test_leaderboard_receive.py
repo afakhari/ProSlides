@@ -1,5 +1,4 @@
 import pytest
-from django.test import override_settings
 
 from backend.srvs.office.tests.factories import (
     QuizFactory,
@@ -11,7 +10,6 @@ from backend.srvs.office.office.models import Leaderboard, PlayerSession
 
 
 @pytest.mark.django_db
-@override_settings(EXPORT_SERVICE_TOKEN="test-export-token")
 def test_leaderboard_receive_saves_entries(api_client):
     quiz = QuizFactory()
     question = QuestionFactory(slide=SlideFactory(quiz=quiz, slide_type=1))
@@ -43,7 +41,6 @@ def test_leaderboard_receive_saves_entries(api_client):
         f"/api/quizzes/{quiz.id}/slides/{question.slide_id}/question/leaderboard/",
         payload,
         format="json",
-        HTTP_X_EXPORT_TOKEN="test-export-token",
     )
 
     # یک ورودی ذخیره می‌شود، دیگری خطا می‌دهد
@@ -63,7 +60,6 @@ def test_leaderboard_receive_saves_entries(api_client):
 
 
 @pytest.mark.django_db
-@override_settings(EXPORT_SERVICE_TOKEN="test-export-token")
 def test_leaderboard_receive_missing_question(api_client):
     quiz = QuizFactory()
     payload = {
@@ -83,32 +79,5 @@ def test_leaderboard_receive_missing_question(api_client):
         f"/api/quizzes/{quiz.id}/slides/999/question/leaderboard/",
         payload,
         format="json",
-        HTTP_X_EXPORT_TOKEN="test-export-token",
     )
     assert resp.status_code == 404
-
-
-@pytest.mark.django_db
-@override_settings(EXPORT_SERVICE_TOKEN="test-export-token")
-def test_leaderboard_receive_requires_service_token(api_client):
-    quiz = QuizFactory()
-    question = QuestionFactory(slide=SlideFactory(quiz=quiz, slide_type=1))
-    payload = {
-        "leaderboard": [
-            {
-                "rust_session_id": "any",
-                "player_name": "any",
-                "avatar": "A1",
-                "score": 10,
-                "time_taken": 1.0,
-                "rank": 1,
-            }
-        ]
-    }
-
-    resp = api_client.post(
-        f"/api/quizzes/{quiz.id}/slides/{question.slide_id}/question/leaderboard/",
-        payload,
-        format="json",
-    )
-    assert resp.status_code in (401, 403)

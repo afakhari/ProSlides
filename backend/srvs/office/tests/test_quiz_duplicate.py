@@ -23,7 +23,6 @@ def test_duplicate_quiz_copies_slides_questions_and_options(api_client):
         content_text="Body",
     )
 
-    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.post(f"/api/quizzes/{quiz.id}/duplicate/")
     assert resp.status_code == 201
 

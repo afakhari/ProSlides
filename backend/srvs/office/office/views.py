@@ -5,7 +5,7 @@ from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
@@ -20,7 +20,6 @@ from .serializers import (
     QuestionResultsReceiveSerializer, QuizListSerializer
 )
 from .pagination import StandardResultsSetPagination
-from .permissions import IsExportServiceOrQuizOwner, IsServiceToken
 
 logger = logging.getLogger(__name__)
 
@@ -137,22 +136,21 @@ class QuizViewSet(viewsets.ModelViewSet):
     """
     queryset = Quiz.objects.all()
     serializer_class = QuizSerializer
-    permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
             return Quiz.objects.none()
-        return super().get_queryset().filter(owner=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        return super().get_queryset()
 
     def _filter_quizzes_for_request(self, request, queryset):
         if request.user and request.user.is_authenticated:
-            return queryset.filter(owner=request.user)
-        return queryset.none()
+            return queryset.filter(author=request.user.username)
+        author = request.query_params.get('author')
+        if author:
+            return queryset.filter(author=author)
+        return queryset
 
     def _next_copy_title(self, title):
         match = re.match(r'^(.*)\s\(copy\d+\)$', title)
@@ -266,18 +264,9 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="صادرات کامل اطلاعات کوئیز برای Rust",
-        manual_parameters=[
-            openapi.Parameter(
-                "X-Export-Token",
-                openapi.IN_HEADER,
-                description="Service token for Rust export access (optional if authenticated).",
-                type=openapi.TYPE_STRING,
-                required=False,
-            )
-        ],
         responses={200: ExportSerializer}
     )
-    @action(detail=True, methods=['get'], permission_classes=[IsExportServiceOrQuizOwner])
+    @action(detail=True, methods=['get'])
     def export(self, request, pk=None):
         """
         صادرات کامل کوئیز برای اجرا در Rust
@@ -285,10 +274,7 @@ class QuizViewSet(viewsets.ModelViewSet):
         این endpoint تمام اطلاعات کوئیز شامل اسلایدها، سوالات و گزینه‌ها را 
         به فرمت مورد نیاز Rust برمی‌گرداند.
         """
-        if getattr(request, "_export_service_token_valid", False):
-            quiz = get_object_or_404(Quiz, pk=pk)
-        else:
-            quiz = self.get_object()
+        quiz = self.get_object()
         serializer = ExportSerializer(quiz)
         return Response(serializer.data)
 
@@ -455,20 +441,13 @@ class SlideViewSet(viewsets.ModelViewSet):
         return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
-        # برای Swagger
+        # O"OñOUO Swagger
         if getattr(self, 'swagger_fake_view', False):
             return Slide.objects.none()
-        return Slide.objects.filter(
-            quiz_id=self.kwargs['quiz_pk'],
-            quiz__owner=self.request.user,
-        )
+        return Slide.objects.filter(quiz_id=self.kwargs['quiz_pk'])
 
     def perform_create(self, serializer):
-        quiz = get_object_or_404(
-            Quiz,
-            pk=self.kwargs['quiz_pk'],
-            owner=self.request.user,
-        )
+        quiz = get_object_or_404(Quiz, pk=self.kwargs['quiz_pk'])
         order = serializer.validated_data.get('order')
         if order is not None and order < 1:
             raise ValidationError({'order': 'must be a positive integer'})
@@ -477,7 +456,7 @@ class SlideViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
                 if order is not None:
                     Slide.objects.filter(quiz=quiz, order__gte=order).update(order=F('order') + 1)
-                instance = serializer.save(quiz=quiz, order=order)
+                serializer.save(quiz=quiz, order=order)
                 touch_quiz(quiz.pk)
         except DjangoValidationError as exc:
             raise ValidationError(_format_django_validation_error(exc))
@@ -590,7 +569,7 @@ class QuestionViewSet(viewsets.ViewSet):
             question = Question.objects.get(
                 slide_id=slide_pk,
                 slide__quiz_id=quiz_pk,
-                slide__quiz__owner=request.user)
+            )
             _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(question)
             return Response(serializer.data)
@@ -618,7 +597,6 @@ class QuestionViewSet(viewsets.ViewSet):
             Slide,
             pk=slide_pk,
             quiz_id=quiz_pk,
-            quiz__owner=request.user,
         )
         _enforce_slide_type(slide, 1, "question")
 
@@ -680,7 +658,7 @@ class QuestionViewSet(viewsets.ViewSet):
             question = Question.objects.get(
                 slide_id=slide_pk,
                 slide__quiz_id=quiz_pk,
-                slide__quiz__owner=request.user)
+            )
             _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(
                 question, data=request.data, partial=False)
@@ -747,7 +725,7 @@ class QuestionViewSet(viewsets.ViewSet):
             question = Question.objects.get(
                 slide_id=slide_pk,
                 slide__quiz_id=quiz_pk,
-                slide__quiz__owner=request.user)
+            )
             _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(
                 question, data=request.data, partial=True)
@@ -813,7 +791,6 @@ class QuestionViewSet(viewsets.ViewSet):
             question = Question.objects.get(
                 slide_id=slide_pk,
                 slide__quiz_id=quiz_pk,
-                slide__quiz__owner=request.user
             )
             _enforce_slide_type(question.slide, 1, "question")
             quiz_id = question.slide.quiz_id
@@ -844,7 +821,6 @@ class OptionViewSet(viewsets.ModelViewSet):
             Question,
             slide_id=self.kwargs['slide_pk'],
             slide__quiz_id=self.kwargs['quiz_pk'],
-            slide__quiz__owner=self.request.user,
         )
         return Option.objects.filter(question=question)
 
@@ -853,7 +829,6 @@ class OptionViewSet(viewsets.ModelViewSet):
             Question,
             slide_id=self.kwargs['slide_pk'],
             slide__quiz_id=self.kwargs['quiz_pk'],
-            slide__quiz__owner=self.request.user,
         )
         if serializer.validated_data.get("is_correct"):
             _enforce_single_choice_correct(question)
@@ -908,7 +883,6 @@ class ContentViewSet(viewsets.ViewSet):
             Slide,
             pk=slide_pk,
             quiz_id=quiz_pk,
-            quiz__owner=request.user,
         )
         _enforce_slide_type(slide, 2, "content")
         return Response({
@@ -935,7 +909,6 @@ class ContentViewSet(viewsets.ViewSet):
             Slide,
             pk=slide_pk,
             quiz_id=quiz_pk,
-            quiz__owner=request.user,
         )
         _enforce_slide_type(slide, 2, "content")
         try:
@@ -992,7 +965,6 @@ class ContentViewSet(viewsets.ViewSet):
             Slide,
             pk=slide_pk,
             quiz_id=quiz_pk,
-            quiz__owner=request.user,
         )
         _enforce_slide_type(slide, 2, "content")
         try:
@@ -1057,39 +1029,15 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
-    def get_queryset(self):
-        # برای Swagger
-        if getattr(self, 'swagger_fake_view', False):
-            return PlayerSession.objects.none()
-        return super().get_queryset().filter(quiz__owner=self.request.user)
-
-    def perform_create(self, serializer):
-        quiz = get_object_or_404(
-            Quiz,
-            pk=serializer.validated_data["quiz"].id,
-            owner=self.request.user,
-        )
-        serializer.save(quiz=quiz)
-
 
 
 class LeaderboardReceiveView(viewsets.ViewSet):
-    permission_classes = [IsServiceToken]
     """
     دریافت لیدربرد از Rust
     """
 
     @swagger_auto_schema(
         operation_description="دریافت لیدربرد از Rust",
-        manual_parameters=[
-            openapi.Parameter(
-                "X-Export-Token",
-                openapi.IN_HEADER,
-                description="Service token required to submit leaderboard updates.",
-                type=openapi.TYPE_STRING,
-                required=True,
-            )
-        ],
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['leaderboard'],
@@ -1162,17 +1110,10 @@ class LeaderboardReceiveView(viewsets.ViewSet):
 
         # از روی slide_pk سوال مربوطه را پیدا می‌کنیم
         try:
-            if getattr(request, "_export_service_token_valid", False):
-                question = Question.objects.get(
-                    slide_id=slide_pk,
-                    slide__quiz_id=quiz_pk,
-                )
-            else:
-                question = Question.objects.get(
-                    slide_id=slide_pk,
-                    slide__quiz_id=quiz_pk,
-                    slide__quiz__owner=request.user,
-                )
+            question = Question.objects.get(
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+            )
         except Question.DoesNotExist:
             return Response(
                 {'error': 'No question found for this slide'},
@@ -1287,7 +1228,6 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
     """
     Receive final question results and persist option votes.
     """
-    permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         operation_description="Store final question results (option votes).",
@@ -1333,7 +1273,6 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
             question = Question.objects.get(
                 slide_id=slide_pk,
                 slide__quiz_id=quiz_pk,
-                slide__quiz__owner=request.user,
             )
         except Question.DoesNotExist:
             return Response(

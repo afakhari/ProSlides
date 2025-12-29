@@ -30,7 +30,6 @@ def test_reset_result_clears_leaderboard_and_participants(api_client):
         rank=2,
     )
 
-    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.post(f"/api/quizzes/{quiz.id}/reset-result/")
     assert resp.status_code == 200
     assert resp.data["participants_count"] == 0
