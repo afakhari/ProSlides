@@ -6,23 +6,21 @@ from backend.srvs.office.tests.factories import (
     SlideFactory,
     QuestionFactory,
     PlayerSessionFactory,
+    UserFactory,
 )
 
 
 @pytest.mark.django_db
 def test_quiz_list_returns_results(api_client):
-    quiz = QuizFactory(author="alice")
-    QuizFactory(author="bob")
+    owner = UserFactory()
+    quiz = QuizFactory(owner=owner)
+    QuizFactory()
 
     resp = api_client.get("/api/quizzes/list/")
     assert resp.status_code == 200
     assert resp.data["count"] == 2
-    assert len(resp.data["results"]) == 2
-
-    resp = api_client.get("/api/quizzes/list/?author=alice")
-    assert resp.status_code == 200
-    assert resp.data["count"] == 1
-    assert resp.data["results"][0]["quiz_id"] == quiz.id
+    returned_ids = {item["quiz_id"] for item in resp.data["results"]}
+    assert quiz.id in returned_ids
 
 
 @pytest.mark.django_db

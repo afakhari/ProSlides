@@ -111,6 +111,23 @@ def _format_django_validation_error(exc):
     return {"detail": str(exc)}
 
 
+def _enforce_single_choice_correct(question, exclude_option_id=None):
+    if question.question_type != "single":
+        return
+    existing = Option.objects.filter(question=question, is_correct=True)
+    if exclude_option_id is not None:
+        existing = existing.exclude(pk=exclude_option_id)
+    if existing.exists():
+        raise ValidationError({"detail": "Single choice questions can only have one correct option."})
+
+
+def _enforce_slide_type(slide, expected_type, expected_label):
+    if slide.slide_type != expected_type:
+        raise ValidationError(
+            {"detail": f"Slide type must be '{expected_label}' for this endpoint."}
+        )
+
+
 class QuizViewSet(viewsets.ModelViewSet):
     """
     مدیریت کوئیزها
@@ -424,7 +441,7 @@ class SlideViewSet(viewsets.ModelViewSet):
         return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
-        # برای Swagger
+        # O"OñOUO Swagger
         if getattr(self, 'swagger_fake_view', False):
             return Slide.objects.none()
         return Slide.objects.filter(quiz_id=self.kwargs['quiz_pk'])
@@ -439,7 +456,7 @@ class SlideViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
                 if order is not None:
                     Slide.objects.filter(quiz=quiz, order__gte=order).update(order=F('order') + 1)
-                instance = serializer.save(quiz=quiz, order=order)
+                serializer.save(quiz=quiz, order=order)
                 touch_quiz(quiz.pk)
         except DjangoValidationError as exc:
             raise ValidationError(_format_django_validation_error(exc))
@@ -550,7 +567,10 @@ class QuestionViewSet(viewsets.ViewSet):
         """
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+            )
+            _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(question)
             return Response(serializer.data)
         except Question.DoesNotExist:
@@ -573,7 +593,12 @@ class QuestionViewSet(viewsets.ViewSet):
 
         هر اسلاید فقط می‌تواند یک سوال داشته باشد.
         """
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(
+            Slide,
+            pk=slide_pk,
+            quiz_id=quiz_pk,
+        )
+        _enforce_slide_type(slide, 1, "question")
 
         with transaction.atomic():
             if Question.objects.filter(slide_id=slide_pk).exists():
@@ -631,10 +656,21 @@ class QuestionViewSet(viewsets.ViewSet):
         """آپدیت کامل سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+            )
+            _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(
                 question, data=request.data, partial=False)
             serializer.is_valid(raise_exception=True)
+            new_type = serializer.validated_data.get("question_type", question.question_type)
+            if new_type == "single":
+                correct_count = Option.objects.filter(question=question, is_correct=True).count()
+                if correct_count > 1:
+                    return Response(
+                        {"detail": "Single choice questions can only have one correct option."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             try:
                 serializer.save()
                 touch_quiz(question.slide.quiz_id)
@@ -687,10 +723,21 @@ class QuestionViewSet(viewsets.ViewSet):
         """آپدیت جزئی سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+            )
+            _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(
                 question, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
+            new_type = serializer.validated_data.get("question_type", question.question_type)
+            if new_type == "single":
+                correct_count = Option.objects.filter(question=question, is_correct=True).count()
+                if correct_count > 1:
+                    return Response(
+                        {"detail": "Single choice questions can only have one correct option."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             try:
                 serializer.save()
                 touch_quiz(question.slide.quiz_id)
@@ -742,7 +789,10 @@ class QuestionViewSet(viewsets.ViewSet):
         """حذف سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+            )
+            _enforce_slide_type(question.slide, 1, "question")
             quiz_id = question.slide.quiz_id
             question.delete()
             touch_quiz(quiz_id)
@@ -770,7 +820,7 @@ class OptionViewSet(viewsets.ModelViewSet):
         question = get_object_or_404(
             Question,
             slide_id=self.kwargs['slide_pk'],
-            slide__quiz_id=self.kwargs['quiz_pk']
+            slide__quiz_id=self.kwargs['quiz_pk'],
         )
         return Option.objects.filter(question=question)
 
@@ -778,8 +828,10 @@ class OptionViewSet(viewsets.ModelViewSet):
         question = get_object_or_404(
             Question,
             slide_id=self.kwargs['slide_pk'],
-            slide__quiz_id=self.kwargs['quiz_pk']
+            slide__quiz_id=self.kwargs['quiz_pk'],
         )
+        if serializer.validated_data.get("is_correct"):
+            _enforce_single_choice_correct(question)
         try:
             serializer.save(question=question)
             touch_quiz(question.slide.quiz_id)
@@ -802,6 +854,9 @@ class OptionViewSet(viewsets.ModelViewSet):
             raise
 
     def perform_update(self, serializer):
+        instance = serializer.instance
+        if serializer.validated_data.get("is_correct"):
+            _enforce_single_choice_correct(instance.question, exclude_option_id=instance.pk)
         instance = serializer.save()
         touch_quiz(instance.question.slide.quiz_id)
 
@@ -824,7 +879,12 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def retrieve(self, request, quiz_pk=None, slide_pk=None):
         """دریافت محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(
+            Slide,
+            pk=slide_pk,
+            quiz_id=quiz_pk,
+        )
+        _enforce_slide_type(slide, 2, "content")
         return Response({
             'title': slide.title,
             'content_text': slide.content_text,
@@ -845,7 +905,12 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(
+            Slide,
+            pk=slide_pk,
+            quiz_id=quiz_pk,
+        )
+        _enforce_slide_type(slide, 2, "content")
         try:
             slide.title = request.data.get('title', slide.title)
             slide.content_text = request.data.get(
@@ -896,7 +961,12 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def destroy(self, request, quiz_pk=None, slide_pk=None):
         """حذف محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(
+            Slide,
+            pk=slide_pk,
+            quiz_id=quiz_pk,
+        )
+        _enforce_slide_type(slide, 2, "content")
         try:
             slide.title = None
             slide.content_text = None
@@ -958,12 +1028,6 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
-
-    def get_queryset(self):
-        # برای Swagger
-        if getattr(self, 'swagger_fake_view', False):
-            return PlayerSession.objects.none()
-        return super().get_queryset()
 
 
 
@@ -1048,7 +1112,7 @@ class LeaderboardReceiveView(viewsets.ViewSet):
         try:
             question = Question.objects.get(
                 slide_id=slide_pk,
-                slide__quiz_id=quiz_pk
+                slide__quiz_id=quiz_pk,
             )
         except Question.DoesNotExist:
             return Response(

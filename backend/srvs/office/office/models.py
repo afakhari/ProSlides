@@ -1,6 +1,7 @@
 import secrets
 import string
 
+from django.conf import settings
 from django.db import IntegrityError, models, transaction
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
@@ -18,6 +19,13 @@ class Quiz(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     author = models.CharField(max_length=100, default="anonymous")
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="quizzes",
+        null=True,
+        blank=True,
+    )
     access_code = models.CharField(
         max_length=16,
         unique=True,
