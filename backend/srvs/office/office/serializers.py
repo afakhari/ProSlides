@@ -15,7 +15,7 @@ class OptionSerializer(serializers.ModelSerializer):
         fields = ['option_id', 'order', 'text', 'is_correct', 'votes', 'image_url']
         read_only_fields = ['option_id', 'votes']
         extra_kwargs = {
-            'order': {'required': False},
+            'order': {'required': False, 'min_value': 1},
         }
 
     def create(self, validated_data):
