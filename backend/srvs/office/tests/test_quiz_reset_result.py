@@ -1,7 +1,12 @@
 import pytest
 
-from backend.srvs.office.office.models import Leaderboard, PlayerSession
-from backend.srvs.office.tests.factories import QuizFactory, QuestionFactory, PlayerSessionFactory
+from backend.srvs.office.office.models import Leaderboard, PlayerSession, Option
+from backend.srvs.office.tests.factories import (
+    QuizFactory,
+    QuestionFactory,
+    PlayerSessionFactory,
+    OptionFactory,
+)
 
 
 @pytest.mark.django_db
@@ -29,6 +34,8 @@ def test_reset_result_clears_leaderboard_and_participants(api_client):
         time_taken=1.2,
         rank=2,
     )
+    OptionFactory(question=question, votes=3)
+    OptionFactory(question=question, votes=5)
 
     api_client.force_authenticate(user=quiz.owner)
     resp = api_client.post(f"/api/quizzes/{quiz.id}/reset-result/")
@@ -39,3 +46,4 @@ def test_reset_result_clears_leaderboard_and_participants(api_client):
 
     assert Leaderboard.objects.filter(question__slide__quiz=quiz).count() == 0
     assert PlayerSession.objects.filter(quiz=quiz).count() == 0
+    assert list(Option.objects.filter(question__slide__quiz=quiz).values_list("votes", flat=True)) == [0, 0]
