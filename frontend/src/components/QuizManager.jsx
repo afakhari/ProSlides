@@ -526,6 +526,10 @@ export default function QuizManager({ onNewPresentation }) {
   const handlePresent = (quizId) => {
     navigate(`/manager/presentation/${quizId}/`);
   };
+  // Handle edit click
+  const handleEdit = (quizId) => {
+    navigate(`/manager/panel/${quizId}/`);
+  };
 
   // Check menu position and adjust if needed
   const checkMenuPosition = (quizId, buttonElement) => {
@@ -662,7 +666,7 @@ export default function QuizManager({ onNewPresentation }) {
                 <Button
                   onClick={handleNewPresentation}
                   disabled={creatingQuiz}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-blue-800 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {creatingQuiz ? (
                     <>
@@ -889,8 +893,14 @@ export default function QuizManager({ onNewPresentation }) {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2 justify-end">
                           <Button
+                            onClick={() => handleEdit(quiz.id)}
+                            className="bg-blue-800 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            Edit
+                          </Button>
+                          <Button
                             onClick={() => handlePresent(quiz.id)}
-                            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="bg-purple-800 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity"
                           >
                             Present
                           </Button>

@@ -249,7 +249,7 @@ export default function App() {
       if (data.type === "ManagerJoinPage") {
         setData({ type: "ManagerPickAnswerQuestion" });
       } else {
-        if (quiz.slides[currentSlide].slide_type === 2) {
+        if (quiz.slides[currentSlide].slide_type === 3) {
           setData({ type: "ManagerLeaderBoard" });
         } else if (quiz.slides[currentSlide].slide_type === 1) {
           setData({ type: "ManagerPickAnswerQuestion" });
@@ -320,21 +320,12 @@ export default function App() {
         "[App renderPlayer] currentQuestion:",
         !!currentQuestion,
         "leaderboardResults:",
-        !!leaderboardResults
+        !!leaderboardResults,
+        "leaderboardResults value:",
+        leaderboardResults
       );
 
-      if (currentQuestion) {
-        const result = questionResults || partialQuestionResults;
-        return (
-          <PlayerPickAnswerQuestion
-            roomId={roomId}
-            question={currentQuestion}
-            result={result}
-            quiz={quiz}
-          />
-        );
-      }
-
+      // 🟢 اول لیدربورد رو چک کن - اگه type:1 رسیده باشه، لیدربورد نشون بده
       if (leaderboardResults) {
         console.log(
           "[App renderPlayer] Showing PlayerLeaderBoard with",
@@ -345,6 +336,19 @@ export default function App() {
           <PlayerLeaderBoard
             roomId={roomId}
             players={leaderboardResults.results || leaderboardResults}
+            quiz={quiz}
+          />
+        );
+      }
+
+      // بعد سوال رو چک کن
+      if (currentQuestion) {
+        const result = questionResults || partialQuestionResults;
+        return (
+          <PlayerPickAnswerQuestion
+            roomId={roomId}
+            question={currentQuestion}
+            result={result}
             quiz={quiz}
           />
         );
