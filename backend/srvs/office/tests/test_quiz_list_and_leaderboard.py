@@ -6,20 +6,18 @@ from backend.srvs.office.tests.factories import (
     SlideFactory,
     QuestionFactory,
     PlayerSessionFactory,
+    UserFactory,
 )
 
 
 @pytest.mark.django_db
 def test_quiz_list_returns_results(api_client):
-    quiz = QuizFactory(author="alice")
-    QuizFactory(author="bob")
+    owner = UserFactory()
+    quiz = QuizFactory(owner=owner)
+    QuizFactory()
 
+    api_client.force_authenticate(user=owner)
     resp = api_client.get("/api/quizzes/list/")
-    assert resp.status_code == 200
-    assert resp.data["count"] == 2
-    assert len(resp.data["results"]) == 2
-
-    resp = api_client.get("/api/quizzes/list/?author=alice")
     assert resp.status_code == 200
     assert resp.data["count"] == 1
     assert resp.data["results"][0]["quiz_id"] == quiz.id
@@ -45,6 +43,7 @@ def test_leaderboard_receive_validates_quiz_pk(api_client):
         ]
     }
 
+    api_client.force_authenticate(user=quiz1.owner)
     resp = api_client.post(
         f"/api/quizzes/{quiz2.id}/slides/{question.slide_id}/question/leaderboard/",
         payload,
@@ -124,6 +123,7 @@ def test_final_leaderboard_tie_ranking(api_client):
         rank=1,
     )
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.get(f"/api/quizzes/{quiz.id}/final-leaderboard/")
     assert resp.status_code == 200
 

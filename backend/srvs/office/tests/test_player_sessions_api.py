@@ -7,6 +7,7 @@ from backend.srvs.office.tests.factories import QuizFactory
 @pytest.mark.filterwarnings("ignore::django.core.paginator.UnorderedObjectListWarning")
 def test_player_session_create_and_list(api_client):
     quiz = QuizFactory()
+    api_client.force_authenticate(user=quiz.owner)
     payload = {
         "quiz": quiz.id,
         "player_name": "Player",

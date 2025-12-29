@@ -10,6 +10,7 @@ def test_create_slide_shifts_orders(api_client):
     s1 = SlideFactory(quiz=quiz, order=1)
     s2 = SlideFactory(quiz=quiz, order=2)
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.post(
         f"/api/quizzes/{quiz.id}/slides/",
         {"slide_type": 1, "order": 2},
@@ -35,6 +36,7 @@ def test_update_slide_move_up_shifts_down(api_client):
     s2 = SlideFactory(quiz=quiz, order=2)
     s3 = SlideFactory(quiz=quiz, order=3)
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.patch(
         f"/api/quizzes/{quiz.id}/slides/{s3.id}/",
         {"order": 1},
@@ -57,6 +59,7 @@ def test_update_slide_move_down_shifts_up(api_client):
     s2 = SlideFactory(quiz=quiz, order=2)
     s3 = SlideFactory(quiz=quiz, order=3)
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.patch(
         f"/api/quizzes/{quiz.id}/slides/{s1.id}/",
         {"order": 3},
@@ -76,6 +79,7 @@ def test_update_slide_move_down_shifts_up(api_client):
 def test_invalid_order_rejected(api_client):
     quiz = QuizFactory()
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.post(
         f"/api/quizzes/{quiz.id}/slides/",
         {"slide_type": 1, "order": 0},

@@ -5,7 +5,7 @@ from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
@@ -136,21 +136,22 @@ class QuizViewSet(viewsets.ModelViewSet):
     """
     queryset = Quiz.objects.all()
     serializer_class = QuizSerializer
+    permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
             return Quiz.objects.none()
-        return super().get_queryset()
+        return super().get_queryset().filter(owner=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
     def _filter_quizzes_for_request(self, request, queryset):
         if request.user and request.user.is_authenticated:
-            return queryset.filter(author=request.user.username)
-        author = request.query_params.get('author')
-        if author:
-            return queryset.filter(author=author)
-        return queryset
+            return queryset.filter(owner=request.user)
+        return queryset.none()
 
     def _next_copy_title(self, title):
         match = re.match(r'^(.*)\s\(copy\d+\)$', title)
@@ -444,10 +445,17 @@ class SlideViewSet(viewsets.ModelViewSet):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
             return Slide.objects.none()
-        return Slide.objects.filter(quiz_id=self.kwargs['quiz_pk'])
+        return Slide.objects.filter(
+            quiz_id=self.kwargs['quiz_pk'],
+            quiz__owner=self.request.user,
+        )
 
     def perform_create(self, serializer):
-        quiz = get_object_or_404(Quiz, pk=self.kwargs['quiz_pk'])
+        quiz = get_object_or_404(
+            Quiz,
+            pk=self.kwargs['quiz_pk'],
+            owner=self.request.user,
+        )
         order = serializer.validated_data.get('order')
         if order is not None and order < 1:
             raise ValidationError({'order': 'must be a positive integer'})
@@ -567,7 +575,9 @@ class QuestionViewSet(viewsets.ViewSet):
         """
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+                slide__quiz__owner=request.user)
             _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(question)
             return Response(serializer.data)
@@ -591,7 +601,12 @@ class QuestionViewSet(viewsets.ViewSet):
 
         هر اسلاید فقط می‌تواند یک سوال داشته باشد.
         """
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(
+            Slide,
+            pk=slide_pk,
+            quiz_id=quiz_pk,
+            quiz__owner=request.user,
+        )
         _enforce_slide_type(slide, 1, "question")
 
         with transaction.atomic():
@@ -650,7 +665,9 @@ class QuestionViewSet(viewsets.ViewSet):
         """آپدیت کامل سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+                slide__quiz__owner=request.user)
             _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(
                 question, data=request.data, partial=False)
@@ -715,7 +732,9 @@ class QuestionViewSet(viewsets.ViewSet):
         """آپدیت جزئی سوال برای یک اسلاید"""
         try:
             question = Question.objects.get(
-                slide_id=slide_pk, slide__quiz_id=quiz_pk)
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+                slide__quiz__owner=request.user)
             _enforce_slide_type(question.slide, 1, "question")
             serializer = QuestionSerializer(
                 question, data=request.data, partial=True)
@@ -780,7 +799,8 @@ class QuestionViewSet(viewsets.ViewSet):
         try:
             question = Question.objects.get(
                 slide_id=slide_pk,
-                slide__quiz_id=quiz_pk
+                slide__quiz_id=quiz_pk,
+                slide__quiz__owner=request.user
             )
             _enforce_slide_type(question.slide, 1, "question")
             quiz_id = question.slide.quiz_id
@@ -810,7 +830,8 @@ class OptionViewSet(viewsets.ModelViewSet):
         question = get_object_or_404(
             Question,
             slide_id=self.kwargs['slide_pk'],
-            slide__quiz_id=self.kwargs['quiz_pk']
+            slide__quiz_id=self.kwargs['quiz_pk'],
+            slide__quiz__owner=self.request.user,
         )
         return Option.objects.filter(question=question)
 
@@ -818,7 +839,8 @@ class OptionViewSet(viewsets.ModelViewSet):
         question = get_object_or_404(
             Question,
             slide_id=self.kwargs['slide_pk'],
-            slide__quiz_id=self.kwargs['quiz_pk']
+            slide__quiz_id=self.kwargs['quiz_pk'],
+            slide__quiz__owner=self.request.user,
         )
         if serializer.validated_data.get("is_correct"):
             _enforce_single_choice_correct(question)
@@ -869,7 +891,12 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def retrieve(self, request, quiz_pk=None, slide_pk=None):
         """دریافت محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(
+            Slide,
+            pk=slide_pk,
+            quiz_id=quiz_pk,
+            quiz__owner=request.user,
+        )
         _enforce_slide_type(slide, 2, "content")
         return Response({
             'title': slide.title,
@@ -891,7 +918,12 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(
+            Slide,
+            pk=slide_pk,
+            quiz_id=quiz_pk,
+            quiz__owner=request.user,
+        )
         _enforce_slide_type(slide, 2, "content")
         try:
             slide.title = request.data.get('title', slide.title)
@@ -943,7 +975,12 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def destroy(self, request, quiz_pk=None, slide_pk=None):
         """حذف محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk)
+        slide = get_object_or_404(
+            Slide,
+            pk=slide_pk,
+            quiz_id=quiz_pk,
+            quiz__owner=request.user,
+        )
         _enforce_slide_type(slide, 2, "content")
         try:
             slide.title = None
@@ -1011,7 +1048,15 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
         # برای Swagger
         if getattr(self, 'swagger_fake_view', False):
             return PlayerSession.objects.none()
-        return super().get_queryset()
+        return super().get_queryset().filter(quiz__owner=self.request.user)
+
+    def perform_create(self, serializer):
+        quiz = get_object_or_404(
+            Quiz,
+            pk=serializer.validated_data["quiz"].id,
+            owner=self.request.user,
+        )
+        serializer.save(quiz=quiz)
 
 
 
@@ -1096,7 +1141,8 @@ class LeaderboardReceiveView(viewsets.ViewSet):
         try:
             question = Question.objects.get(
                 slide_id=slide_pk,
-                slide__quiz_id=quiz_pk
+                slide__quiz_id=quiz_pk,
+                slide__quiz__owner=request.user,
             )
         except Question.DoesNotExist:
             return Response(
@@ -1212,6 +1258,7 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
     """
     Receive final question results and persist option votes.
     """
+    permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         operation_description="Store final question results (option votes).",
@@ -1257,6 +1304,7 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
             question = Question.objects.get(
                 slide_id=slide_pk,
                 slide__quiz_id=quiz_pk,
+                slide__quiz__owner=request.user,
             )
         except Question.DoesNotExist:
             return Response(

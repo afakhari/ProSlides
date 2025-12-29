@@ -123,6 +123,9 @@ SWAGGER_USE_COMPAT_RENDERERS = False
 
 # REST framework settings
 REST_FRAMEWORK = {
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
     "DEFAULT_PAGINATION_CLASS": "backend.srvs.office.office.pagination.StandardResultsSetPagination",
     "PAGE_SIZE": 20,
 }

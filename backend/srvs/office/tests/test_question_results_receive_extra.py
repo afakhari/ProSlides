@@ -11,6 +11,7 @@ def test_question_results_rejects_option_from_other_question(api_client):
     opt2 = OptionFactory(question=question)
     foreign_option = OptionFactory(question=other_question)
 
+    api_client.force_authenticate(user=question.slide.quiz.owner)
     payload = {
         "options": [
             {"option_id": opt1.id, "number_of_submits": 1},

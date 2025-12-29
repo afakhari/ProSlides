@@ -9,6 +9,7 @@ def test_export_includes_quiz_and_slides(api_client):
     question = QuestionFactory(slide__quiz=quiz)
     OptionFactory.create_batch(3, question=question)
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.get(f"/api/quizzes/{quiz.id}/export/")
     assert resp.status_code == 200
 
@@ -31,6 +32,7 @@ def test_export_includes_leaderboard_slide_after_question(api_client):
     question = QuestionFactory(slide__quiz=quiz, slide__show_leaderboard_after=True)
     OptionFactory.create_batch(2, question=question)
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.get(f"/api/quizzes/{quiz.id}/export/")
     assert resp.status_code == 200
 

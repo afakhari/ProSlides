@@ -7,6 +7,7 @@ from backend.srvs.office.tests.factories import QuestionFactory, QuizFactory
 @pytest.mark.django_db
 def test_leaderboard_receive_rejects_empty_list(api_client):
     question = QuestionFactory()
+    api_client.force_authenticate(user=question.slide.quiz.owner)
     resp = api_client.post(
         f"/api/quizzes/{question.slide.quiz_id}/slides/{question.slide_id}/question/leaderboard/",
         {"leaderboard": []},
@@ -25,6 +26,7 @@ def test_leaderboard_receive_partial_errors_returns_207(api_client):
         player_name="Bob",
         avatar="B",
     )
+    api_client.force_authenticate(user=question.slide.quiz.owner)
     payload = {
         "leaderboard": [
             {
@@ -66,6 +68,7 @@ def test_leaderboard_receive_rejects_session_from_other_quiz(api_client):
         player_name="Hacker",
         avatar="X",
     )
+    api_client.force_authenticate(user=question.slide.quiz.owner)
     payload = {
         "leaderboard": [
             {

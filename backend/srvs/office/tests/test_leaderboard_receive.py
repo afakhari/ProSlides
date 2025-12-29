@@ -37,6 +37,7 @@ def test_leaderboard_receive_saves_entries(api_client):
         ]
     }
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.post(
         f"/api/quizzes/{quiz.id}/slides/{question.slide_id}/question/leaderboard/",
         payload,
@@ -75,6 +76,7 @@ def test_leaderboard_receive_missing_question(api_client):
         ]
     }
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.post(
         f"/api/quizzes/{quiz.id}/slides/999/question/leaderboard/",
         payload,
