@@ -1222,6 +1222,14 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
             return PlayerSession.objects.none()
         return PlayerSession.objects.filter(quiz__owner=self.request.user)
 
+    def perform_create(self, serializer):
+        quiz = get_object_or_404(
+            Quiz,
+            pk=serializer.validated_data["quiz"].id,
+            owner=self.request.user,
+        )
+        serializer.save(quiz=quiz)
+
 
 
 class LeaderboardReceiveView(viewsets.ViewSet):
@@ -1437,6 +1445,7 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
     """
     Receive final question results and persist option votes.
     """
+    permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         operation_description="Store final question results (option votes).",
@@ -1482,6 +1491,7 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
             question = Question.objects.get(
                 slide_id=slide_pk,
                 slide__quiz_id=quiz_pk,
+                slide__quiz__owner=request.user,
             )
         except Question.DoesNotExist:
             return Response(

@@ -26,6 +26,13 @@ def test_player_session_create_and_list_scoped_to_owner(api_client):
     assert list_resp.data["count"] == 1
     assert len(list_resp.data["results"]) == 1
 
+    create_resp = api_client.post(
+        "/api/player-sessions/",
+        {"rust_session_id": "session-999", "quiz": other_quiz.id, "player_name": "Other", "avatar": "B"},
+        format="json",
+    )
+    assert create_resp.status_code in (404, 403)
+
 
 @pytest.mark.django_db
 def test_player_sessions_require_auth(api_client):

@@ -49,3 +49,16 @@ def test_question_results_requires_auth(api_client):
         format="json",
     )
     assert resp.status_code == 401
+
+
+@pytest.mark.django_db
+def test_question_results_rejects_non_owner(api_client):
+    question = QuestionFactory()
+    other = UserFactory()
+    api_client.force_authenticate(user=other)
+    resp = api_client.post(
+        f"/api/quizzes/{question.slide.quiz_id}/slides/{question.slide_id}/question/results/",
+        {"options": []},
+        format="json",
+    )
+    assert resp.status_code in (404, 403)
