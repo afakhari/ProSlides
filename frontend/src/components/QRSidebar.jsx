@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 
-export default function QRSidebar({ gameCode = "1", isOpen, onClose }) {
+export default function QRSidebar({ accessCode = "", isOpen, onClose }) {
   const [copiedLink, setCopiedLink] = useState(false);
-  // ساختار جدید لینک پلیر
-  const joinUrl = `proslides.ir/${gameCode}/player/presentation`;
+  // استفاده از access_code برای لینک پلیر
+  const joinUrl = `proslides.ir/${accessCode}`;
 
   // Function to copy link to clipboard
   const copyToClipboard = () => {
