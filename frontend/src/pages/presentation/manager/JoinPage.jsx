@@ -306,7 +306,7 @@ export default function ManagerJoinPage({
       >
         {/* Top bar */}
         <TopBar
-          gameCode={gameCode}
+          accessCode={quiz?.access_code}
           showQRButton={true}
           onQRToggle={setShowQRModal}
           isQROpen={showQRModal}
@@ -451,7 +451,7 @@ export default function ManagerJoinPage({
 
         {/* QR Code Sidebar */}
         <QRSidebar
-          gameCode={gameCode}
+          accessCode={quiz?.access_code}
           isOpen={showQRModal}
           onClose={() => setShowQRModal(false)}
         />
