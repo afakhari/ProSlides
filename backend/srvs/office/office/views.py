@@ -1018,6 +1018,70 @@ class OptionViewSet(viewsets.ModelViewSet):
         )
         return Option.objects.filter(question=question)
 
+    def _shift_option_orders(self, question, order, direction, old_order=None):
+        max_order = (
+            Option.objects.filter(question=question)
+            .aggregate(max_order=Max('order'))
+            .get('max_order') or 0
+        )
+        offset = max_order + 1000
+
+        if direction == "insert":
+            Option.objects.filter(
+                question=question,
+                order__gte=order,
+            ).update(order=F('order') + offset)
+            Option.objects.filter(
+                question=question,
+                order__gte=order + offset,
+            ).update(order=F('order') - offset + 1)
+            return
+
+        if old_order is None:
+            return
+
+        if direction == "up":
+            Option.objects.filter(
+                question=question,
+                order__gte=order,
+                order__lt=old_order,
+            ).update(order=F('order') + offset)
+            Option.objects.filter(
+                question=question,
+                order__gte=order + offset,
+                order__lt=old_order + offset,
+            ).update(order=F('order') - offset + 1)
+            return
+
+        if direction == "down":
+            Option.objects.filter(
+                question=question,
+                order__gt=old_order,
+                order__lte=order,
+            ).update(order=F('order') + offset)
+            Option.objects.filter(
+                question=question,
+                order__gt=old_order + offset,
+                order__lte=order + offset,
+            ).update(order=F('order') - offset - 1)
+
+    def _reorder_options(self, question, instance, new_order):
+        options = list(Option.objects.filter(question=question).order_by('order'))
+        options = [opt for opt in options if opt.pk != instance.pk]
+        insert_pos = max(0, min(len(options), new_order - 1))
+        options.insert(insert_pos, instance)
+
+        max_order = (
+            Option.objects.filter(question=question)
+            .aggregate(max_order=Max('order'))
+            .get('max_order') or 0
+        )
+        offset = max_order + 1000
+        Option.objects.filter(question=question).update(order=F('order') + offset)
+
+        for idx, option in enumerate(options, start=1):
+            Option.objects.filter(pk=option.pk).update(order=idx)
+
     def perform_create(self, serializer):
         question = get_object_or_404(
             Question,
@@ -1025,10 +1089,16 @@ class OptionViewSet(viewsets.ModelViewSet):
             slide__quiz_id=self.kwargs['quiz_pk'],
             slide__quiz__owner=self.request.user
         )
+        order = serializer.validated_data.get("order")
+        if order is not None and order < 1:
+            raise ValidationError({'order': 'must be a positive integer'})
         if serializer.validated_data.get("is_correct"):
             _enforce_single_choice_correct(question)
         try:
-            serializer.save(question=question)
+            with transaction.atomic():
+                if order is not None:
+                    self._shift_option_orders(question, order, "insert")
+                serializer.save(question=question, order=order)
             touch_quiz(question.slide.quiz_id)
         except DjangoValidationError as exc:
             raise ValidationError(_format_django_validation_error(exc))
@@ -1050,10 +1120,28 @@ class OptionViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         instance = serializer.instance
+        new_order = serializer.validated_data.get("order", instance.order)
+        if new_order is not None and new_order < 1:
+            raise ValidationError({'order': 'must be a positive integer'})
         if serializer.validated_data.get("is_correct"):
             _enforce_single_choice_correct(instance.question, exclude_option_id=instance.pk)
-        instance = serializer.save()
-        touch_quiz(instance.question.slide.quiz_id)
+        try:
+            with transaction.atomic():
+                if new_order != instance.order:
+                    self._reorder_options(instance.question, instance, new_order)
+                instance = serializer.save(order=new_order)
+            touch_quiz(instance.question.slide.quiz_id)
+        except DjangoValidationError as exc:
+            raise ValidationError(_format_django_validation_error(exc))
+        except IntegrityError:
+            logger.exception(
+                "Option constraint violation for question slide_id=%s quiz_pk=%s",
+                self.kwargs['slide_pk'],
+                self.kwargs['quiz_pk'],
+            )
+            raise ValidationError(
+                {"detail": "Option data violates database constraints."}
+            )
 
     def perform_destroy(self, instance):
         quiz_id = instance.question.slide.quiz_id

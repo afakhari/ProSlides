@@ -3,7 +3,7 @@ import string
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
@@ -160,7 +160,7 @@ class Question(models.Model):
 class Option(models.Model):
     question = models.ForeignKey(
         Question, on_delete=models.CASCADE, related_name='options')
-    order = models.PositiveIntegerField()
+    order = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     text = models.CharField(max_length=255)
     is_correct = models.BooleanField(default=False)
     votes = models.PositiveIntegerField(default=0)
@@ -169,6 +169,12 @@ class Option(models.Model):
 
     class Meta:
         ordering = ['order']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['question', 'order'],
+                name='unique_option_order_per_question',
+            )
+        ]
 
     def save(self, *args, **kwargs):
         if self.order is None:
