@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
-import { Search, LogOut } from "lucide-react";
+import { useParams, useNavigate } from "react-router-dom";
+import { Search, LogOut, Home } from "lucide-react";
 
 export default function SessionDetail() {
   const { quizId } = useParams();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("participants");
   const [searchQuery, setSearchQuery] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -57,8 +58,16 @@ export default function SessionDetail() {
     <div className="min-h-screen bg-[#F8FAFC] text-gray-800">
       {/* Top Navigation Bar with Search */}
       <div className="bg-white fixed top-0 left-0 right-0 w-full h-16 flex items-center justify-between px-6 z-50 shadow-sm">
-        <div className="text-black font-semibold text-lg flex items-center gap-1.5 before:content-['✱'] before:text-xl">
-          ProSlides
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate("/manager/panel")}
+            className="p-2 hover:bg-gray-100 rounded-lg transition"
+          >
+            <Home className="w-5 h-5" />
+          </button>
+          <div className="text-black font-semibold text-lg flex items-center gap-1.5 before:content-['✱'] before:text-xl">
+            ProSlides
+          </div>
         </div>
 
         <div className="relative flex-1 max-w-md mx-8">
@@ -220,18 +229,19 @@ export default function SessionDetail() {
                               );
                               // Define distinct colors for progress bars
                               const progressColors = [
-                                'bg-blue-500',   // 1st place
-                                'bg-yellow-500', // 2rd place
-                                'bg-red-500',    // 3th place
-                                'bg-green-500',  // 4nd place
-                                'bg-indigo-500', // 5th place
-                                'bg-pink-500',   // 6th place
-                                'bg-teal-500',   // 7th place
-                                'bg-orange-500', // 8th place
-                                'bg-cyan-500',   // 9th place
-                                'bg-lime-500',   // 10th place
+                                "bg-blue-500", // 1st place
+                                "bg-yellow-500", // 2rd place
+                                "bg-red-500", // 3th place
+                                "bg-green-500", // 4nd place
+                                "bg-indigo-500", // 5th place
+                                "bg-pink-500", // 6th place
+                                "bg-teal-500", // 7th place
+                                "bg-orange-500", // 8th place
+                                "bg-cyan-500", // 9th place
+                                "bg-lime-500", // 10th place
                               ];
-                              const progressColor = progressColors[index % progressColors.length];
+                              const progressColor =
+                                progressColors[index % progressColors.length];
 
                               // Check if player is in top 3 for green background
                               const isTopThree = participant.rank <= 3;
@@ -239,9 +249,13 @@ export default function SessionDetail() {
                               return (
                                 <tr
                                   key={participant.rust_session_id || index}
-                                  className={`border-t ${isTopThree ? 'bg-green-100' : ''}`}
+                                  className={`border-t ${
+                                    isTopThree ? "bg-green-100" : ""
+                                  }`}
                                 >
-                                  <td className="py-4">{participant.rank}</td>
+                                  <td className="py-4 pl-3">
+                                    {participant.rank}
+                                  </td>
                                   <td className="py-4">
                                     <div className="flex items-center gap-2">
                                       <span className="text-xl">
@@ -249,7 +263,9 @@ export default function SessionDetail() {
                                       </span>
                                       <span>{cleanName}</span>
                                       {participant.rank === 1 && (
-                                        <span className="text-yellow-500 text-lg">🏆</span>
+                                        <span className="text-yellow-500 text-lg">
+                                          🏆
+                                        </span>
                                       )}
                                     </div>
                                   </td>

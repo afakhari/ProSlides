@@ -71,14 +71,14 @@ function ManagerPlayerLeaderBoard({
       style={{ backgroundImage: "url('/bg.jpg')" }}
     >
       <TopBar
-        gameCode={gameCode}
+        accessCode={quiz?.access_code}
         showQRButton={true}
         onQRToggle={setShowQRModal}
         isQROpen={showQRModal}
       />
 
       <QRSidebar
-        gameCode={gameCode}
+        accessCode={quiz?.access_code}
         isOpen={showQRModal}
         onClose={() => setShowQRModal(false)}
       />

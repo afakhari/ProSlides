@@ -49,4 +49,7 @@ class IsServiceToken(BasePermission):
     message = "This endpoint requires a valid service token."
 
     def has_permission(self, request, view):
-        return _is_service_token_valid(request)
+        if _is_service_token_valid(request):
+            request._export_service_token_valid = True
+            return True
+        return False

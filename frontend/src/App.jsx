@@ -3,6 +3,7 @@ import {
   Routes,
   Route,
   useParams,
+  useNavigate,
 } from "react-router-dom";
 import { useState, useEffect } from "react";
 
@@ -37,9 +38,11 @@ export default function App() {
           <Route path="/" element={<AuthPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route
-            path="/:roomId/:role/presentation"
+            path="/:role/presentation/:roomId"
             element={<PresentationRouter />}
           />
+          {/* Access code route - resolves access code to quiz_id and redirects to player presentation */}
+          <Route path="/:accessCode" element={<AccessCodeResolver />} />
           {/* Manager/Role panel (supports both /manager and any role param) */}
           <Route path="/:role/panel" element={<HomePage />} />
           <Route path="/:role/panel/:roomId" element={<EditorPage />} />
@@ -53,6 +56,68 @@ export default function App() {
       </ServerDataProvider>
     </Router>
   );
+
+  /* ------------------------ Access Code Resolver ------------------------ */
+  function AccessCodeResolver() {
+    const { accessCode } = useParams();
+    const [status, setStatus] = useState("loading"); // loading | error | success
+    const [resolvedQuizId, setResolvedQuizId] = useState(null);
+
+    useEffect(() => {
+      let mounted = true;
+      const resolveCode = async () => {
+        try {
+          const res = await fetch(
+            `https://api.proslides.ir/api/quizzes/resolve-access-code/?access_code=${accessCode}`
+          );
+          const data = await res.json();
+
+          if (!mounted) return;
+
+          if (data.quiz_id) {
+            // Access code valid - store quiz_id and show player presentation
+            setResolvedQuizId(data.quiz_id);
+            setStatus("success");
+          } else {
+            // Invalid access code
+            setStatus("error");
+          }
+        } catch (err) {
+          console.error("[AccessCodeResolver] Error:", err);
+          if (mounted) setStatus("error");
+        }
+      };
+
+      resolveCode();
+      return () => {
+        mounted = false;
+      };
+    }, [accessCode]);
+
+    // Loading state
+    if (status === "loading") {
+      return <Waiting message="Joining..." />;
+    }
+
+    // Error state
+    if (status === "error") {
+      return <Waiting message="Invalid access code" />;
+    }
+
+    // Success - render player presentation directly (URL stays the same)
+    if (status === "success" && resolvedQuizId) {
+      return (
+        <AudioProvider>
+          <WebSocketProvider role="player">
+            <AppPresentation roomId={String(resolvedQuizId)} role="player" />
+            <WSMessageHandler />
+          </WebSocketProvider>
+        </AudioProvider>
+      );
+    }
+
+    return <Waiting />;
+  }
 
   /* ------------------------ Router Wrapper ------------------------ */
   function PresentationRouter() {
@@ -101,6 +166,7 @@ export default function App() {
                   question_time: q.time_limit,
                   max_point: q.max_point,
                   min_point: q.min_point,
+                  access_code: q.access_code,
                   // New fields from API
                   question_type: q.question_type, // "single" or "multiple"
                   has_multiple: q.question_type === "multiple",
@@ -135,6 +201,7 @@ export default function App() {
             const quizData = {
               quiz_id: data.quiz_id,
               title: data.title,
+              access_code: data.access_code || "",
               background: data.background || { color: "#1e1e2e", image: "" },
               music_url: data.music_url || "",
               slides: mappedSlides,
@@ -185,7 +252,7 @@ export default function App() {
       if (data.type === "ManagerJoinPage") {
         setData({ type: "ManagerPickAnswerQuestion" });
       } else {
-        if (quiz.slides[currentSlide].slide_type === 2) {
+        if (quiz.slides[currentSlide].slide_type === 3) {
           setData({ type: "ManagerLeaderBoard" });
         } else if (quiz.slides[currentSlide].slide_type === 1) {
           setData({ type: "ManagerPickAnswerQuestion" });
@@ -256,21 +323,12 @@ export default function App() {
         "[App renderPlayer] currentQuestion:",
         !!currentQuestion,
         "leaderboardResults:",
-        !!leaderboardResults
+        !!leaderboardResults,
+        "leaderboardResults value:",
+        leaderboardResults
       );
 
-      if (currentQuestion) {
-        const result = questionResults || partialQuestionResults;
-        return (
-          <PlayerPickAnswerQuestion
-            roomId={roomId}
-            question={currentQuestion}
-            result={result}
-            quiz={quiz}
-          />
-        );
-      }
-
+      // 🟢 اول لیدربورد رو چک کن - اگه type:1 رسیده باشه، لیدربورد نشون بده
       if (leaderboardResults) {
         console.log(
           "[App renderPlayer] Showing PlayerLeaderBoard with",
@@ -281,6 +339,19 @@ export default function App() {
           <PlayerLeaderBoard
             roomId={roomId}
             players={leaderboardResults.results || leaderboardResults}
+            quiz={quiz}
+          />
+        );
+      }
+
+      // بعد سوال رو چک کن
+      if (currentQuestion) {
+        const result = questionResults || partialQuestionResults;
+        return (
+          <PlayerPickAnswerQuestion
+            roomId={roomId}
+            question={currentQuestion}
+            result={result}
             quiz={quiz}
           />
         );

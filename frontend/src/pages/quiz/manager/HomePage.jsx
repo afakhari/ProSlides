@@ -5,5 +5,9 @@ import QuizManager from "../../../components/QuizManager";
 export default function HomePage() {
   const navigate = useNavigate();
 
-  return <QuizManager onNewPresentation={() => navigate("/editor")} />;
+  return (
+    <QuizManager
+      onNewPresentation={(roomId) => navigate(`/manager/panel/${roomId}`)}
+    />
+  );
 }
