@@ -8,19 +8,19 @@
 // import RightToolbar from "./RightToolbar";
 // import DesignPanel from "./DesignPanel";
 // import AudioPanel from "./AudioPanel";
-// import { quizService } from "../../../services/quizService"; 
+// import { quizService } from "../../../services/quizService";
 
 // export default function EditorPage() {
 //   const location = useLocation();
 //   const params = useParams();
 //   const navigate = useNavigate();
-  
+
 //   const [quiz, setQuiz] = useState(null);
 //   const [loading, setLoading] = useState(true);
 //   const [error, setError] = useState(null);
-  
+
 //   // استخراج quiz_id از URL یا location state
-//   const quizId = location.state?.quiz?.quiz_id || 
+//   const quizId = location.state?.quiz?.quiz_id ||
 //                 new URLSearchParams(location.search).get('quiz_id') ||
 //                 params.quizId;
 
@@ -52,7 +52,7 @@
 
 //   const saveQuiz = async () => {
 //     if (!quiz) return;
-    
+
 //     try {
 //       const savedQuiz = await quizService.updateQuiz(quiz.quiz_id, quiz);
 //       setQuiz(savedQuiz);
@@ -80,7 +80,7 @@
 //   }
 
 //   return (
-//     <QuestionEditor 
+//     <QuestionEditor
 //       quiz={quiz}
 //       updateQuiz={updateQuiz}
 //       saveQuiz={saveQuiz}
@@ -90,7 +90,7 @@
 
 // function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
 //   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
-  
+
 //   // تبدیل ساختار quiz به فرمت قابل استفاده برای کامپوننت‌ها
 //   const slides = quiz.slides || [];
 //   const activeSlide = slides[activeSlideIndex] || null;
@@ -125,7 +125,7 @@
 //       setShowDesignPanel(false);
 //       setShowAudioPanel(false);
 //     }
-    
+
 //     if (tabId !== "audio" || !showAudioPanel) {
 //       setActiveTab(tabId);
 //     }
@@ -160,14 +160,14 @@
 
 //       // ارسال به سرور برای ایجاد اسلاید جدید
 //       const createdSlide = await quizService.createSlide(quiz.quiz_id, newSlideData);
-      
+
 //       // به‌روزرسانی quiz با اسلاید جدید
 //       const updatedSlides = [...slides, createdSlide];
 //       updateQuiz({
 //         ...quiz,
 //         slides: updatedSlides
 //       });
-      
+
 //       // انتخاب اسلاید جدید
 //       setActiveSlideIndex(updatedSlides.length - 1);
 //     } catch (error) {
@@ -179,10 +179,10 @@
 //       const createLeaderboardSlide = async (questionOrder) => {
 //         try {
 //           // ابتدا اسلاید سوال را پیدا کن (اسلاید اصلی که لیدربرد برای آن ایجاد می‌شود)
-//           const questionSlide = slides.find(s => 
+//           const questionSlide = slides.find(s =>
 //             s.slide_type === 1 && s.order === questionOrder
 //           );
-          
+
 //           if (!questionSlide) return;
 
 //           // ساختار لیدربرد با order مشابه اسلاید سوال
@@ -197,7 +197,7 @@
 
 //           // ارسال به سرور
 //           const createdLeaderboardSlide = await quizService.createSlide(
-//             quiz.quiz_id, 
+//             quiz.quiz_id,
 //             leaderboardSlideData
 //           );
 
@@ -215,19 +215,19 @@
 
 //           // درج اسلاید لیدربرد بعد از اسلاید سوال (با order اصلی اسلاید سوال)
 //           createdLeaderboardSlide.order = questionSlide.order; // لیدربرد order اصلی اسلاید سوال را می‌گیرد
-//           const questionIndex = updatedSlides.findIndex(s => 
+//           const questionIndex = updatedSlides.findIndex(s =>
 //             s.slide_id === questionSlide.slide_id || s.order === questionSlide.order
 //           );
-          
+
 //           // درج لیدربرد بعد از اسلاید سوال
 //           updatedSlides.splice(questionIndex + 1, 0, createdLeaderboardSlide);
-          
+
 //           // اعمال تغییرات
 //           updateQuiz({
 //             ...quiz,
 //             slides: updatedSlides
 //           });
-          
+
 //           // انتخاب اسلاید لیدربرد
 //           setActiveSlideIndex(questionIndex + 1);
 //         } catch (error) {
@@ -240,15 +240,15 @@
 //       const deleteLeaderboardSlide = async (questionOrder) => {
 //         try {
 //           // اسلاید لیدربرد مرتبط را پیدا کن (اسلاید لیدربردی که order آن برابر با order اسلاید سوال است)
-//           const leaderboardSlide = slides.find(s => 
+//           const leaderboardSlide = slides.find(s =>
 //             s.slide_type === 3 && s.order === questionOrder
 //           );
-          
+
 //           if (!leaderboardSlide) return;
 
 //           // حذف از سرور
 //           await quizService.deleteSlide(quiz.quiz_id, leaderboardSlide.slide_id);
-          
+
 //           // حذف از state و به‌روزرسانی order اسلایدهای بعدی
 //           const updatedSlides = slides
 //             .filter(s => s !== leaderboardSlide) // حذف لیدربرد
@@ -262,12 +262,12 @@
 //               }
 //               return slide;
 //             });
-          
+
 //           updateQuiz({
 //             ...quiz,
 //             slides: updatedSlides
 //           });
-          
+
 //           // اگر اسلاید فعال حذف شده، به اسلاید اول برو
 //           if (activeSlideIndex >= updatedSlides.length) {
 //             setActiveSlideIndex(0);
@@ -283,16 +283,16 @@
 //     try {
 //       // حذف از سرور
 //       await quizService.deleteSlide(quiz.quiz_id, slideId);
-      
+
 //       // به‌روزرسانی state
 //       const slideIndex = slides.findIndex(s => s.slide_id === slideId);
 //       const updatedSlides = slides.filter(s => s.slide_id !== slideId);
-      
+
 //       updateQuiz({
 //         ...quiz,
 //         slides: updatedSlides
 //       });
-      
+
 //       // تنظیم اسلاید فعال
 //       if (slides.length > 1) {
 //         if (slideIndex >= updatedSlides.length) {
@@ -341,16 +341,16 @@
 //     try {
 //       // ارسال به سرور
 //       const savedSlide = await quizService.updateSlide(
-//         quiz.quiz_id, 
-//         updatedSlide.slide_id, 
+//         quiz.quiz_id,
+//         updatedSlide.slide_id,
 //         updatedSlide
 //       );
-      
+
 //       // به‌روزرسانی state
-//       const updatedSlides = slides.map(s => 
+//       const updatedSlides = slides.map(s =>
 //         s.slide_id === updatedSlide.slide_id ? savedSlide : s
 //       );
-      
+
 //       updateQuiz({
 //         ...quiz,
 //         slides: updatedSlides
@@ -366,15 +366,15 @@
 
 //   const handleSelectType = async (type) => {
 //     if (!activeSlide || activeSlide.slide_type !== 1) return;
-  
+
 //     const questionType = type === "Single Choice" ? "single" : "multiple";
 //     const quizId = quiz.quiz_id;
 //     const slideId = activeSlide.slide_id;
 //     const currentQuestion = activeSlide.question;
-  
+
 //     try {
 //       let result;
-    
+
 //       if (!currentQuestion || !currentQuestion.id) {
 //       // حالت 1: ایجاد سوال جدید
 //         const questionData = {
@@ -388,53 +388,53 @@
 //           faster_answers_more_points: false,
 //           partial_scoring: false
 //         };
-      
+
 //         result = await quizService.createQuestion(quizId, slideId, questionData);
 //       } else {
 //       // حالت 2: به‌روزرسانی سوال موجود
 //       // فقط ارسال فیلدهای لازم برای تغییر نوع
 //         const updateData = {question_type: questionType};
-      
+
 //       // ارسال درخواست PATCH برای به‌روزرسانی جزئی
 //         result = await axios.patch(
 //           `${API_BASE_URL}/quizzes/${quizId}/slides/${slideId}/question/`,
 //           updateData
 //         ).then(res => res.data);
 //       }
-    
+
 //     // ادغام نتیجه با داده‌های موجود
 //       const mergedQuestion = {
 //         ...(currentQuestion || {}),
 //         ...result,
 //         question_type: questionType
 //       };
-    
+
 //     // به‌روزرسانی state
 //       const updatedSlide = {
 //         ...activeSlide,
 //         question: mergedQuestion
 //       };
-    
+
 //       updateActiveSlide(updatedSlide);
 //       setShowTypeBox(false);
-    
+
 //     } catch (error) {
 //       console.error('Error:', error);
-    
+
 //       if (error.response?.status === 400) {
 //         const errorMsg = error.response.data;
-      
+
 //         if (typeof errorMsg === 'string' && errorMsg.includes("already has a question")) {
 //         // سوال از قبل وجود دارد، آن را دریافت و state را به‌روز کن
 //           try {
 //             const existingQuestion = await quizService.getQuestion(quizId, slideId);
-          
+
 //             const updatedSlide = {
 //               ...activeSlide,
 //               question: existingQuestion
 //             };
 //             updateActiveSlide(updatedSlide);
-          
+
 //           // حالا دوباره امتحان کن
 //             await handleSelectTypeSimple(type);
 //           } catch (err) {
@@ -448,7 +448,6 @@
 //       }
 //     }
 //   };
-
 
 //   // تابع Present (ذخیره و ارائه)
 //   const handlePresent = () => {
@@ -467,7 +466,7 @@
 //         question_time: slide.question.time_limit,
 //         max_point: slide.question.max_point,
 //         min_point: slide.question.min_point,
-//         scoring_type: slide.question.faster_answers_more_points ? "faster" : 
+//         scoring_type: slide.question.faster_answers_more_points ? "faster" :
 //                     slide.question.partial_scoring ? "partial" : "normal",
 //         backgroundColor: quiz.background_color,
 //         backgroundImage: quiz.background_image_url,
@@ -492,11 +491,10 @@
 
 //   const displaySlide = activeSlide ? convertSlideForDisplay(activeSlide) : null;
 
-
 //   return (
 //     <div className="h-full flex flex-col relative pt-14">
 //       {/* ----- Header -----*/}
-//       <QuizHeader 
+//       <QuizHeader
 //         title={quiz.title}
 //         quizId={quiz.quiz_id}
 //       />
@@ -518,14 +516,14 @@
 //             addNewSlide={async (slideData) => {
 //               // فراخوانی API برای ایجاد اسلاید جدید
 //               const createdSlide = await quizService.createSlide(quiz.quiz_id, slideData);
-              
+
 //               // به‌روزرسانی state
 //               const updatedSlides = [...slides, createdSlide];
 //               updateQuiz({
 //                 ...quiz,
 //                 slides: updatedSlides
 //               });
-              
+
 //               // انتخاب اسلاید جدید
 //               setActiveSlideIndex(updatedSlides.length - 1);
 //             }}
@@ -539,7 +537,7 @@
 //                 const reordered = Array.from(slides);
 //                 const [removed] = reordered.splice(result.source.index, 1);
 //                 reordered.splice(result.destination.index, 0, removed);
-                
+
 //                 // به‌روزرسانی state
 //                 updateQuiz({
 //                   ...quiz,
@@ -578,15 +576,15 @@
 //             {displaySlide ? (
 //               displaySlide.slide_type === 2 ? (
 //                 <div className="w-full h-full flex justify-center items-center">
-//                   <LeaderboardPreview 
-//                     slide={displaySlide} 
+//                   <LeaderboardPreview
+//                     slide={displaySlide}
 //                     isFullSize={!showSidebar && !showDesignPanel && !showAudioPanel}
 //                   />
 //                 </div>
 //               ) : (
 //                 <div className="w-full h-full flex justify-center items-center">
-//                   <MiniResultsResultsOnly 
-//                     slide={displaySlide} 
+//                   <MiniResultsResultsOnly
+//                     slide={displaySlide}
 //                     result={{ optionsResult: displaySlide.options?.map(opt => ({
 //                       option_id: opt.option_id,
 //                       answer: opt.answer,
@@ -633,7 +631,7 @@
 //             )}
 //           </div>
 //         </div>
-        
+
 //         {/* ----- Right Panels ----- */}
 //         {showSidebar && activeSlide?.slide_type === 1 && (
 //           <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/4">
@@ -653,7 +651,7 @@
 //                 }
 
 //                 const validQuestionTypes = ["single", "multiple"];
-                
+
 //                 if (!activeSlide.question.question_type || !validQuestionTypes.includes(activeSlide.question.question_type)) {
 //                   return (
 //                     <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -669,8 +667,8 @@
 
 //                 // اگر همه شرایط برقرار بود، کامپوننت Sidebar را رندر کن
 //                 return (
-//                   <Sidebar 
-//                     slide={displaySlide} 
+//                   <Sidebar
+//                     slide={displaySlide}
 //                     setSlide={(updatedDisplaySlide) => {
 //                       // تبدیل به ساختار اصلی
 //                       const updatedQuestion = {
@@ -690,18 +688,18 @@
 //                           image_url: opt.image
 //                         }))
 //                       };
-                      
+
 //                       const updatedSlide = {
 //                         ...activeSlide,
 //                         question: updatedQuestion
 //                       };
-                      
+
 //                       updateActiveSlide(updatedSlide);
 //                     }}
-//                     onCreateLeaderboardSlide={() => 
+//                     onCreateLeaderboardSlide={() =>
 //                       createLeaderboardSlide(activeSlide.order)
 //                     }
-//                     onDeleteLeaderboardSlide={() => 
+//                     onDeleteLeaderboardSlide={() =>
 //                       deleteLeaderboardSlide(activeSlide.order)
 //                     }
 //                     slides={slides}
@@ -741,8 +739,8 @@
 //           </div>
 //         )}
 //         {/* ----- RightToolbar ----- */}
-//         <RightToolbar 
-//           activeTab={activeTab} 
+//         <RightToolbar
+//           activeTab={activeTab}
 //           setActiveTab={handleTabClick}
 //           hasQuestion={activeSlide?.slide_type === 1}
 //         />
@@ -750,52 +748,6 @@
 //     </div>
 //   );
 // }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 import { useState, useEffect } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
@@ -807,7 +759,7 @@ import SlidesPanel from "./SlidesPanel";
 import RightToolbar from "./RightToolbar";
 import DesignPanel from "./DesignPanel";
 import AudioPanel from "./AudioPanel";
-import { quizService } from "../../../services/quizService"; 
+import { quizService } from "../../../services/quizService";
 
 export default function EditorPage() {
   const location = useLocation();
@@ -816,21 +768,18 @@ export default function EditorPage() {
   const { roomId, role } = useParams();
   const quizId = parseInt(roomId, 10);
 
-  
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // استخراج quiz_id از URL یا location state
-  // const quizId = location.state?.quiz?.quiz_id || 
+  // const quizId = location.state?.quiz?.quiz_id ||
   //               new URLSearchParams(location.search).get('quiz_id') ||
   //               params.quizId;
 
-  // const quizId = location.roomId?.roomId || 
+  // const quizId = location.roomId?.roomId ||
   //               new URLSearchParams(location.search).get('roomId') ||
   //               params.quizId;
-
-
 
   useEffect(() => {
     const fetchQuiz = async () => {
@@ -861,7 +810,7 @@ export default function EditorPage() {
 
   const saveQuiz = async () => {
     if (!quiz) return;
-    
+
     try {
       const savedQuiz = await quizService.updateQuiz(quiz.quiz_id, quiz);
       setQuiz(savedQuiz);
@@ -889,17 +838,14 @@ export default function EditorPage() {
   }
 
   return (
-    <QuestionEditor 
-      quiz={quiz}
-      updateQuiz={updateQuiz}
-      saveQuiz={saveQuiz}
-    />
+    <QuestionEditor quiz={quiz} updateQuiz={updateQuiz} saveQuiz={saveQuiz} />
   );
 }
 
 function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
-  
+  const navigate = useNavigate();
+
   // استفاده مستقیم از ساختار بک‌اند
   const slides = quiz.slides || [];
   const activeSlide = slides[activeSlideIndex] || null;
@@ -913,7 +859,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
   // توابع برای مدیریت تب‌ها
   const handleTabClick = (tabId) => {
     if (tabId === "audio") {
-      setShowAudioPanel(prev => !prev);
+      setShowAudioPanel((prev) => !prev);
       setShowSidebar(false);
       setShowDesignPanel(false);
       if (showAudioPanel) {
@@ -934,7 +880,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
       setShowDesignPanel(false);
       setShowAudioPanel(false);
     }
-    
+
     if (tabId !== "audio" || !showAudioPanel) {
       setActiveTab(tabId);
     }
@@ -963,7 +909,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
       return slide.title || "Leaderboard";
     }
     // return `Slide ${slide.order}`;
-    return "No Question Yet"
+    return "No Question Yet";
   };
 
   // ایجاد اسلاید جدید
@@ -978,8 +924,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
       //   content_image_url: "",
       // };
 
-
-
       const newSlideData = {
         slide_type: 1,
         order: 1,
@@ -990,15 +934,18 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
       };
 
       // ارسال به سرور برای ایجاد اسلاید جدید
-      const createdSlide = await quizService.createSlide(quiz.quiz_id, newSlideData);
-      
+      const createdSlide = await quizService.createSlide(
+        quiz.quiz_id,
+        newSlideData
+      );
+
       // به‌روزرسانی quiz با اسلاید جدید
       const updatedSlides = [...slides, createdSlide];
       updateQuiz({
         ...quiz,
-        slides: updatedSlides
+        slides: updatedSlides,
       });
-      
+
       // انتخاب اسلاید جدید
       setActiveSlideIndex(updatedSlides.length - 1);
     } catch (error) {
@@ -1011,10 +958,10 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
   const createLeaderboardSlide = async (questionOrder) => {
     try {
       // ابتدا اسلاید سوال را پیدا کن
-      const questionSlide = slides.find(s => 
-        s.slide_type === 1 && s.order === questionOrder
+      const questionSlide = slides.find(
+        (s) => s.slide_type === 1 && s.order === questionOrder
       );
-      
+
       if (!questionSlide) return;
 
       // ساختار لیدربرد
@@ -1029,16 +976,16 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
 
       // ارسال به سرور
       const createdLeaderboardSlide = await quizService.createSlide(
-        quiz.quiz_id, 
+        quiz.quiz_id,
         leaderboardSlideData
       );
 
       // به‌روزرسانی order اسلایدهای بعدی
-      const updatedSlides = slides.map(slide => {
+      const updatedSlides = slides.map((slide) => {
         if (slide.order >= questionSlide.order) {
           return {
             ...slide,
-            order: slide.order + 1
+            order: slide.order + 1,
           };
         }
         return slide;
@@ -1046,18 +993,18 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
 
       // درج اسلاید لیدربرد
       createdLeaderboardSlide.order = questionSlide.order;
-      const questionIndex = updatedSlides.findIndex(s => 
-        s.slide_id === questionSlide.slide_id
+      const questionIndex = updatedSlides.findIndex(
+        (s) => s.slide_id === questionSlide.slide_id
       );
-      
+
       updatedSlides.splice(questionIndex + 1, 0, createdLeaderboardSlide);
-      
+
       // اعمال تغییرات
       updateQuiz({
         ...quiz,
-        slides: updatedSlides
+        slides: updatedSlides,
       });
-      
+
       // انتخاب اسلاید لیدربرد
       setActiveSlideIndex(questionIndex + 1);
     } catch (error) {
@@ -1070,33 +1017,33 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
   const deleteLeaderboardSlide = async (questionOrder) => {
     try {
       // اسلاید لیدربرد مرتبط را پیدا کن
-      const leaderboardSlide = slides.find(s => 
-        s.slide_type === 3 && s.order === questionOrder
+      const leaderboardSlide = slides.find(
+        (s) => s.slide_type === 3 && s.order === questionOrder
       );
-      
+
       if (!leaderboardSlide) return;
 
       // حذف از سرور
       await quizService.deleteSlide(quiz.quiz_id, leaderboardSlide.slide_id);
-      
+
       // حذف از state و به‌روزرسانی order
       const updatedSlides = slides
-        .filter(s => s.slide_id !== leaderboardSlide.slide_id)
-        .map(slide => {
+        .filter((s) => s.slide_id !== leaderboardSlide.slide_id)
+        .map((slide) => {
           if (slide.order > questionOrder) {
             return {
               ...slide,
-              order: slide.order - 1
+              order: slide.order - 1,
             };
           }
           return slide;
         });
-      
+
       updateQuiz({
         ...quiz,
-        slides: updatedSlides
+        slides: updatedSlides,
       });
-      
+
       // اگر اسلاید فعال حذف شده، به اسلاید قبل برو
       if (activeSlideIndex >= updatedSlides.length) {
         setActiveSlideIndex(Math.max(0, updatedSlides.length - 1));
@@ -1112,16 +1059,16 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
     try {
       // حذف از سرور
       await quizService.deleteSlide(quiz.quiz_id, slideId);
-      
+
       // به‌روزرسانی state
-      const slideIndex = slides.findIndex(s => s.slide_id === slideId);
-      const updatedSlides = slides.filter(s => s.slide_id !== slideId);
-      
+      const slideIndex = slides.findIndex((s) => s.slide_id === slideId);
+      const updatedSlides = slides.filter((s) => s.slide_id !== slideId);
+
       updateQuiz({
         ...quiz,
-        slides: updatedSlides
+        slides: updatedSlides,
       });
-      
+
       // تنظیم اسلاید فعال
       if (updatedSlides.length > 0) {
         if (slideIndex >= updatedSlides.length) {
@@ -1143,19 +1090,19 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
     try {
       // ارسال به سرور
       const savedSlide = await quizService.updateSlide(
-        quiz.quiz_id, 
-        updatedSlide.slide_id, 
+        quiz.quiz_id,
+        updatedSlide.slide_id,
         updatedSlide
       );
-      
+
       // به‌روزرسانی state
-      const updatedSlides = slides.map(s => 
+      const updatedSlides = slides.map((s) =>
         s.slide_id === updatedSlide.slide_id ? savedSlide : s
       );
-      
+
       updateQuiz({
         ...quiz,
-        slides: updatedSlides
+        slides: updatedSlides,
       });
     } catch (error) {
       console.error("Failed to update slide:", error);
@@ -1170,15 +1117,15 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
 
   const handleSelectType = async (type) => {
     if (!activeSlide || activeSlide.slide_type !== 1) return;
-  
+
     const questionType = type === "Single Choice" ? "single" : "multiple";
     const quizId = quiz.quiz_id;
     const slideId = activeSlide.slide_id;
     const currentQuestion = activeSlide.question;
-  
+
     try {
       let updatedQuestion;
-    
+
       if (!currentQuestion || !currentQuestion.question_id) {
         // حالت 1: ایجاد سوال جدید
         const questionData = {
@@ -1190,46 +1137,53 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
           time_limit: 10,
           image_url: "",
           faster_answers_more_points: false,
-          partial_scoring: false
+          partial_scoring: false,
         };
-      
-        updatedQuestion = await quizService.createQuestion(quizId, slideId, questionData);
+
+        updatedQuestion = await quizService.createQuestion(
+          quizId,
+          slideId,
+          questionData
+        );
       } else {
         // حالت 2: به‌روزرسانی سوال موجود
         const updateData = {
           ...currentQuestion,
-          question_type: questionType
+          question_type: questionType,
         };
-      
-        updatedQuestion = await quizService.updateQuestion(quizId, slideId, updateData);
+
+        updatedQuestion = await quizService.updateQuestion(
+          quizId,
+          slideId,
+          updateData
+        );
       }
-    
+
       // به‌روزرسانی state
       const updatedSlide = {
         ...activeSlide,
-        question: updatedQuestion
+        question: updatedQuestion,
       };
-    
+
       // به‌روزرسانی در state اصلی
-      const updatedSlides = slides.map(s => 
+      const updatedSlides = slides.map((s) =>
         s.slide_id === slideId ? updatedSlide : s
       );
-      
+
       updateQuiz({
         ...quiz,
-        slides: updatedSlides
+        slides: updatedSlides,
       });
-      
+
       setShowTypeBox(false);
-    
     } catch (error) {
-      console.error('Error changing question type:', error);
-      
+      console.error("Error changing question type:", error);
+
       if (error.response?.status === 400) {
         const errorMsg = error.response.data;
         alert(`Error: ${JSON.stringify(errorMsg)}`);
       } else {
-        alert('Unexpected error. Please try again.');
+        alert("Unexpected error. Please try again.");
       }
     }
   };
@@ -1237,17 +1191,19 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
   // تابع برای به‌روزرسانی اسلاید پس از ذخیره در Sidebar
   const handleSlideUpdated = (updatedSlide) => {
     // به‌روزرسانی اسلاید در state اصلی
-    const updatedSlides = slides.map(s => 
+    const updatedSlides = slides.map((s) =>
       s.slide_id === updatedSlide.slide_id ? updatedSlide : s
     );
-    
+
     updateQuiz({
       ...quiz,
-      slides: updatedSlides
+      slides: updatedSlides,
     });
-    
+
     // به‌روزرسانی اسلاید فعال
-    setActiveSlideIndex(updatedSlides.findIndex(s => s.slide_id === updatedSlide.slide_id));
+    setActiveSlideIndex(
+      updatedSlides.findIndex((s) => s.slide_id === updatedSlide.slide_id)
+    );
   };
 
   // تابع Present (ذخیره و ارائه)
@@ -1259,14 +1215,14 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
   //   navigate(`/manager/presentation/${quizId}/`);
   // };
 
-  const handlePresent = (quizId) => {
-    navigate(`/manager/presentation/${quizId}/`);
+  const handlePresent = () => {
+    navigate(`/manager/presentation/${quiz.quiz_id}/`);
   };
 
   return (
     <div className="h-full flex flex-col relative pt-14">
       {/* ----- Header -----*/}
-      <QuizHeader 
+      <QuizHeader
         accessCode={quiz.access_code}
         quizTitle={quiz.title}
         quizId={quiz.quiz_id}
@@ -1280,7 +1236,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
             slides={slides}
             activeSlideId={activeSlide?.slide_id}
             setActiveSlideId={(id) => {
-              const slide = slides.find(s => s.slide_id === id);
+              const slide = slides.find((s) => s.slide_id === id);
               if (slide) {
                 const index = slides.indexOf(slide);
                 setActiveSlideIndex(index);
@@ -1298,7 +1254,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
               // به‌روزرسانی order اسلایدها
               const updatedSlides = reordered.map((slide, index) => ({
                 ...slide,
-                order: index + 1
+                order: index + 1,
               }));
 
               // ذخیره در سرور
@@ -1306,7 +1262,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
                 await quizService.reorderSlides(quiz.quiz_id, updatedSlides);
                 updateQuiz({
                   ...quiz,
-                  slides: updatedSlides
+                  slides: updatedSlides,
                 });
               } catch (error) {
                 console.error("Failed to reorder slides:", error);
@@ -1326,13 +1282,14 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
         <div className="flex-1 mx-4 relative">
           <div className="bg-white rounded-xl shadow p-2 h-full flex justify-center items-center overflow-hidden relative">
             {/* ----- Present Button ----- */}
+
             <button
-              onClick={() => handlePresent(quizId)}
-              className="absolute top-2 left-2 bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600 transition z-10"
+              onClick={handlePresent}
+              className="absolute top-2 left-2 bg-gradient-to-r from-slate-500 to-teal-600 
+                        hover:from-slate-600 hover:to-teal-700 text-white px-3 py-1 rounded-lg text-3xl  transition z-10"
             >
               Present
             </button>
-
             {activeSlide?.slide_type === 1 && (
               <button
                 onClick={handleTypeChangeClick}
@@ -1345,20 +1302,24 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
             {activeSlide ? (
               activeSlide.slide_type === 3 ? (
                 <div className="w-full h-full flex justify-center items-center">
-                  <LeaderboardPreview 
-                    slide={activeSlide} 
+                  <LeaderboardPreview
+                    slide={activeSlide}
                     quizBackground={quiz.background_color}
                     quizBackgroundImage={quiz.background_image_url}
-                    isFullSize={!showSidebar && !showDesignPanel && !showAudioPanel}
+                    isFullSize={
+                      !showSidebar && !showDesignPanel && !showAudioPanel
+                    }
                   />
                 </div>
               ) : activeSlide.slide_type === 1 && activeSlide.question ? (
                 <div className="w-full h-full flex justify-center items-center">
-                  <MiniResultsResultsOnly 
+                  <MiniResultsResultsOnly
                     slide={activeSlide}
                     quizBackground={quiz.background_color}
                     quizBackgroundImage={quiz.background_image_url}
-                    isFullSize={!showSidebar && !showDesignPanel && !showAudioPanel}
+                    isFullSize={
+                      !showSidebar && !showDesignPanel && !showAudioPanel
+                    }
                   />
                 </div>
               ) : (
@@ -1392,7 +1353,9 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
                 ></div>
 
                 <div className="absolute z-20 bg-white rounded-2xl shadow-2xl p-6 w-[400px] flex flex-col items-center space-y-4">
-                  <h2 className="text-xl font-bold text-pink-700">Select Question Type</h2>
+                  <h2 className="text-xl font-bold text-pink-700">
+                    Select Question Type
+                  </h2>
 
                   {["Single Choice", "Multiple Choice"].map((type) => (
                     <button
@@ -1415,64 +1378,93 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
             )}
           </div>
         </div>
-        
+
         {/* ----- Right Panels ----- */}
         {showSidebar && activeSlide?.slide_type === 1 && (
           <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/4">
             {(() => {
-                // بررسی اینکه آیا activeSlide.question وجود دارد
-                if (!activeSlide?.question) {
-                  return (
-                    <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                      <div className="text-yellow-500 mb-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.998-.833-2.732 0L4.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                      </div>
-                      <p className="text-gray-700 font-medium">First, select the question type.</p>
-                      <button
-                        onClick={handleTypeChangeClick}
-                        className="mt-4 bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 transition"
-                      >
-                        Select Type
-                      </button>
-                    </div>
-                  );
-                }
-
-                const validQuestionTypes = ["single", "multiple"];
-                
-                if (!activeSlide.question.question_type || !validQuestionTypes.includes(activeSlide.question.question_type)) {
-                  return (
-                    <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                      <div className="text-red-500 mb-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <p className="text-gray-700 font-medium">Question type is invalid.</p>
-                    </div>
-                  );
-                }
-
-                // اگر همه شرایط برقرار بود، کامپوننت Sidebar را رندر کن
+              // بررسی اینکه آیا activeSlide.question وجود دارد
+              if (!activeSlide?.question) {
                 return (
-                  <Sidebar 
-                    quizId={quiz.quiz_id}
-                    slide={activeSlide} 
-                    setSlide={setActiveSlideIndex}
-                    onCreateLeaderboardSlide={() => 
-                      createLeaderboardSlide(activeSlide.order)
-                    }
-                    onDeleteLeaderboardSlide={() => 
-                      deleteLeaderboardSlide(activeSlide.order)
-                    }
-                    slides={slides}
-                    onClose={handleCloseSidebarPanel}
-                    onSlideUpdated={handleSlideUpdated}
-                  />
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <div className="text-yellow-500 mb-2">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-12 w-12"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.998-.833-2.732 0L4.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-gray-700 font-medium">
+                      First, select the question type.
+                    </p>
+                    <button
+                      onClick={handleTypeChangeClick}
+                      className="mt-4 bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 transition"
+                    >
+                      Select Type
+                    </button>
+                  </div>
                 );
-              })()}
+              }
+
+              const validQuestionTypes = ["single", "multiple"];
+
+              if (
+                !activeSlide.question.question_type ||
+                !validQuestionTypes.includes(activeSlide.question.question_type)
+              ) {
+                return (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <div className="text-red-500 mb-2">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-12 w-12"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-gray-700 font-medium">
+                      Question type is invalid.
+                    </p>
+                  </div>
+                );
+              }
+
+              // اگر همه شرایط برقرار بود، کامپوننت Sidebar را رندر کن
+              return (
+                <Sidebar
+                  quizId={quiz.quiz_id}
+                  slide={activeSlide}
+                  setSlide={setActiveSlideIndex}
+                  onCreateLeaderboardSlide={() =>
+                    createLeaderboardSlide(activeSlide.order)
+                  }
+                  onDeleteLeaderboardSlide={() =>
+                    deleteLeaderboardSlide(activeSlide.order)
+                  }
+                  slides={slides}
+                  onClose={handleCloseSidebarPanel}
+                  onSlideUpdated={handleSlideUpdated}
+                />
+              );
+            })()}
           </div>
         )}
 
@@ -1501,10 +1493,10 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
             )}
           </div>
         )}
-        
+
         {/* ----- RightToolbar ----- */}
-        <RightToolbar 
-          activeTab={activeTab} 
+        <RightToolbar
+          activeTab={activeTab}
           setActiveTab={handleTabClick}
           hasQuestion={activeSlide?.slide_type === 1}
         />
