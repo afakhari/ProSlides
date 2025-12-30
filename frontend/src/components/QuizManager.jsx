@@ -1017,6 +1017,7 @@ export default function QuizManager({ onNewPresentation }) {
         <ShareMenu
           isOpen={true}
           onClose={() => setShowShareModal(null)}
+          quizId={showShareModal}
           accessCode={quizzes.find((q) => q.id === showShareModal)?.accessCode}
         />
       )}
