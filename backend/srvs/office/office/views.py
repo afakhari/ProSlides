@@ -531,7 +531,6 @@ class QuizViewSet(viewsets.ModelViewSet):
             leaderboard_deleted = Leaderboard.objects.filter(
                 question__slide__quiz=quiz
             ).delete()[0]
-            Option.objects.filter(question__slide__quiz=quiz).update(votes=0)
             participants_deleted = PlayerSession.objects.filter(
                 quiz=quiz
             ).delete()[0]
