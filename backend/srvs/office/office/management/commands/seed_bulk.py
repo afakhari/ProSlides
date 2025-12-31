@@ -192,7 +192,6 @@ class Command(BaseCommand):
             title = f"Demo Quiz {quiz_idx + 1} - {rng.choice(TITLE_WORDS)}"
             quiz_kwargs = {
                 "title": title,
-                "author": owner.username if owner else f"author_{quiz_idx + 1}",
                 "music_url": "https://example.com/music.mp3",
                 "background_color": self._random_color(rng),
                 "background_image_url": "https://example.com/background.jpg",

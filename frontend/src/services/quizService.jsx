@@ -222,7 +222,6 @@ export const quizService = {
     try {
       const response = await api.post(`/quizzes/`, {
         title: "Default",
-        author: "anonymous",
         music_url: "",
         background_color: "#ffffff",
         background_image_url: ""

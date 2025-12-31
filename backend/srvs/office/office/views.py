@@ -82,7 +82,7 @@ QUIZ_ITEM_SCHEMA = openapi.Schema(
         "title": openapi.Schema(type=openapi.TYPE_STRING),
         "created_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
         "updated_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
-        "author": openapi.Schema(type=openapi.TYPE_STRING),
+        "owner_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
         "access_code": openapi.Schema(type=openapi.TYPE_STRING),
         "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
         "music_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
@@ -278,6 +278,7 @@ class QuizViewSet(viewsets.ModelViewSet):
                             "access_code": openapi.Schema(type=openapi.TYPE_STRING),
                             "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
                             "slides_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "owner_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
                         },
                     )
                 ),
@@ -299,11 +300,11 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     def _filter_quizzes_for_request(self, request, queryset):
         if request.user and request.user.is_authenticated:
-            return queryset.filter(author=request.user.username)
-        author = request.query_params.get('author')
-        if author:
-            return queryset.filter(author=author)
-        return queryset
+            return queryset.filter(owner=request.user)
+        owner_name = request.query_params.get('owner') or request.query_params.get('author')
+        if owner_name:
+            return queryset.filter(owner__username=owner_name)
+        return queryset.none()
 
     def _next_copy_title(self, title):
         match = re.match(r'^(.*)\s\(copy\d+\)$', title)
@@ -396,6 +397,7 @@ class QuizViewSet(viewsets.ModelViewSet):
                             "access_code": openapi.Schema(type=openapi.TYPE_STRING),
                             "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
                             "slides_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "owner_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
                         },
                     )
                 ),
@@ -562,7 +564,6 @@ class QuizViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             new_quiz = Quiz.objects.create(
                 title=self._next_copy_title(quiz.title),
-                author=quiz.author,
                 owner=quiz.owner,
                 music_url=quiz.music_url,
                 background_color=quiz.background_color,

@@ -21,7 +21,9 @@ import { clearAuthStorage, getRefreshToken } from "../utils/auth";
 
 export default function QuizManager({ onNewPresentation }) {
   const navigate = useNavigate();
-  const [loggedInUser, setLoggedInUser] = useState("HesamAzmoun");
+  const [loggedInUser, setLoggedInUser] = useState(() =>
+    localStorage.getItem("auth.name") || "You"
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -47,7 +49,7 @@ export default function QuizManager({ onNewPresentation }) {
         slides: quiz.slides_count,
         participants: quiz.participants_count,
         members: "",
-        createdBy: loggedInUser, // API doesn't provide this, using fallback
+        createdBy: quiz.owner_name || loggedInUser,
         lastUpdated: new Date(quiz.last_update).toLocaleDateString("en-GB", {
           day: "2-digit",
           month: "short",
@@ -440,7 +442,6 @@ export default function QuizManager({ onNewPresentation }) {
         method: "POST",
         json: {
           title: newName,
-          author: quiz.createdBy,
           access_code: generateAccessCode(), // Generate new access code for duplicate
           music_url: "",
           background_color: "",

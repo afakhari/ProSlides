@@ -32,7 +32,6 @@ class Command(BaseCommand):
         quiz = models.Quiz.objects.create(
             title=title,
             created_at=timezone.now(),
-            author="demo_author",
             music_url="https://example.com/music.mp3",
             background_color="#123456",
             background_image_url="https://example.com/background.jpg",

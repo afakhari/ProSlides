@@ -314,28 +314,9 @@ export default function AuthPage() {
     setVerificationCode("");
   };
 
-  const createQuizAndNavigate = async (accessToken) => {
-    const response = await apiFetch("/quizzes/", {
-      method: "POST",
-      auth: false,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-      json: { title: "Untitled quiz" },
-    });
-
-    const payload = await parseJson(response);
-    if (!response.ok) {
-      throw new Error(formatError(payload));
-    }
-
-    const quizId = payload?.quiz_id ?? payload?.id;
-    if (!quizId) {
-      throw new Error("Quiz created, but no ID was returned.");
-    }
-
-    navigate(`/manager/panel/${quizId}`);
-  };
+  const navigateToDashboard = useCallback(() => {
+    navigate("/manager/panel");
+  }, [navigate]);
 
   const handleGoogleResponse = useCallback(
     async (response) => {
@@ -369,7 +350,7 @@ export default function AuthPage() {
         if (refresh) localStorage.setItem("auth.refresh", refresh);
         if (name) localStorage.setItem("auth.name", name);
 
-        await createQuizAndNavigate(access);
+        navigateToDashboard();
       } catch (error) {
         setStatus({
           type: "error",
@@ -379,7 +360,7 @@ export default function AuthPage() {
         setSubmitting(false);
       }
     },
-    [createQuizAndNavigate]
+    [navigateToDashboard]
   );
 
   useEffect(() => {
@@ -473,7 +454,7 @@ export default function AuthPage() {
       localStorage.setItem("auth.name", fullName.trim());
     }
 
-    await createQuizAndNavigate(access);
+    navigateToDashboard();
   };
 
   const handleForgotPassword = async () => {
