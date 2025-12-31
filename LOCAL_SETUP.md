@@ -97,6 +97,8 @@ X-Export-Token: dev-export-token
 ```
 If `EXPORT_SERVICE_TOKEN` is empty, service-token access is disabled.
 
+For full Rust facade integration details, see `RUST_FACADE_SETUP.md`.
+
 ## 9) Swagger and base URLs
 - Swagger UI: `http://127.0.0.1:8000/swagger`
 - API base: `http://127.0.0.1:8000/api/`

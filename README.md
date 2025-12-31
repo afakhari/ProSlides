@@ -7,6 +7,9 @@ See `LOCAL_SETUP.md` for a step-by-step guide for running the backend locally.
 ## Frontend Setup
 See `FRONTEND_SETUP.md` for how to run the Vite frontend locally.
 
+## Rust Facade
+See `RUST_FACADE_SETUP.md` for service-token setup and the Django endpoints used by the Rust WebSocket facade.
+
 ## Deployment
 See `DEPLOYMENT.md` for how to run the Django backend in production.
 
