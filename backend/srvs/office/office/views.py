@@ -1583,11 +1583,15 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            question = Question.objects.get(
+            question_queryset = Question.objects.filter(
                 slide_id=slide_pk,
                 slide__quiz_id=quiz_pk,
-                slide__quiz__owner=request.user,
             )
+            if request.user and request.user.is_authenticated:
+                question_queryset = question_queryset.filter(
+                    slide__quiz__owner=request.user,
+                )
+            question = question_queryset.get()
         except Question.DoesNotExist:
             return Response(
                 {'detail': 'No question found for this slide'},
