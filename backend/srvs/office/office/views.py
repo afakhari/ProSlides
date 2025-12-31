@@ -31,7 +31,8 @@ from .serializers import (
     ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer,
     QuestionResultsReceiveSerializer, RegisterSerializer, QuizListSerializer,
     VerifyEmailSerializer, ResendVerificationSerializer, GoogleAuthSerializer,
-    PasswordResetRequestSerializer, PasswordResetConfirmSerializer
+    PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
+    TokenWithProfileSerializer,
 )
 from .permissions import IsQuizOwner, IsExportServiceOrQuizOwner, IsServiceToken
 from .pagination import StandardResultsSetPagination
@@ -83,6 +84,7 @@ QUIZ_ITEM_SCHEMA = openapi.Schema(
         "created_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
         "updated_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
         "owner_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "owner_full_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
         "access_code": openapi.Schema(type=openapi.TYPE_STRING),
         "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
         "music_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
@@ -279,6 +281,7 @@ class QuizViewSet(viewsets.ModelViewSet):
                             "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
                             "slides_count": openapi.Schema(type=openapi.TYPE_INTEGER),
                             "owner_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                            "owner_full_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
                         },
                     )
                 ),
@@ -398,6 +401,7 @@ class QuizViewSet(viewsets.ModelViewSet):
                             "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
                             "slides_count": openapi.Schema(type=openapi.TYPE_INTEGER),
                             "owner_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                            "owner_full_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
                         },
                     )
                 ),
@@ -1697,15 +1701,20 @@ class RegisterView(APIView):
             user.is_active = True
             user.save(update_fields=["is_active"])
 
-        return Response(
-            {
-                "username": user.username,
-                "email": user.email,
-                "is_active": user.is_active,
-                "verification_sent": settings.AUTH_REQUIRE_EMAIL_VERIFICATION,
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        response_payload = {
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.first_name,
+            "is_active": user.is_active,
+            "verification_sent": settings.AUTH_REQUIRE_EMAIL_VERIFICATION,
+        }
+        if settings.AUTH_REQUIRE_EMAIL_VERIFICATION:
+            response_payload["resend_seconds"] = settings.EMAIL_VERIFICATION_RESEND_SECONDS
+            response_payload["code_expires_in_seconds"] = (
+                settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES * 60
+            )
+
+        return Response(response_payload, status=status.HTTP_201_CREATED)
 
 
 class VerifyEmailView(APIView):
@@ -1852,8 +1861,14 @@ class ResendVerificationView(APIView):
 
         resend_wait = settings.EMAIL_VERIFICATION_RESEND_SECONDS
         if verification.sent_at and (timezone.now() - verification.sent_at).total_seconds() < resend_wait:
+            remaining = int(resend_wait - (timezone.now() - verification.sent_at).total_seconds())
+            expires_remaining = int((verification.expires_at - timezone.now()).total_seconds())
             return Response(
-                {"detail": "Please wait before requesting a new code."},
+                {
+                    "detail": "Please wait before requesting a new code.",
+                    "retry_after_seconds": max(0, remaining),
+                    "code_expires_in_seconds": max(0, expires_remaining),
+                },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
@@ -1866,7 +1881,13 @@ class ResendVerificationView(APIView):
         verification.save()
         send_verification_email(user, verification.code)
 
-        return Response({"detail": "Verification code sent"})
+        return Response(
+            {
+                "detail": "Verification code sent",
+                "resend_seconds": settings.EMAIL_VERIFICATION_RESEND_SECONDS,
+                "code_expires_in_seconds": settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES * 60,
+            }
+        )
 
 
 class GoogleAuthView(APIView):
@@ -1946,6 +1967,7 @@ class GoogleAuthView(APIView):
             )
 
         email = id_info.get("email")
+        display_name = id_info.get("name", "").strip()
         if not email:
             return Response(
                 {"detail": "Google token did not include an email"},
@@ -1957,14 +1979,18 @@ class GoogleAuthView(APIView):
         if not user:
             user = User.objects.filter(username__iexact=normalized_email).first()
 
+        created = False
         if not user:
             user = User(
                 username=normalized_email,
                 email=normalized_email,
                 is_active=True,
             )
+            if display_name:
+                user.first_name = display_name
             user.set_unusable_password()
             user.save()
+            created = True
         else:
             updated_fields = []
             if not user.is_active:
@@ -1973,16 +1999,24 @@ class GoogleAuthView(APIView):
             if not user.email:
                 user.email = normalized_email
                 updated_fields.append("email")
+            if display_name and not user.first_name:
+                user.first_name = display_name
+                updated_fields.append("first_name")
             if updated_fields:
                 user.save(update_fields=updated_fields)
 
         refresh = RefreshToken.for_user(user)
+        needs_password_setup = not user.has_usable_password()
+        full_name = user.first_name or id_info.get("name", "")
         return Response(
             {
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
                 "email": normalized_email,
                 "name": id_info.get("name", ""),
+                "full_name": full_name,
+                "needs_password_setup": needs_password_setup,
+                "is_new_user": created,
             }
         )
 
@@ -2133,6 +2167,7 @@ class LogoutView(APIView):
 class ThrottledTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "auth"
+    serializer_class = TokenWithProfileSerializer
 
     @swagger_auto_schema(
         operation_description="Obtain access and refresh tokens.",

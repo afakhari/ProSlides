@@ -26,6 +26,9 @@ export default function QuizManager({ onNewPresentation }) {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [passwordPromptVisible, setPasswordPromptVisible] = useState(false);
+  const [passwordPromptStatus, setPasswordPromptStatus] = useState(null);
+  const [passwordPromptLoading, setPasswordPromptLoading] = useState(false);
 
   // Load quizzes from API on mount
   const [quizzes, setQuizzes] = useState([]);
@@ -49,7 +52,7 @@ export default function QuizManager({ onNewPresentation }) {
         slides: quiz.slides_count,
         participants: quiz.participants_count,
         members: "",
-        createdBy: quiz.owner_name || loggedInUser,
+        createdBy: quiz.owner_full_name || quiz.owner_name || loggedInUser,
         lastUpdated: new Date(quiz.last_update).toLocaleDateString("en-GB", {
           day: "2-digit",
           month: "short",
@@ -74,6 +77,14 @@ export default function QuizManager({ onNewPresentation }) {
 
   useEffect(() => {
     fetchQuizzes();
+  }, []);
+
+  useEffect(() => {
+    const promptFlag = localStorage.getItem("auth.promptSetPassword");
+    const email = localStorage.getItem("auth.email");
+    if (promptFlag && email) {
+      setPasswordPromptVisible(true);
+    }
   }, []);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -518,6 +529,46 @@ export default function QuizManager({ onNewPresentation }) {
     }
   };
 
+  const dismissPasswordPrompt = () => {
+    localStorage.removeItem("auth.promptSetPassword");
+    setPasswordPromptVisible(false);
+  };
+
+  const sendPasswordSetupEmail = async () => {
+    const email = localStorage.getItem("auth.email");
+    if (!email) {
+      setPasswordPromptStatus({
+        type: "error",
+        message: "Email address not found. Please log in again.",
+      });
+      return;
+    }
+    setPasswordPromptLoading(true);
+    setPasswordPromptStatus(null);
+    try {
+      const response = await apiFetch("/auth/password/reset/", {
+        method: "POST",
+        auth: false,
+        json: { email },
+      });
+      if (!response.ok) {
+        throw new Error("Unable to send password setup email.");
+      }
+      setPasswordPromptStatus({
+        type: "success",
+        message: "Password setup link sent. Check your inbox.",
+      });
+      dismissPasswordPrompt();
+    } catch (err) {
+      setPasswordPromptStatus({
+        type: "error",
+        message: err.message || "Unable to send password setup email.",
+      });
+    } finally {
+      setPasswordPromptLoading(false);
+    }
+  };
+
   // Check menu position and adjust if needed
   const checkMenuPosition = (quizId, buttonElement) => {
     if (!buttonElement) return;
@@ -637,6 +688,45 @@ export default function QuizManager({ onNewPresentation }) {
 
         {/* Content with top padding to account for fixed header */}
         <div className="pt-24 px-6">
+          {passwordPromptVisible && (
+            <div className="mb-6 rounded-xl border border-purple-200 bg-white px-4 py-3 text-sm text-purple-900 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="font-semibold">Set a password for your account</div>
+                  <div className="text-xs text-purple-700">
+                    You signed up with Google. Set a password to log in without Google.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={sendPasswordSetupEmail}
+                    disabled={passwordPromptLoading}
+                    className="rounded-md bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {passwordPromptLoading ? "Sending..." : "Send link"}
+                  </button>
+                  <button
+                    onClick={dismissPasswordPrompt}
+                    className="rounded-md border border-purple-200 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-50"
+                  >
+                    Later
+                  </button>
+                </div>
+              </div>
+              {passwordPromptStatus && (
+                <div
+                  className={`mt-2 text-xs ${
+                    passwordPromptStatus.type === "error"
+                      ? "text-red-600"
+                      : "text-green-600"
+                  }`}
+                >
+                  {passwordPromptStatus.message}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* My Presentations Section */}
           <div className="mb-6">
             {/* <h3 className="text-xs uppercase text-gray-500 mb-2">
