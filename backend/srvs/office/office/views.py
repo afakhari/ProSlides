@@ -22,13 +22,15 @@ from django.contrib.auth import get_user_model
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework_simplejwt.tokens import RefreshToken
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard, EmailVerification
 from .serializers import (
     QuizSerializer, SlideSerializer, QuestionSerializer, OptionSerializer,
     ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer,
     QuestionResultsReceiveSerializer, RegisterSerializer, QuizListSerializer,
-    VerifyEmailSerializer, ResendVerificationSerializer,
+    VerifyEmailSerializer, ResendVerificationSerializer, GoogleAuthSerializer,
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer
 )
 from .permissions import IsQuizOwner, IsExportServiceOrQuizOwner, IsServiceToken
@@ -1860,6 +1862,124 @@ class ResendVerificationView(APIView):
         send_verification_email(user, verification.code)
 
         return Response({"detail": "Verification code sent"})
+
+
+class GoogleAuthView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = "auth"
+
+    @swagger_auto_schema(
+        operation_description="Exchange a Google ID token for JWTs.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=["token"],
+            properties={
+                "token": openapi.Schema(type=openapi.TYPE_STRING),
+            },
+        ),
+        responses={
+            200: openapi.Response(
+                "Tokens",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "access": openapi.Schema(type=openapi.TYPE_STRING),
+                        "refresh": openapi.Schema(type=openapi.TYPE_STRING),
+                        "email": openapi.Schema(type=openapi.TYPE_STRING),
+                        "name": openapi.Schema(type=openapi.TYPE_STRING),
+                    },
+                ),
+                examples={
+                    "application/json": {
+                        "access": "jwt-access-token",
+                        "refresh": "jwt-refresh-token",
+                        "email": "user@example.com",
+                        "name": "Jane Doe",
+                    }
+                },
+            ),
+            400: openapi.Response(
+                "Invalid token",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Invalid Google token"}},
+            ),
+            500: openapi.Response(
+                "Google auth not configured",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                ),
+                examples={"application/json": {"detail": "Google auth is not configured"}},
+            ),
+        },
+        tags=["Auth"],
+    )
+    def post(self, request):
+        serializer = GoogleAuthSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        token = serializer.validated_data["token"]
+
+        if not settings.GOOGLE_CLIENT_ID:
+            return Response(
+                {"detail": "Google auth is not configured"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        try:
+            id_info = id_token.verify_oauth2_token(
+                token,
+                google_requests.Request(),
+                settings.GOOGLE_CLIENT_ID,
+            )
+        except ValueError:
+            return Response(
+                {"detail": "Invalid Google token"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = id_info.get("email")
+        if not email:
+            return Response(
+                {"detail": "Google token did not include an email"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        normalized_email = User.objects.normalize_email(email)
+        user = User.objects.filter(email__iexact=normalized_email).first()
+        if not user:
+            user = User.objects.filter(username__iexact=normalized_email).first()
+
+        if not user:
+            user = User(
+                username=normalized_email,
+                email=normalized_email,
+                is_active=True,
+            )
+            user.set_unusable_password()
+            user.save()
+        else:
+            updated_fields = []
+            if not user.is_active:
+                user.is_active = True
+                updated_fields.append("is_active")
+            if not user.email:
+                user.email = normalized_email
+                updated_fields.append("email")
+            if updated_fields:
+                user.save(update_fields=updated_fields)
+
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "email": normalized_email,
+                "name": id_info.get("name", ""),
+            }
+        )
 
 
 class PasswordResetRequestView(APIView):

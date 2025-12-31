@@ -1,9 +1,18 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../../utils/apiFetch";
 
 function formatError(payload) {
   if (!payload) return "Something went wrong. Please try again.";
+  if (payload.email) {
+    const message = Array.isArray(payload.email)
+      ? payload.email.join(", ")
+      : payload.email;
+    if (message.toLowerCase().includes("already")) {
+      return "Email already used";
+    }
+    return `email: ${message}`;
+  }
   if (payload.detail) return payload.detail;
   const keys = Object.keys(payload);
   if (!keys.length) return "Something went wrong. Please try again.";
@@ -277,6 +286,8 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   const isSignup = mode === "signup";
   const isVerify = mode === "verify";
@@ -324,6 +335,107 @@ export default function AuthPage() {
     }
 
     navigate(`/manager/panel/${quizId}`);
+  };
+
+  const handleGoogleResponse = useCallback(
+    async (response) => {
+      if (!response?.credential) {
+        setStatus({
+          type: "error",
+          message: "Google login did not return a credential.",
+        });
+        return;
+      }
+
+      setSubmitting(true);
+      setStatus(null);
+      try {
+        const googleResponse = await apiFetch("/auth/google/", {
+          method: "POST",
+          auth: false,
+          json: { token: response.credential },
+        });
+        const payload = await parseJson(googleResponse);
+        if (!googleResponse.ok) {
+          throw new Error(formatError(payload));
+        }
+
+        const { access, refresh, name } = payload || {};
+        if (!access) {
+          throw new Error("Google login succeeded, but no access token returned.");
+        }
+
+        localStorage.setItem("auth.access", access);
+        if (refresh) localStorage.setItem("auth.refresh", refresh);
+        if (name) localStorage.setItem("auth.name", name);
+
+        await createQuizAndNavigate(access);
+      } catch (error) {
+        setStatus({
+          type: "error",
+          message: error.message || "Google login failed.",
+        });
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [createQuizAndNavigate]
+  );
+
+  useEffect(() => {
+    if (!googleClientId) return;
+    const scriptId = "google-identity";
+    const initialize = () => {
+      if (!window.google?.accounts?.id) return;
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleGoogleResponse,
+        ux_mode: "popup",
+      });
+      setGoogleReady(true);
+    };
+
+    const existingScript = document.getElementById(scriptId);
+    if (existingScript) {
+      if (window.google?.accounts?.id) {
+        initialize();
+      } else {
+        existingScript.addEventListener("load", initialize, { once: true });
+      }
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = scriptId;
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = initialize;
+    script.onerror = () => {
+      setStatus({
+        type: "error",
+        message: "Unable to load Google login right now.",
+      });
+    };
+    document.body.appendChild(script);
+  }, [googleClientId, handleGoogleResponse]);
+
+  const handleGoogleSignIn = () => {
+    if (!googleClientId) {
+      setStatus({
+        type: "error",
+        message: "Google login is not configured.",
+      });
+      return;
+    }
+    if (!googleReady || !window.google?.accounts?.id) {
+      setStatus({
+        type: "error",
+        message: "Google login is still loading. Please try again.",
+      });
+      return;
+    }
+    window.google.accounts.id.prompt();
   };
 
   const handleLogin = async () => {
@@ -585,13 +697,13 @@ export default function AuthPage() {
           <button
             type="button"
             onClick={isVerify ? handleResendVerification : handleModeSwitch}
-            className="font-semibold text-[#6c4cf5]"
+            className="font-semibold text-[#6c4cf5] transition hover:text-[#4f32e6] hover:underline cursor-pointer"
           >
             {isVerify
               ? "Resend code"
               : isSignup
-              ? "Log in to your account"
-              : "Sign up now"}
+                ? "Log in to your account"
+                : "Sign up now"}
           </button>
         </p>
 
@@ -599,7 +711,9 @@ export default function AuthPage() {
           <div className="mt-5 flex flex-col gap-3">
             <button
               type="button"
-              className="flex items-center justify-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-semibold text-[#111827] transition hover:border-[#d1d5db] hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
+              onClick={handleGoogleSignIn}
+              disabled={submitting}
+              className="flex items-center justify-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-semibold text-[#111827] transition hover:border-[#d1d5db] hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <GoogleIcon />
               {isSignup ? "Sign up with Google" : "Log in with Google"}
@@ -628,13 +742,15 @@ export default function AuthPage() {
               <MailIcon />
             </span>
             <input
-              className="flex-1 border-none bg-transparent px-3 text-sm text-[#1f2937] outline-none placeholder:text-[#9ca3af]"
+              className={`flex-1 border-none bg-transparent px-3 text-sm text-[#1f2937] outline-none placeholder:text-[#9ca3af] ${isVerify ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""
+                }`}
               type="email"
               name="email"
               autoComplete="email"
               placeholder="Your email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
+              disabled={isVerify}
               required
             />
           </label>
@@ -703,7 +819,7 @@ export default function AuthPage() {
               <button
                 type="button"
                 onClick={handleForgotPassword}
-                className="text-xs text-[#9ca3af]"
+                className="text-xs text-[#9ca3af] transition hover:text-[#6b7280] hover:underline cursor-pointer"
               >
                 Forgot password?
               </button>
@@ -712,11 +828,10 @@ export default function AuthPage() {
 
           {status && (
             <div
-              className={`mb-3 rounded-xl px-3 py-2 text-left text-xs ${
-                status.type === "error"
+              className={`mb-3 rounded-xl px-3 py-2 text-left text-xs ${status.type === "error"
                   ? "bg-[#fee2e2] text-[#991b1b]"
                   : "bg-[#e0f2fe] text-[#0c4a6e]"
-              }`}
+                }`}
             >
               {status.message}
             </div>
@@ -734,7 +849,7 @@ export default function AuthPage() {
         {!isVerify && (
           <button
             type="button"
-            className="mt-4 text-sm font-semibold text-[#6c4cf5]"
+            className="mt-4 text-sm font-semibold text-[#6c4cf5] transition hover:text-[#4f32e6] hover:underline cursor-pointer"
           >
             {isSignup ? "Sign up with SSO" : "Log in with SSO"}
           </button>

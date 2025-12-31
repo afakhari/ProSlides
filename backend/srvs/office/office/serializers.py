@@ -275,6 +275,10 @@ class ResendVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
 
+class GoogleAuthSerializer(serializers.Serializer):
+    token = serializers.CharField()
+
+
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
