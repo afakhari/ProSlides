@@ -1539,7 +1539,7 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
     """
     Receive final question results and persist option votes.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsServiceToken]
 
     @swagger_auto_schema(
         operation_description="Store final question results (option votes).",
