@@ -213,6 +213,7 @@
 import { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import { X, Check, Loader2 } from "lucide-react";
+import { buildApiUrl } from "../utils/api";
 import { getAuthHeaders } from "../utils/auth";
 
 export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
@@ -246,12 +247,12 @@ export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
     setSaveSuccess(false);
     
     try {
-      const response = await fetch(`https://api.proslides.ir/api/quizzes/${quizId}/`, {
-        method: 'PATCH',
-        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      const response = await fetch(buildApiUrl(`/quizzes/${quizId}/`), {
+        method: "PATCH",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
-          access_code: code
-        })
+          access_code: code,
+        }),
       });
       
       if (!response.ok) {

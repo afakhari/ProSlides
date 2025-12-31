@@ -205,11 +205,11 @@
 
 
 // services/quizService.js
-import axios from 'axios';
-import { getAuthHeaders } from '../utils/auth';
+import axios from "axios";
+import { getApiBase } from "../utils/api";
+import { getAuthHeaders } from "../utils/auth";
 
-const API_BASE_URL = 'https://api.proslides.ir/api';
-const api = axios.create({ baseURL: API_BASE_URL });
+const api = axios.create({ baseURL: getApiBase() });
 
 api.interceptors.request.use((config) => {
   config.headers = { ...config.headers, ...getAuthHeaders() };

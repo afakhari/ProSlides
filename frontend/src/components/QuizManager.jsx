@@ -16,7 +16,8 @@ import {
   X,
 } from "lucide-react";
 import ShareMenu from "./ShareMenu";
-import { getAuthHeaders } from "../utils/auth";
+import { buildApiUrl } from "../utils/api";
+import { clearAuthStorage, getAuthHeaders, getRefreshToken } from "../utils/auth";
 
 export default function QuizManager({ onNewPresentation }) {
   const navigate = useNavigate();
@@ -32,10 +33,9 @@ export default function QuizManager({ onNewPresentation }) {
       setLoading(true);
       // Add a small delay for better UX
       await new Promise((resolve) => setTimeout(resolve, 100));
-      const response = await fetch(
-        "https://api.proslides.ir/api/quizzes/list/",
-        { headers: getAuthHeaders() }
-      );
+      const response = await fetch(buildApiUrl("/quizzes/list/"), {
+        headers: getAuthHeaders(),
+      });
       if (!response.ok) {
         throw new Error("Failed to fetch quizzes");
       }
@@ -105,7 +105,7 @@ export default function QuizManager({ onNewPresentation }) {
   const handleNewPresentation = async () => {
     try {
       setCreatingQuiz(true);
-      const response = await fetch("https://api.proslides.ir/api/quizzes/", {
+      const response = await fetch(buildApiUrl("/quizzes/"), {
         method: "POST",
         headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
@@ -244,13 +244,10 @@ export default function QuizManager({ onNewPresentation }) {
         setDeletingQuizIds((prev) => [...prev, quizId]);
       }
 
-      const response = await fetch(
-        `https://api.proslides.ir/api/quizzes/${quizId}/`,
-        {
-          method: "DELETE",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
-        }
-      );
+      const response = await fetch(buildApiUrl(`/quizzes/${quizId}/`), {
+        method: "DELETE",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to delete quiz: ${response.statusText}`);
@@ -273,16 +270,13 @@ export default function QuizManager({ onNewPresentation }) {
   // Rename a quiz via API
   const renameQuiz = async (quizId, newName) => {
     try {
-      const response = await fetch(
-        `https://api.proslides.ir/api/quizzes/${quizId}/`,
-        {
-          method: "PATCH",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({
-            title: newName.trim(),
-          }),
-        }
-      );
+      const response = await fetch(buildApiUrl(`/quizzes/${quizId}/`), {
+        method: "PATCH",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          title: newName.trim(),
+        }),
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to rename quiz: ${response.statusText}`);
@@ -311,21 +305,10 @@ export default function QuizManager({ onNewPresentation }) {
       }
 
       const response = await fetch(
-        `https://api.proslides.ir/api/quizzes/${quizId}/reset-result/`,
+        buildApiUrl(`/quizzes/${quizId}/reset-result/`),
         {
           method: "POST",
           headers: getAuthHeaders(),
-          // headers: {
-          //   "Content-Type": "application/json",
-          // },
-          // body: JSON.stringify({
-          //   title: quiz.name,
-          //   author: quiz.createdBy,
-          //   access_code: quiz.accessCode,
-          //   music_url: "",
-          //   background_color: "",
-          //   background_image_url: "",
-          // }),
         }
       );
 
@@ -463,7 +446,7 @@ export default function QuizManager({ onNewPresentation }) {
       const newName = `${quiz.name} (copy ${maxCopyNumber + 1})`;
 
       const response = await fetch(
-        `https://api.proslides.ir/api/quizzes/${quiz.id}/duplicate/`,
+        buildApiUrl(`/quizzes/${quiz.id}/duplicate/`),
         {
           method: "POST",
           headers: getAuthHeaders({ "Content-Type": "application/json" }),
@@ -524,6 +507,28 @@ export default function QuizManager({ onNewPresentation }) {
   // Handle edit click
   const handleEdit = (quizId) => {
     navigate(`/manager/panel/${quizId}/`);
+  };
+
+  const handleLogout = async () => {
+    setShowProfileMenu(false);
+    try {
+      const refresh = getRefreshToken();
+      if (refresh) {
+        const response = await fetch(buildApiUrl("/auth/logout/"), {
+          method: "POST",
+          headers: getAuthHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ refresh }),
+        });
+        if (!response.ok) {
+          console.warn("Logout request failed:", response.statusText);
+        }
+      }
+    } catch (err) {
+      console.warn("Logout error:", err);
+    } finally {
+      clearAuthStorage();
+      navigate("/auth");
+    }
   };
 
   // Check menu position and adjust if needed
@@ -630,11 +635,10 @@ export default function QuizManager({ onNewPresentation }) {
                 <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg w-48 z-50">
                   <button
                     onClick={() => {
-                      setShowProfileMenu(false);
-                      // Add logout logic here
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
-                  >
+                    handleLogout();
+                  }}
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                >
                     <LogOut className="w-4 h-4" />
                     Logout
                   </button>

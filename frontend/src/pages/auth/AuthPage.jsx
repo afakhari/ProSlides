@@ -1,24 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getApiBase } from "../../utils/api";
 
-const DEFAULT_API_BASE = "https://api.proslides.ir/api";
-const LOCAL_API_BASE = "http://127.0.0.1:8000/api";
-
-const resolveApiBase = () => {
-  const envBase = import.meta.env.VITE_API_BASE_URL;
-  if (envBase && envBase.trim()) {
-    return envBase.trim();
-  }
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host === "localhost" || host === "127.0.0.1") {
-      return LOCAL_API_BASE;
-    }
-  }
-  return DEFAULT_API_BASE;
-};
-
-const API_BASE = resolveApiBase();
+const API_BASE = getApiBase();
 
 function formatError(payload) {
   if (!payload) return "Something went wrong. Please try again.";
