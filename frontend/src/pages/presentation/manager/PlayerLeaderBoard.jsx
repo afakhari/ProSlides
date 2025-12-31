@@ -13,6 +13,7 @@ function ManagerPlayerLeaderBoard({
   totalSlides = 3,
   roomId,
   players = [],
+  quiz,
 }) {
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
@@ -65,10 +66,18 @@ function ManagerPlayerLeaderBoard({
 
   const gameCode = roomId;
 
+  // Calculate dynamic background style from quiz data
+  const backgroundStyle = {
+    backgroundImage: quiz?.background?.image
+      ? `url('${quiz.background.image}')`
+      : "none",
+    backgroundColor: quiz?.background?.color || "#1e1e2e",
+  };
+
   return (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      style={backgroundStyle}
     >
       <TopBar
         accessCode={quiz?.access_code}

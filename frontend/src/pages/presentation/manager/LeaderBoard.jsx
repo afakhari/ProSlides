@@ -23,6 +23,7 @@ function ManagerLeaderBoard({
   isRemoteReady,
   roomId,
   getLeaderboardForQuestion,
+  onEndGame,
 }) {
   // فقط داده‌های سرور را از useServerData بگیر، و sendNavigation را از useWebSocket
   const { isConnected, lastMessage } = useWebSocket();
@@ -152,6 +153,7 @@ function ManagerLeaderBoard({
   const handleEnd = () => {
     console.log("[LeaderBoard] Sending end command to server");
     sendEnd();
+    if (onEndGame) onEndGame();
   };
 
   const handleToggleBlur = (id) => {
@@ -194,7 +196,7 @@ function ManagerLeaderBoard({
   const backgroundStyle = {
     backgroundImage: quiz?.background?.image
       ? `url('${quiz.background.image}')`
-      : "url('/bg.jpg')",
+      : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
 

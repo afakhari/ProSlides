@@ -98,7 +98,7 @@ export default function PlayerJoinPage({ roomId, quiz, ...inp }) {
   const backgroundStyle = {
     backgroundImage: quiz?.background?.image
       ? `url('${quiz.background.image}')`
-      : "url('/bg.jpg')",
+      : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
 

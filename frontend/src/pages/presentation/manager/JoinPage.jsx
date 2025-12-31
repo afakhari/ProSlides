@@ -30,6 +30,7 @@ export default function ManagerJoinPage({
   currentSlide = 1,
   totalSlides = 3,
   quiz,
+  onEndGame,
 }) {
   const { isConnected, connect, sendNavigation, sendEnd, lastMessage } =
     useWebSocket();
@@ -152,6 +153,7 @@ export default function ManagerJoinPage({
   const handleEnd = () => {
     console.log("[JoinPage] Sending end command to server");
     sendEnd();
+    if (onEndGame) onEndGame();
   };
 
   const handleStart = () => {
@@ -290,7 +292,7 @@ export default function ManagerJoinPage({
   const backgroundStyle = {
     backgroundImage: quiz?.background?.image
       ? `url('${quiz.background.image}')`
-      : "url('/bg.jpg')",
+      : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
 

@@ -12,7 +12,6 @@ export default function PlayerPickAnswerQuestion({
   const { questionResults, partialQuestionResults } = useServerData();
   const { sendMessage, isConnected } = useWebSocket();
 
-
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(question?.question_time || 0);
@@ -141,7 +140,7 @@ export default function PlayerPickAnswerQuestion({
   const backgroundStyle = {
     backgroundImage: quiz?.background?.image
       ? `url('${quiz.background.image}')`
-      : "url('/bg.jpg')",
+      : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
 
@@ -186,7 +185,6 @@ export default function PlayerPickAnswerQuestion({
               <div className="border-white border-2 bg-[rgba(255,255,255,0.3)] h-2 rounded-[5px] mt-3 mb-5 overflow-hidden">
                 <div
                   className="h-full bg-purple-600"
-
                   style={{
                     width: "100%",
                     // Use GPU-accelerated transform instead of animating width.
@@ -203,7 +201,6 @@ export default function PlayerPickAnswerQuestion({
                       Math.min(1, progressPercent / 100)
                     )})`,
                     WebkitTransformOrigin: "left",
-
                   }}
                 ></div>
               </div>
@@ -214,7 +211,6 @@ export default function PlayerPickAnswerQuestion({
               {options.map((goz) => {
                 let optionClass = "";
                 let icon = null;
-
 
                 if (showResults && result?.optionsResult) {
                   // نتیجه از type:3 میاد با فرمت { option_id, answer: true/false }
@@ -232,7 +228,6 @@ export default function PlayerPickAnswerQuestion({
 
                   if (selectedOptions.includes(goz) && submitted) {
                     optionClass = isCorrect
-
                       ? "bg-green-600 text-white"
                       : "bg-red-600 text-white";
                   }

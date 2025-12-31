@@ -22,6 +22,7 @@ export default function ManagerPickAnswerQuestion({
   quiz,
   isRemoteReady,
   roomId,
+  onEndGame,
 }) {
   const { isConnected, sendNavigation, sendEnd, lastMessage, type8Message } =
     useWebSocket();
@@ -305,6 +306,7 @@ export default function ManagerPickAnswerQuestion({
   const handleEnd = () => {
     console.log("[PickAnswerQuestion] Sending end command to server");
     sendEnd();
+    if (onEndGame) onEndGame();
   };
 
   // Debug: Log state changes
@@ -370,7 +372,7 @@ export default function ManagerPickAnswerQuestion({
   const backgroundStyle = {
     backgroundImage: quiz?.background?.image
       ? `url('${quiz.background.image}')`
-      : "url('/bg.jpg')",
+      : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
 
