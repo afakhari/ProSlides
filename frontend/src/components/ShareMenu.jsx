@@ -213,8 +213,7 @@
 import { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import { X, Check, Loader2 } from "lucide-react";
-import { buildApiUrl } from "../utils/api";
-import { getAuthHeaders } from "../utils/auth";
+import { apiFetch } from "../utils/apiFetch";
 
 export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
   const [section, setSection] = useState("invite");
@@ -247,12 +246,11 @@ export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
     setSaveSuccess(false);
     
     try {
-      const response = await fetch(buildApiUrl(`/quizzes/${quizId}/`), {
+      const response = await apiFetch(`/quizzes/${quizId}/`, {
         method: "PATCH",
-        headers: getAuthHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
+        json: {
           access_code: code,
-        }),
+        },
       });
       
       if (!response.ok) {

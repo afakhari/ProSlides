@@ -16,8 +16,8 @@ import {
   X,
 } from "lucide-react";
 import ShareMenu from "./ShareMenu";
-import { buildApiUrl } from "../utils/api";
-import { clearAuthStorage, getAuthHeaders, getRefreshToken } from "../utils/auth";
+import { apiFetch } from "../utils/apiFetch";
+import { clearAuthStorage, getRefreshToken } from "../utils/auth";
 
 export default function QuizManager({ onNewPresentation }) {
   const navigate = useNavigate();
@@ -33,9 +33,7 @@ export default function QuizManager({ onNewPresentation }) {
       setLoading(true);
       // Add a small delay for better UX
       await new Promise((resolve) => setTimeout(resolve, 100));
-      const response = await fetch(buildApiUrl("/quizzes/list/"), {
-        headers: getAuthHeaders(),
-      });
+      const response = await apiFetch("/quizzes/list/");
       if (!response.ok) {
         throw new Error("Failed to fetch quizzes");
       }
@@ -105,12 +103,11 @@ export default function QuizManager({ onNewPresentation }) {
   const handleNewPresentation = async () => {
     try {
       setCreatingQuiz(true);
-      const response = await fetch(buildApiUrl("/quizzes/"), {
+      const response = await apiFetch("/quizzes/", {
         method: "POST",
-        headers: getAuthHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
+        json: {
           title: "Untitled Presentation",
-        }),
+        },
       });
 
       if (!response.ok) {
@@ -244,9 +241,8 @@ export default function QuizManager({ onNewPresentation }) {
         setDeletingQuizIds((prev) => [...prev, quizId]);
       }
 
-      const response = await fetch(buildApiUrl(`/quizzes/${quizId}/`), {
+      const response = await apiFetch(`/quizzes/${quizId}/`, {
         method: "DELETE",
-        headers: getAuthHeaders({ "Content-Type": "application/json" }),
       });
 
       if (!response.ok) {
@@ -270,12 +266,11 @@ export default function QuizManager({ onNewPresentation }) {
   // Rename a quiz via API
   const renameQuiz = async (quizId, newName) => {
     try {
-      const response = await fetch(buildApiUrl(`/quizzes/${quizId}/`), {
+      const response = await apiFetch(`/quizzes/${quizId}/`, {
         method: "PATCH",
-        headers: getAuthHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
+        json: {
           title: newName.trim(),
-        }),
+        },
       });
 
       if (!response.ok) {
@@ -304,13 +299,9 @@ export default function QuizManager({ onNewPresentation }) {
         throw new Error("Quiz not found");
       }
 
-      const response = await fetch(
-        buildApiUrl(`/quizzes/${quizId}/reset-result/`),
-        {
-          method: "POST",
-          headers: getAuthHeaders(),
-        }
-      );
+      const response = await apiFetch(`/quizzes/${quizId}/reset-result/`, {
+        method: "POST",
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to reset quiz results: ${response.statusText}`);
@@ -445,21 +436,17 @@ export default function QuizManager({ onNewPresentation }) {
 
       const newName = `${quiz.name} (copy ${maxCopyNumber + 1})`;
 
-      const response = await fetch(
-        buildApiUrl(`/quizzes/${quiz.id}/duplicate/`),
-        {
-          method: "POST",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({
-            title: newName,
-            author: quiz.createdBy,
-            access_code: generateAccessCode(), // Generate new access code for duplicate
-            music_url: "",
-            background_color: "",
-            background_image_url: "",
-          }),
-        }
-      );
+      const response = await apiFetch(`/quizzes/${quiz.id}/duplicate/`, {
+        method: "POST",
+        json: {
+          title: newName,
+          author: quiz.createdBy,
+          access_code: generateAccessCode(), // Generate new access code for duplicate
+          music_url: "",
+          background_color: "",
+          background_image_url: "",
+        },
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to duplicate quiz: ${response.statusText}`);
@@ -514,10 +501,9 @@ export default function QuizManager({ onNewPresentation }) {
     try {
       const refresh = getRefreshToken();
       if (refresh) {
-        const response = await fetch(buildApiUrl("/auth/logout/"), {
+        const response = await apiFetch("/auth/logout/", {
           method: "POST",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ refresh }),
+          json: { refresh },
         });
         if (!response.ok) {
           console.warn("Logout request failed:", response.statusText);

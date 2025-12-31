@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getApiBase } from "../../utils/api";
-
-const API_BASE = getApiBase();
+import { apiFetch } from "../../utils/apiFetch";
 
 function formatError(payload) {
   if (!payload) return "Something went wrong. Please try again.";
@@ -306,13 +304,13 @@ export default function AuthPage() {
   };
 
   const createQuizAndNavigate = async (accessToken) => {
-    const response = await fetch(`${API_BASE}/quizzes/`, {
+    const response = await apiFetch("/quizzes/", {
       method: "POST",
+      auth: false,
       headers: {
-        "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ title: "Untitled quiz" }),
+      json: { title: "Untitled quiz" },
     });
 
     const payload = await parseJson(response);
@@ -329,13 +327,13 @@ export default function AuthPage() {
   };
 
   const handleLogin = async () => {
-    const response = await fetch(`${API_BASE}/auth/token/`, {
+    const response = await apiFetch("/auth/token/", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      auth: false,
+      json: {
         username: email.trim(),
         password: password.trim(),
-      }),
+      },
     });
 
     const payload = await parseJson(response);
@@ -378,10 +376,10 @@ export default function AuthPage() {
     setSubmitting(true);
     setStatus(null);
     try {
-      const response = await fetch(`${API_BASE}/auth/password/reset/`, {
+      const response = await apiFetch("/auth/password/reset/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        auth: false,
+        json: { email: email.trim() },
       });
       const payload = await parseJson(response);
       if (!response.ok) {
@@ -402,14 +400,14 @@ export default function AuthPage() {
   };
 
   const handleSignup = async () => {
-    const response = await fetch(`${API_BASE}/auth/register/`, {
+    const response = await apiFetch("/auth/register/", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      auth: false,
+      json: {
         username: email.trim(),
         email: email.trim(),
         password: password.trim(),
-      }),
+      },
     });
 
     const payload = await parseJson(response);
@@ -437,13 +435,13 @@ export default function AuthPage() {
     setSubmitting(true);
     setStatus(null);
     try {
-      const response = await fetch(`${API_BASE}/auth/verify/`, {
+      const response = await apiFetch("/auth/verify/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        auth: false,
+        json: {
           email: email.trim(),
           code: verificationCode.trim(),
-        }),
+        },
       });
 
       const payload = await parseJson(response);
@@ -478,10 +476,10 @@ export default function AuthPage() {
     setSubmitting(true);
     setStatus(null);
     try {
-      const response = await fetch(`${API_BASE}/auth/verify/resend/`, {
+      const response = await apiFetch("/auth/verify/resend/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        auth: false,
+        json: { email: email.trim() },
       });
       const payload = await parseJson(response);
       if (!response.ok) {

@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Search, LogOut, Home } from "lucide-react";
-import { buildApiUrl } from "../../utils/api";
-import {
-  clearAuthStorage,
-  getAuthHeaders,
-  getRefreshToken,
-} from "../../utils/auth";
+import { apiFetch } from "../../utils/apiFetch";
+import { clearAuthStorage, getRefreshToken } from "../../utils/auth";
 
 export default function SessionDetail() {
   const { quizId } = useParams();
@@ -24,9 +20,8 @@ export default function SessionDetail() {
     const fetchLeaderboard = async () => {
       try {
         setLoading(true);
-        const response = await fetch(
-          buildApiUrl(`/quizzes/${quizId}/final-leaderboard/`),
-          { headers: getAuthHeaders() }
+        const response = await apiFetch(
+          `/quizzes/${quizId}/final-leaderboard/`
         );
 
         if (!response.ok) {
@@ -66,10 +61,9 @@ export default function SessionDetail() {
     try {
       const refresh = getRefreshToken();
       if (refresh) {
-        const response = await fetch(buildApiUrl("/auth/logout/"), {
+        const response = await apiFetch("/auth/logout/", {
           method: "POST",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ refresh }),
+          json: { refresh },
         });
         if (!response.ok) {
           console.warn("Logout request failed:", response.statusText);
