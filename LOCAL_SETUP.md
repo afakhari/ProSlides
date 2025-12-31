@@ -51,6 +51,7 @@ DJANGO_SETTINGS_MODULE=backend.srvs.office.office.settings
 ALLOWED_HOSTS=127.0.0.1,localhost
 CORS_ALLOWED_ORIGINS=http://127.0.0.1:3000,http://localhost:3000
 EXPORT_SERVICE_TOKEN=dev-export-token
+GOOGLE_CLIENT_ID=your-google-client-id
 ```
 
 Email behavior:
@@ -71,6 +72,24 @@ python backend/srvs/office/manage.py migrate
 python backend/srvs/office/manage.py runserver 127.0.0.1:8000
 ```
 
+## 8) Frontend setup (Vite)
+From the repo root:
+```
+cd frontend
+```
+
+Create `frontend/.env` with:
+```
+VITE_API_BASE_URL=http://127.0.0.1:8000/api
+VITE_GOOGLE_CLIENT_ID=your-google-client-id
+```
+
+Install dependencies and run:
+```
+npm install
+npm run dev
+```
+
 ## Rust service token (export + leaderboard)
 Rust can request quiz export and submit leaderboard updates by sending:
 ```
@@ -78,11 +97,11 @@ X-Export-Token: dev-export-token
 ```
 If `EXPORT_SERVICE_TOKEN` is empty, service-token access is disabled.
 
-## 8) Swagger and base URLs
+## 9) Swagger and base URLs
 - Swagger UI: `http://127.0.0.1:8000/swagger`
 - API base: `http://127.0.0.1:8000/api/`
 
-## 9) Quick auth flow test
+## 10) Quick auth flow test
 1) Register:
    `POST /api/auth/register`
    ```json

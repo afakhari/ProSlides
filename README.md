@@ -4,6 +4,9 @@ a live interactive quiz
 ## Local Setup
 See `LOCAL_SETUP.md` for a step-by-step guide for running the backend locally.
 
+## Frontend Setup
+See `FRONTEND_SETUP.md` for how to run the Vite frontend locally.
+
 ## Deployment
 See `DEPLOYMENT.md` for how to run the Django backend in production.
 
