@@ -11,6 +11,7 @@ import ManagerJoinPage from "./pages/presentation/manager/JoinPage";
 import ManagerPickAnswerQuestion from "./pages/presentation/manager/PickAnswerQuestion";
 import ManagerLeaderBoard from "./pages/presentation/manager/LeaderBoard";
 import ManagerPlayerLeaderBoard from "./pages/presentation/manager/PlayerLeaderBoard";
+import FinalLeaderboard from "./pages/presentation/manager/FinalLeaderboard";
 
 import PlayerJoinPage from "./pages/presentation/player/JoinPage";
 import PlayerPickAnswerQuestion from "./pages/presentation/player/PickAnswerQuestion";
@@ -240,6 +241,7 @@ export default function App() {
       leaderboardResults,
       questionResults,
       partialQuestionResults,
+      modalLeaderboardResults,
     } = useServerData();
 
     // 🟢 وقتی manager است و type:1 از سرور می‌رسد، به لیدربورد برو
@@ -277,6 +279,10 @@ export default function App() {
       }
     };
 
+    const handleEndGame = () => {
+      setData({ type: "ManagerFinalLeaderboard" });
+    };
+
     /* ---------------- Manager Rendering (EXACT LIKE ORIGINAL) ---------------- */
     const renderManager = () => {
       switch (data.type) {
@@ -289,6 +295,7 @@ export default function App() {
               currentSlide={currentSlide}
               totalSlides={totalSlides}
               quiz={quiz}
+              onEndGame={handleEndGame}
             />
           );
         case "ManagerPickAnswerQuestion":
@@ -301,6 +308,7 @@ export default function App() {
               totalSlides={totalSlides}
               quiz={quiz}
               isRemoteReady={isRemoteReady}
+              onEndGame={handleEndGame}
             />
           );
         case "ManagerLeaderBoard":
@@ -313,6 +321,14 @@ export default function App() {
               totalSlides={totalSlides}
               quiz={quiz}
               isRemoteReady={isRemoteReady}
+              onEndGame={handleEndGame}
+            />
+          );
+        case "ManagerFinalLeaderboard":
+          return (
+            <FinalLeaderboard
+              leaderboardData={modalLeaderboardResults || leaderboardResults}
+              onExit={() => (window.location.href = "/")}
             />
           );
         default:
