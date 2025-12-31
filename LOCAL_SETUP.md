@@ -120,12 +120,20 @@ For full Rust facade integration details, see `RUST_FACADE_SETUP.md`.
    {"username":"testuser","password":"StrongPass123!"}
    ```
 
-## 10) Seed demo data (optional)
+## 11) Seed demo data (optional)
 Generate demo quizzes, slides, players, and leaderboard entries:
 ```
 python backend/srvs/office/manage.py seed_bulk --flush --quizzes 20 --slides-per-quiz 10 --players-per-quiz 30 --leaderboard-per-question 20
 ```
 Note: `--flush` wipes the database.
+
+Seed all quizzes under a single owner (recommended for frontend testing):
+```
+python backend/srvs/office/manage.py seed_bulk --flush --single-owner --owner-username demo_owner --owner-email owner@example.com --owner-password password123
+```
+Login with:
+- username: `demo_owner`
+- password: `password123`
 
 ## Troubleshooting
 - ModuleNotFoundError: make sure the venv is activated.
