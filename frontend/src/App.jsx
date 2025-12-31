@@ -18,6 +18,8 @@ import PlayerLeaderBoard from "./pages/presentation/player/LeaderBoard";
 
 import Waiting from "./pages/loading/LoadingPage";
 
+import AuthPage from "./pages/auth/AuthPage";
+
 import { QuizSetup } from "./data/mockData";
 import { WebSocketProvider } from "./contexts/WebSocketContext";
 import { ServerDataProvider } from "./contexts/ServerDataContext";
@@ -25,6 +27,7 @@ import { useServerData } from "./hooks/useServerData";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { AudioProvider, useAudio } from "./contexts/AudioContext";
 import SessionDetail from "./pages/report/SessionDetail";
+import { apiFetch } from "./utils/apiFetch";
 
 import HomePage from "./pages/quiz/manager/HomePage";
 import EditorPage from "./pages/quiz/manager/EditorPage";
@@ -34,10 +37,12 @@ export default function App() {
     <Router>
       <ServerDataProvider>
         <Routes>
+          <Route path="/auth" element={<AuthPage />} />
           <Route
             path="/:role/presentation/:roomId"
             element={<PresentationRouter />}
           />
+          <Route path="/" element={<AuthPage />} />
           {/* Access code route - resolves access code to quiz_id and redirects to player presentation */}
           <Route path="/:accessCode" element={<AccessCodeResolver />} />
           {/* Manager/Role panel (supports both /manager and any role param) */}
@@ -64,8 +69,11 @@ export default function App() {
       let mounted = true;
       const resolveCode = async () => {
         try {
-          const res = await fetch(
-            `https://api.proslides.ir/api/quizzes/resolve-access-code/?access_code=${accessCode}`
+          const res = await apiFetch(
+            `/quizzes/resolve-access-code/?access_code=${encodeURIComponent(
+              accessCode
+            )}`,
+            { auth: false }
           );
           const data = await res.json();
 
@@ -143,9 +151,7 @@ export default function App() {
       const fetchQuiz = async () => {
         try {
           if (!roomId) return;
-          const res = await fetch(
-            `https://api.proslides.ir/api/quizzes/${roomId}/export/`
-          );
+          const res = await apiFetch(`/quizzes/${roomId}/export/`);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
           if (!mounted) return;

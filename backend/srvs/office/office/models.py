@@ -1,10 +1,11 @@
 import secrets
 import string
 
-from django.conf import settings
-from django.db import IntegrityError, models, transaction
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, RegexValidator
+from django.db import IntegrityError, models, transaction
+from django.utils import timezone
 
 
 ACCESS_CODE_ALPHABET = string.ascii_letters + string.digits
@@ -18,13 +19,8 @@ class Quiz(models.Model):
     title = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    author = models.CharField(max_length=100, default="anonymous")
     owner = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="quizzes",
-        null=True,
-        blank=True,
+        User, on_delete=models.CASCADE, related_name="quizzes", null=True, blank=True
     )
     access_code = models.CharField(
         max_length=16,
@@ -71,6 +67,21 @@ class Quiz(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class EmailVerification(models.Model):
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name='email_verification'
+    )
+    code = models.CharField(max_length=6, blank=True, null=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    is_verified = models.BooleanField(default=False)
+    sent_at = models.DateTimeField(auto_now=True)
+    expires_at = models.DateTimeField()
+    verified_at = models.DateTimeField(blank=True, null=True)
+
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
 
 
 class Slide(models.Model):

@@ -14,6 +14,8 @@ SECRET_KEY = env.str(
 )
 DEBUG = env.bool("DEBUG", False)
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
+EXPORT_SERVICE_TOKEN = env.str("EXPORT_SERVICE_TOKEN", default="")
+GOOGLE_CLIENT_ID = env.str("GOOGLE_CLIENT_ID", default="")
 
 # Application definition
 INSTALLED_APPS = [
@@ -28,6 +30,8 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "django_filters",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
 ]
 
 MIDDLEWARE = [
@@ -83,6 +87,72 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Email defaults
+EMAIL_BACKEND = env.str(
+    "EMAIL_BACKEND",
+    default="django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend",
+)
+DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", default="no-reply@proslides.ir")
+EMAIL_HOST = env.str("EMAIL_HOST", default="localhost")
+EMAIL_PORT = env.int("EMAIL_PORT", default=25)
+EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+
+# Email verification policy
+EMAIL_VERIFICATION_CODE_TTL_MINUTES = env.int(
+    "EMAIL_VERIFICATION_CODE_TTL_MINUTES", default=10
+)
+EMAIL_VERIFICATION_RESEND_SECONDS = env.int(
+    "EMAIL_VERIFICATION_RESEND_SECONDS", default=60
+)
+EMAIL_VERIFICATION_MAX_ATTEMPTS = env.int(
+    "EMAIL_VERIFICATION_MAX_ATTEMPTS", default=5
+)
+AUTH_REQUIRE_EMAIL_VERIFICATION = env.bool(
+    "AUTH_REQUIRE_EMAIL_VERIFICATION", default=True
+)
+PASSWORD_RESET_URL_TEMPLATE = env.str(
+    "PASSWORD_RESET_URL_TEMPLATE",
+    default="https://proslides.ir/reset-password?uid={uid}&token={token}",
+)
+
+# DRF defaults
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/min",
+        "user": "120/min",
+        "auth": "10/min",
+        "auth_verify": "6/min",
+        "password_reset": "5/min",
+    },
+    "DEFAULT_PAGINATION_CLASS": "backend.srvs.office.office.pagination.StandardResultsSetPagination",
+    "PAGE_SIZE": 20,
+}
+
+# SimpleJWT (defaults؛ قابل تنظیم با env)
+from datetime import timedelta  # noqa: E402
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+}
+
 # CORS (development default; can be overridden per environment)
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
@@ -121,8 +191,26 @@ LOGGING = {
 # Swagger UI compatibility settings
 SWAGGER_USE_COMPAT_RENDERERS = False
 
-# REST framework settings
-REST_FRAMEWORK = {
-    "DEFAULT_PAGINATION_CLASS": "backend.srvs.office.office.pagination.StandardResultsSetPagination",
-    "PAGE_SIZE": 20,
+SWAGGER_SETTINGS = {
+    "SECURITY_DEFINITIONS": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": 'JWT Authorization header using the Bearer scheme. Example: "Authorization: Bearer <token>"',
+        }
+    },
+    "USE_SESSION_AUTH": False,
+    "DOC_EXPANSION": "none",
+    "PERSIST_AUTH": True,
+    "TAGS": [
+        {"name": "Auth", "description": "Authentication, verification, and recovery"},
+        {"name": "Quizzes", "description": "Quiz management and metadata"},
+        {"name": "Slides", "description": "Slide CRUD and ordering"},
+        {"name": "Questions", "description": "Question CRUD for slides"},
+        {"name": "Options", "description": "Answer options for questions"},
+        {"name": "Leaderboard", "description": "Leaderboard ingest and aggregation"},
+        {"name": "Players", "description": "Player session management"},
+        {"name": "Content", "description": "Content-only slides"},
+    ],
 }

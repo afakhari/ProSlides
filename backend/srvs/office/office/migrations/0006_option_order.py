@@ -18,7 +18,7 @@ def set_option_order(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("office", "0005_fix_rust_session_id_columns"),
+        ("office", "0006_rust_session_id_fields"),
     ]
 
     operations = [

@@ -36,7 +36,10 @@ def test_reset_result_clears_leaderboard_and_participants(api_client):
         time_taken=1.2,
         rank=2,
     )
+    OptionFactory(question=question, votes=3)
+    OptionFactory(question=question, votes=5)
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.post(f"/api/quizzes/{quiz.id}/reset-result/")
     assert resp.status_code == 200
     assert resp.data["participants_count"] == 0
@@ -45,5 +48,4 @@ def test_reset_result_clears_leaderboard_and_participants(api_client):
 
     assert Leaderboard.objects.filter(question__slide__quiz=quiz).count() == 0
     assert PlayerSession.objects.filter(quiz=quiz).count() == 0
-    assert Option.objects.get(pk=option1.pk).votes == 0
-    assert Option.objects.get(pk=option2.pk).votes == 0
+    assert Option.objects.filter(question__slide__quiz=quiz).exclude(votes=0).count() == 0

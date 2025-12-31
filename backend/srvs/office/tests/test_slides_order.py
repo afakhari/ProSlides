@@ -7,6 +7,7 @@ from backend.srvs.office.office.models import Slide
 @pytest.mark.django_db
 def test_create_slide_shifts_orders(api_client):
     quiz = QuizFactory()
+    api_client.force_authenticate(user=quiz.owner)
     s1 = SlideFactory(quiz=quiz, order=1)
     s2 = SlideFactory(quiz=quiz, order=2)
 
@@ -31,6 +32,7 @@ def test_create_slide_shifts_orders(api_client):
 @pytest.mark.django_db
 def test_update_slide_move_up_shifts_down(api_client):
     quiz = QuizFactory()
+    api_client.force_authenticate(user=quiz.owner)
     s1 = SlideFactory(quiz=quiz, order=1)
     s2 = SlideFactory(quiz=quiz, order=2)
     s3 = SlideFactory(quiz=quiz, order=3)
@@ -53,6 +55,7 @@ def test_update_slide_move_up_shifts_down(api_client):
 @pytest.mark.django_db
 def test_update_slide_move_down_shifts_up(api_client):
     quiz = QuizFactory()
+    api_client.force_authenticate(user=quiz.owner)
     s1 = SlideFactory(quiz=quiz, order=1)
     s2 = SlideFactory(quiz=quiz, order=2)
     s3 = SlideFactory(quiz=quiz, order=3)
@@ -75,6 +78,7 @@ def test_update_slide_move_down_shifts_up(api_client):
 @pytest.mark.django_db
 def test_invalid_order_rejected(api_client):
     quiz = QuizFactory()
+    api_client.force_authenticate(user=quiz.owner)
 
     resp = api_client.post(
         f"/api/quizzes/{quiz.id}/slides/",

@@ -7,6 +7,7 @@ from backend.srvs.office.tests.factories import QuestionFactory
 @pytest.mark.django_db
 def test_option_order_auto_increments(api_client):
     question = QuestionFactory()
+    api_client.force_authenticate(user=question.slide.quiz.owner)
     url = f"/api/quizzes/{question.slide.quiz_id}/slides/{question.slide_id}/question/options/"
 
     first = api_client.post(url, {"text": "A", "is_correct": False}, format="json")
@@ -21,6 +22,7 @@ def test_option_order_auto_increments(api_client):
 @pytest.mark.django_db
 def test_option_order_create_shifts_existing(api_client):
     question = QuestionFactory()
+    api_client.force_authenticate(user=question.slide.quiz.owner)
     url = f"/api/quizzes/{question.slide.quiz_id}/slides/{question.slide_id}/question/options/"
 
     first = api_client.post(url, {"text": "A", "is_correct": False}, format="json")
@@ -45,6 +47,7 @@ def test_option_order_create_shifts_existing(api_client):
 @pytest.mark.django_db
 def test_option_order_rejects_zero(api_client):
     question = QuestionFactory()
+    api_client.force_authenticate(user=question.slide.quiz.owner)
     url = f"/api/quizzes/{question.slide.quiz_id}/slides/{question.slide_id}/question/options/"
 
     resp = api_client.post(
@@ -59,6 +62,7 @@ def test_option_order_rejects_zero(api_client):
 @pytest.mark.django_db
 def test_option_order_update_shifts_existing(api_client):
     question = QuestionFactory()
+    api_client.force_authenticate(user=question.slide.quiz.owner)
     url = f"/api/quizzes/{question.slide.quiz_id}/slides/{question.slide_id}/question/options/"
 
     first = api_client.post(url, {"text": "A", "is_correct": False}, format="json")

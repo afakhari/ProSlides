@@ -1,6 +1,10 @@
 import logging
 from django.db.models import Prefetch
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
+
 from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard
 
 
@@ -85,15 +89,20 @@ class SlideSerializer(serializers.ModelSerializer):
 class QuizSerializer(serializers.ModelSerializer):
     quiz_id = serializers.IntegerField(source='id', read_only=True)
     slides = SlideSerializer(many=True, read_only=True)
+    owner_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Quiz
         fields = [
-            'quiz_id', 'title', 'created_at', 'updated_at', 'author',
+            'quiz_id', 'title', 'created_at', 'updated_at', 'owner_name',
             'access_code', 'participants_count', 'music_url',
             'background_color', 'background_image_url', 'slides'
         ]
         read_only_fields = ['quiz_id', 'created_at', 'updated_at', 'participants_count']
+
+    def get_owner_name(self, obj):
+        owner = getattr(obj, "owner", None)
+        return owner.username if owner else None
 
     def validate_access_code(self, value):
         if not value:
@@ -111,13 +120,18 @@ class QuizListSerializer(serializers.ModelSerializer):
     quiz_name = serializers.CharField(source='title', read_only=True)
     last_update = serializers.DateTimeField(source='updated_at', read_only=True)
     slides_count = serializers.IntegerField(read_only=True)
+    owner_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Quiz
         fields = [
             'quiz_id', 'quiz_name', 'last_update', 'created_at',
-            'access_code', 'participants_count', 'slides_count'
+            'access_code', 'participants_count', 'slides_count', 'owner_name'
         ]
+
+    def get_owner_name(self, obj):
+        owner = getattr(obj, "owner", None)
+        return owner.username if owner else None
 
 
 class ExportSerializer(serializers.ModelSerializer):
@@ -172,30 +186,47 @@ class ExportSerializer(serializers.ModelSerializer):
 
 
 class PlayerSessionSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField(write_only=True, required=False)
+
     class Meta:
         model = PlayerSession
-        fields = ['rust_session_id', 'quiz', 'player_name', 'avatar']
+        fields = ['rust_session_id', 'user_id', 'quiz', 'player_name', 'avatar']
+
+    def validate(self, attrs):
+        session_id = attrs.get('rust_session_id') or attrs.get('user_id')
+        if not session_id:
+            raise serializers.ValidationError({'rust_session_id': 'This field is required.'})
+        attrs['rust_session_id'] = session_id
+        attrs.pop('user_id', None)
+        return attrs
 
 
 class LeaderboardEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Leaderboard
-        fields = ['rust_session_id', 'player_name',
-                  'avatar', 'score', 'time_taken', 'rank']
+        fields = ['rust_session_id', 'player_name', 'avatar', 'score', 'time_taken', 'rank']
 
 
 class LeaderboardReceiveItemSerializer(serializers.Serializer):
-    rust_session_id = serializers.CharField(max_length=255)
+    rust_session_id = serializers.CharField(max_length=255, required=False)
+    user_id = serializers.CharField(max_length=255, required=False)
     player_name = serializers.CharField(max_length=100)
     avatar = serializers.CharField(max_length=10)
     score = serializers.IntegerField()
     time_taken = serializers.FloatField()
     rank = serializers.IntegerField()
 
+    def validate(self, attrs):
+        session_id = attrs.get('rust_session_id') or attrs.get('user_id')
+        if not session_id:
+            raise serializers.ValidationError({'rust_session_id': 'This field is required.'})
+        attrs['rust_session_id'] = session_id
+        attrs.pop('user_id', None)
+        return attrs
+
 
 class LeaderboardReceiveSerializer(serializers.Serializer):
     leaderboard = LeaderboardReceiveItemSerializer(many=True)
-
 
 class QuestionOptionResultSerializer(serializers.Serializer):
     option_id = serializers.IntegerField(min_value=1)
@@ -204,3 +235,72 @@ class QuestionOptionResultSerializer(serializers.Serializer):
 
 class QuestionResultsReceiveSerializer(serializers.Serializer):
     options = QuestionOptionResultSerializer(many=True)
+
+
+User = get_user_model()
+
+
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    email = serializers.EmailField()
+
+    class Meta:
+        model = User
+        fields = ["username", "email", "password"]
+
+    def validate_email(self, value):
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("email already in use")
+        return User.objects.normalize_email(value)
+
+    def validate_username(self, value):
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("username already in use")
+        return value
+
+    def validate_password(self, value):
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
+
+    def create(self, validated_data):
+        user = User(
+            username=validated_data["username"],
+            email=validated_data.get("email"),
+            is_active=False,
+        )
+        user.set_password(validated_data["password"])
+        user.save()
+        return user
+
+
+class VerifyEmailSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField(min_length=6, max_length=6)
+
+
+class ResendVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class GoogleAuthSerializer(serializers.Serializer):
+    token = serializers.CharField()
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True)
+
+    def validate_new_password(self, value):
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
