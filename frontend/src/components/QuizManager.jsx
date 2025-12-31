@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/confirm-dialog";
@@ -21,7 +21,7 @@ import { clearAuthStorage, getRefreshToken } from "../utils/auth";
 
 export default function QuizManager({ onNewPresentation }) {
   const navigate = useNavigate();
-  const [loggedInUser, setLoggedInUser] = useState(() =>
+  const [loggedInUser] = useState(() =>
     localStorage.getItem("auth.name") || "You"
   );
   const [loading, setLoading] = useState(true);
@@ -33,7 +33,7 @@ export default function QuizManager({ onNewPresentation }) {
   // Load quizzes from API on mount
   const [quizzes, setQuizzes] = useState([]);
 
-  const fetchQuizzes = async () => {
+  const fetchQuizzes = useCallback(async () => {
     try {
       setLoading(true);
       // Add a small delay for better UX
@@ -73,11 +73,11 @@ export default function QuizManager({ onNewPresentation }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loggedInUser]);
 
   useEffect(() => {
     fetchQuizzes();
-  }, []);
+  }, [fetchQuizzes]);
 
   useEffect(() => {
     const promptFlag = localStorage.getItem("auth.promptSetPassword");
@@ -92,7 +92,6 @@ export default function QuizManager({ onNewPresentation }) {
   const [showMenu, setShowMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState("bottom"); // 'top' or 'bottom'
   const [showShareModal, setShowShareModal] = useState(null);
-  const [templatesExpanded, setTemplatesExpanded] = useState(true);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [renamingQuiz, setRenamingQuiz] = useState(null);
   const [newQuizName, setNewQuizName] = useState("");
@@ -168,11 +167,6 @@ export default function QuizManager({ onNewPresentation }) {
       },
       onClose: () => setConfirmDialog((prev) => ({ ...prev, isOpen: false })),
     });
-  };
-
-  // Helper function to close confirmation dialog
-  const closeConfirmDialog = () => {
-    setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
   };
 
   // Helper function to parse date strings in "DD Mon YYYY" format

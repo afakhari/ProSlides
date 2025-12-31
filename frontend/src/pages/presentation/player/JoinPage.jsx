@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import EmojiPicker from "emoji-picker-react";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 
-export default function PlayerJoinPage({ roomId, quiz, ...inp }) {
+export default function PlayerJoinPage({ roomId, quiz }) {
   const [players, setPlayers] = useState([]);
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("🧙");

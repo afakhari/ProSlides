@@ -123,9 +123,42 @@ function formatCountdown(totalSeconds) {
 async function parseJson(response) {
   try {
     return await response.json();
-  } catch (error) {
+  } catch {
     return null;
   }
+}
+
+const GOOGLE_COOKIE_HELP_URL =
+  "https://support.google.com/accounts/answer/61416?hl=en";
+
+function getCookieSettingsUrl() {
+  if (typeof navigator === "undefined") return "";
+  const ua = navigator.userAgent || "";
+  if (ua.includes("Edg/")) return "edge://settings/content/cookies";
+  if (ua.includes("Firefox/")) return "about:preferences#privacy";
+  if (ua.includes("Chrome/") && !ua.includes("Edg/")) {
+    return "chrome://settings/cookies";
+  }
+  if (ua.includes("Safari/") && !ua.includes("Chrome/")) {
+    return "https://support.apple.com/guide/safari/manage-cookies-sfri11471/mac";
+  }
+  return "";
+}
+
+function getGooglePromptReason(notification) {
+  if (!notification) return "";
+  if (notification.isNotDisplayed?.()) {
+    return notification.getNotDisplayedReason?.() || "";
+  }
+  if (notification.isSkippedMoment?.()) {
+    return notification.getSkippedReason?.() || "";
+  }
+  return "";
+}
+
+function isCookieBlockedReason(reason) {
+  if (!reason) return false;
+  return /cookie|storage/i.test(reason);
 }
 
 function GoogleIcon() {
@@ -395,6 +428,10 @@ export default function AuthPage() {
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const DEFAULT_OTP_TTL_SECONDS = 600;
   const PASSWORD_PROMPT_FLAG = "auth.promptSetPassword";
+  const cookieSettingsUrl = useMemo(() => getCookieSettingsUrl(), []);
+  const cookieSettingsLabel = cookieSettingsUrl
+    ? "Open cookie settings"
+    : "Open cookie help";
 
   const isSignup = mode === "signup";
   const isVerify = mode === "verify";
@@ -600,6 +637,25 @@ export default function AuthPage() {
     localStorage.setItem(PASSWORD_PROMPT_FLAG, "1");
   };
 
+  const handleOpenCookieSettings = () => {
+    const targetUrl = cookieSettingsUrl || GOOGLE_COOKIE_HELP_URL;
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleOpenCookieHelp = () => {
+    window.open(GOOGLE_COOKIE_HELP_URL, "_blank", "noopener,noreferrer");
+  };
+
+  const handleGooglePromptMoment = (notification) => {
+    const reason = getGooglePromptReason(notification);
+    if (!reason || !isCookieBlockedReason(reason)) return;
+    setStatus({
+      type: "google-cookies",
+      message:
+        "Google sign-in was blocked by your browser's cookie settings. Enable third-party cookies or allow accounts.google.com, then try again.",
+    });
+  };
+
   const navigateToDashboard = useCallback(() => {
     navigate("/manager/panel");
   }, [navigate]);
@@ -710,7 +766,16 @@ export default function AuthPage() {
       });
       return;
     }
-    window.google.accounts.id.prompt();
+    setStatus(null);
+    if (typeof navigator !== "undefined" && navigator.cookieEnabled === false) {
+      setStatus({
+        type: "google-cookies",
+        message:
+          "Cookies are disabled in your browser. Enable cookies and try Google sign-in again.",
+      });
+      return;
+    }
+    window.google.accounts.id.prompt(handleGooglePromptMoment);
   };
 
   const handleLogin = async () => {
@@ -1289,11 +1354,11 @@ export default function AuthPage() {
             <div
               className={`mb-3 rounded-xl px-3 py-2 text-left text-xs ${status.type === "error"
                   ? "bg-[#fee2e2] text-[#991b1b]"
-                  : status.type === "network"
+                  : status.type === "network" || status.type === "google-cookies"
                     ? "bg-[#fef9c3] text-[#92400e]"
                     : status.type === "email-exists"
                       ? "bg-[#ede9fe] text-[#4c1d95]"
-                    : "bg-[#e0f2fe] text-[#0c4a6e]"
+                      : "bg-[#e0f2fe] text-[#0c4a6e]"
                 }`}
               role={status.type === "error" ? "alert" : "status"}
               aria-live={status.type === "error" ? "assertive" : "polite"}
@@ -1308,6 +1373,33 @@ export default function AuthPage() {
                 >
                   Try again
                 </button>
+              )}
+              {status.type === "google-cookies" && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenCookieSettings}
+                    className="inline-flex items-center rounded-md border border-[#fcd34d] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#92400e] hover:bg-[#fef08a]"
+                  >
+                    {cookieSettingsLabel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    className="inline-flex items-center rounded-md border border-[#fcd34d] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#92400e] hover:bg-[#fef08a]"
+                  >
+                    Try Google again
+                  </button>
+                  {cookieSettingsUrl && (
+                    <button
+                      type="button"
+                      onClick={handleOpenCookieHelp}
+                      className="inline-flex items-center rounded-md border border-[#fcd34d] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#92400e] hover:bg-[#fef08a]"
+                    >
+                      Learn how
+                    </button>
+                  )}
+                </div>
               )}
               {status.type === "email-exists" && (
                 <div className="mt-2 flex flex-wrap gap-2">
