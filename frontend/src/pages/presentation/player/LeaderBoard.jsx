@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import { getColorForUser } from "../../../lib/colorUtils";
 
@@ -51,8 +51,14 @@ import { getColorForUser } from "../../../lib/colorUtils";
 // ];
 
 function PlayerLeaderBoard({ players, quiz }) {
-  // Ensure players is always an array to prevent crashes
-  const validPlayers = Array.isArray(players) ? players : [];
+  // Ensure players is always an array to prevent crashes and filter out invalid entries
+  const validPlayers = useMemo(
+    () =>
+      (Array.isArray(players) ? players : []).filter(
+        (p) => p && typeof p === "object"
+      ),
+    [players]
+  );
 
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
@@ -103,15 +109,15 @@ function PlayerLeaderBoard({ players, quiz }) {
       color: getColorForUser(p.user_id),
     }));
     setDisplayedPlayers(processedPlayers);
+  }, [validPlayers, currentUserId]);
 
+  useEffect(() => {
     // Trigger animation only if not already animated
-    if (!animateBars) {
-      const t = setTimeout(() => {
-        setAnimateBars(true);
-      }, 500);
-      return () => clearTimeout(t);
-    }
-  }, [validPlayers, currentUserId, animateBars]);
+    const t = setTimeout(() => {
+      setAnimateBars(true);
+    }, 500);
+    return () => clearTimeout(t);
+  }, []);
 
   // Calculate dynamic background style from quiz data
   const backgroundStyle = {
@@ -151,7 +157,7 @@ function PlayerLeaderBoard({ players, quiz }) {
           >
             <ul className="space-y-4 w-full flex flex-col items-stretch py-2">
               <AnimatePresence>
-                {displayedPlayers.map((p) => {
+                {displayedPlayers.map((p, index) => {
                   const isHidden = hiddenNames.includes(p.rank);
                   const scoreVal = parseFloat(p.total_points) || 0;
                   const hasScore = scoreVal > 0;
@@ -160,8 +166,8 @@ function PlayerLeaderBoard({ players, quiz }) {
 
                   return (
                     <Motion.li
-                      key={p.user_id || p.rank}
-                      id={`player-${p.user_id}`}
+                      key={p.user_id || p.rank || index}
+                      id={`player-${p.user_id || index}`}
                       layout
                       initial={{
                         opacity: 0,
@@ -236,7 +242,7 @@ function PlayerLeaderBoard({ players, quiz }) {
                       >
                         {/* Colored fill - only show if score > 0 */}
                         {hasScore && (
-                          <motion.div
+                          <Motion.div
                             className={`absolute left-0 top-0 h-full z-10 rounded-lg`}
                             style={{
                               backgroundColor: p.color,

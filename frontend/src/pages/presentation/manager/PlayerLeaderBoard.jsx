@@ -163,7 +163,7 @@ function ManagerPlayerLeaderBoard({
                             {/* Fixed-width translucent track */}
                             <div className="relative overlay-hidden bg-white/10 w-full h-14 mr-3">
                               {/* Colored fill */}
-                              <motion.div
+                              <Motion.div
                                 className={`absolute left-0 top-0 h-full z-10`}
                                 style={{ backgroundColor: p.color }}
                                 initial={{ width: 0 }}
