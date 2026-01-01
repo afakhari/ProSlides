@@ -238,7 +238,7 @@ function PlayerLeaderBoard({ players, quiz }) {
                       >
                         {/* Colored fill - only show if score > 0 */}
                         {hasScore && (
-                          <motion.div
+                          <Motion.div
                             className={`absolute left-0 top-0 h-full z-10 rounded-lg`}
                             style={{
                               backgroundColor: p.color,
