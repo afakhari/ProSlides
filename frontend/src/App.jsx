@@ -90,6 +90,7 @@ export default function App() {
             { auth: false }
           );
           const data = await res.json();
+          console.log("[AccessCodeResolver] API Response:", data);
 
           if (!mounted) return;
 
@@ -168,14 +169,23 @@ export default function App() {
     // Initialize remoteQuiz with initialQuizData if available (for player)
     useEffect(() => {
       if (initialQuizData && role === "player") {
+        console.log(
+          "[AppPresentation] Initializing player with:",
+          initialQuizData
+        );
+
+        // Handle potential flat structure or nested structure for background
+        const rawBg = initialQuizData.background || {};
+        const background = {
+          color: rawBg.color || initialQuizData.background_color || "#1e1e2e",
+          image: rawBg.image || initialQuizData.background_image || "",
+        };
+
         setRemoteQuiz({
           quiz_id: initialQuizData.quiz_id,
           title: initialQuizData.title || "",
           access_code: initialQuizData.access_code || "",
-          background: initialQuizData.background || {
-            color: "#1e1e2e",
-            image: "",
-          },
+          background: background,
           music_url: initialQuizData.music_url || "",
           slides: [], // Player doesn't need full slides initially
         });
