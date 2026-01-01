@@ -1850,11 +1850,19 @@ class GoogleAuthView(APIView):
             )
 
         try:
-            id_info = id_token.verify_oauth2_token(
-                token,
-                google_requests.Request(),
-                settings.GOOGLE_CLIENT_ID,
-            )
+            if getattr(settings, "GOOGLE_OAUTH_CERTS_URL", ""):
+                id_info = id_token.verify_token(
+                    token,
+                    google_requests.Request(),
+                    audience=settings.GOOGLE_CLIENT_ID,
+                    certs_url=settings.GOOGLE_OAUTH_CERTS_URL,
+                )
+            else:
+                id_info = id_token.verify_oauth2_token(
+                    token,
+                    google_requests.Request(),
+                    settings.GOOGLE_CLIENT_ID,
+                )
         except ValueError:
             return Response(
                 {"detail": "Invalid Google token"},

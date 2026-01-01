@@ -17,6 +17,7 @@ DEBUG = env.bool("DEBUG", False)
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
 EXPORT_SERVICE_TOKEN = env.str("EXPORT_SERVICE_TOKEN", default="")
 GOOGLE_CLIENT_ID = env.str("GOOGLE_CLIENT_ID", default="")
+GOOGLE_OAUTH_CERTS_URL = env.str("GOOGLE_OAUTH_CERTS_URL", default="")
 
 # Application definition
 INSTALLED_APPS = [
