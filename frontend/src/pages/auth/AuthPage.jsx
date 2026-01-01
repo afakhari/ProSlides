@@ -495,7 +495,7 @@ export default function AuthPage() {
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
   const codeRef = useRef(null);
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || "").trim();
   const DEFAULT_OTP_TTL_SECONDS = 600;
   const PASSWORD_PROMPT_FLAG = "auth.promptSetPassword";
   const cookieSettingsUrl = useMemo(() => getCookieSettingsUrl(), []);
@@ -796,13 +796,17 @@ export default function AuthPage() {
   useEffect(() => {
     if (!googleClientId) return;
     const scriptId = "google-identity";
+    const shouldUseFedcm =
+      typeof window !== "undefined" &&
+      window.isSecureContext &&
+      !["localhost", "127.0.0.1"].includes(window.location.hostname);
     const initialize = () => {
       if (!window.google?.accounts?.id) return;
       window.google.accounts.id.initialize({
         client_id: googleClientId,
         callback: handleGoogleResponse,
         ux_mode: "popup",
-        use_fedcm_for_prompt: true,
+        use_fedcm_for_prompt: shouldUseFedcm,
       });
       setGoogleReady(true);
     };
