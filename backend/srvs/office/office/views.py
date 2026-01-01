@@ -220,6 +220,9 @@ class QuizViewSet(viewsets.ModelViewSet):
                 type=openapi.TYPE_OBJECT,
                 properties={
                     "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                    "background_color": openapi.Schema(type=openapi.TYPE_STRING),
+                    "background_image_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                    "music_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
                 },
             ),
             400: openapi.Response("Missing access_code"),
@@ -241,13 +244,25 @@ class QuizViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        quiz = Quiz.objects.filter(access_code=access_code).values("id").first()
+        quiz = (
+            Quiz.objects
+            .filter(access_code=access_code)
+            .values("id", "background_color", "background_image_url", "music_url")
+            .first()
+        )
         if not quiz:
             return Response(
                 {"detail": "Quiz not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        return Response({"quiz_id": quiz["id"]})
+        return Response(
+            {
+                "quiz_id": quiz["id"],
+                "background_color": quiz["background_color"],
+                "background_image_url": quiz["background_image_url"],
+                "music_url": quiz["music_url"],
+            }
+        )
 
     @swagger_auto_schema(
         operation_description="List quizzes.",

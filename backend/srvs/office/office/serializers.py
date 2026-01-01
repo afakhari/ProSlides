@@ -202,6 +202,9 @@ class PlayerSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PlayerSession
         fields = ['rust_session_id', 'user_id', 'quiz', 'player_name', 'avatar']
+        extra_kwargs = {
+            'rust_session_id': {'required': False},
+        }
 
     def validate(self, attrs):
         session_id = attrs.get('rust_session_id') or attrs.get('user_id')
