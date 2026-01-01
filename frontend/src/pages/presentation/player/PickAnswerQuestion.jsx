@@ -1,5 +1,4 @@
 import { useRef, useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 
@@ -12,9 +11,12 @@ export default function PlayerPickAnswerQuestion({
   const { questionResults, partialQuestionResults } = useServerData();
   const { sendMessage, isConnected } = useWebSocket();
 
+  const questionId = question?.question_id;
+  const questionTime = question?.question_time ?? 0;
+
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [submitted, setSubmitted] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(question?.question_time || 0);
+  const [timeLeft, setTimeLeft] = useState(questionTime);
   const startTime = useRef(Date.now());
 
   // result رو از چند منبع چک کن - مستقیم از context
@@ -31,24 +33,25 @@ export default function PlayerPickAnswerQuestion({
   );
 
   // اگه question نیست، بعد از hooks برگرد
-  if (!question) return null;
 
   // ⏱ تایمر دقیق با اختلاف زمان واقعی (حتی اگر تب عوض شود یا فریز شود)
   useEffect(() => {
+    if (!question) return;
     startTime.current = Date.now();
-    setTimeLeft(question.question_time);
+    setTimeLeft(questionTime);
     // ریست کردن state ها وقتی سوال عوض میشه
     setSelectedOptions([]);
     setSubmitted(false);
-  }, [question.question_id, question.question_time]);
+  }, [question, questionId, questionTime]);
 
   useEffect(() => {
+    if (!question) return;
     let frameId;
     let stopped = false;
     const tick = () => {
       if (stopped) return;
       const elapsed = (Date.now() - startTime.current) / 1000;
-      const left = Math.max(0, question.question_time - elapsed);
+      const left = Math.max(0, questionTime - elapsed);
       setTimeLeft(left);
       if (left > 0) {
         frameId = requestAnimationFrame(tick);
@@ -59,7 +62,7 @@ export default function PlayerPickAnswerQuestion({
       stopped = true;
       cancelAnimationFrame(frameId);
     };
-  }, [question.question_id, question.question_time]);
+  }, [question, questionId, questionTime]);
 
   const handleSelect = (option) => {
     if (submitted || timeLeft <= -1) return;
@@ -79,6 +82,7 @@ export default function PlayerPickAnswerQuestion({
   };
 
   const handleSubmit = () => {
+    if (!question) return;
     // mark submitted for UI
     if (selectedOptions.length > 0) setSubmitted(true);
 
@@ -131,10 +135,10 @@ export default function PlayerPickAnswerQuestion({
   }, [timeLeft]);
 
   const progressPercent =
-    timeLeft >= 0 ? (timeLeft / question.question_time) * 100 : 0;
+    timeLeft >= 0 && questionTime > 0 ? (timeLeft / questionTime) * 100 : 0;
   // نمایش جواب‌ها اگر تایمر تمام شد یا داده result رسید
   const showResults = timeLeft <= -1 || !!result;
-  const options = question.options || [];
+  const options = question?.options || [];
 
   // Calculate dynamic background style from quiz data
   const backgroundStyle = {
@@ -143,6 +147,8 @@ export default function PlayerPickAnswerQuestion({
       : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
+
+  if (!question) return null;
 
   return (
     <div

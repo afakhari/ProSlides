@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useLocation, useNavigate } from "react-router-dom";
+import { motion as Motion, AnimatePresence } from "framer-motion";
 import { getColorForUser } from "../../../lib/colorUtils";
 
 // const players = [
@@ -157,7 +156,7 @@ function PlayerLeaderBoard({ players, quiz }) {
                   const isCurrentUser = p.user_id === currentUserId;
 
                   return (
-                    <motion.li
+                    <Motion.li
                       key={p.user_id || p.rank}
                       id={`player-${p.user_id}`}
                       layout
@@ -195,7 +194,7 @@ function PlayerLeaderBoard({ players, quiz }) {
                     >
                       {/* Glow effect for current user */}
                       {isCurrentUser && (
-                        <motion.div
+                        <Motion.div
                           className="absolute inset-0 rounded-xl pointer-events-none"
                           animate={{
                             boxShadow: [
@@ -309,7 +308,7 @@ function PlayerLeaderBoard({ players, quiz }) {
                           +{Math.round(p.new_points)}
                         </span>
                       </div>
-                    </motion.li>
+                    </Motion.li>
                   );
                 })}
               </AnimatePresence>

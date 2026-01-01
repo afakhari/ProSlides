@@ -10,7 +10,12 @@ from backend.srvs.office.tests.factories import QuizFactory, UserFactory, SlideF
 
 @pytest.mark.django_db
 def test_register_creates_user(api_client: APIClient):
-    payload = {"username": "newuser", "email": "new@example.com", "password": "StrongPass!123"}
+    payload = {
+        "username": "newuser",
+        "email": "new@example.com",
+        "password": "StrongPass!123",
+        "full_name": "New User",
+    }
     resp = api_client.post("/api/auth/register/", payload, format="json")
     assert resp.status_code == 201
     assert resp.data["username"] == "newuser"
@@ -82,7 +87,12 @@ def test_export_requires_auth_or_service_token(api_client: APIClient):
 
 @pytest.mark.django_db
 def test_verify_email_activates_user(api_client: APIClient):
-    payload = {"username": "verifyuser", "email": "verify@example.com", "password": "StrongPass!123"}
+    payload = {
+        "username": "verifyuser",
+        "email": "verify@example.com",
+        "password": "StrongPass!123",
+        "full_name": "Verify User",
+    }
     resp = api_client.post("/api/auth/register/", payload, format="json")
     assert resp.status_code == 201
 
@@ -98,7 +108,12 @@ def test_verify_email_activates_user(api_client: APIClient):
 
 @pytest.mark.django_db
 def test_verify_email_rejects_wrong_code(api_client: APIClient):
-    payload = {"username": "wrongcode", "email": "wrong@example.com", "password": "StrongPass!123"}
+    payload = {
+        "username": "wrongcode",
+        "email": "wrong@example.com",
+        "password": "StrongPass!123",
+        "full_name": "Wrong Code",
+    }
     api_client.post("/api/auth/register/", payload, format="json")
     verification = EmailVerification.objects.get(user__email="wrong@example.com")
 
@@ -112,11 +127,21 @@ def test_verify_email_rejects_wrong_code(api_client: APIClient):
 
 @pytest.mark.django_db
 def test_register_rejects_duplicate_email(api_client: APIClient):
-    payload = {"username": "firstuser", "email": "dup@example.com", "password": "StrongPass!123"}
+    payload = {
+        "username": "firstuser",
+        "email": "dup@example.com",
+        "password": "StrongPass!123",
+        "full_name": "First User",
+    }
     resp1 = api_client.post("/api/auth/register/", payload, format="json")
     assert resp1.status_code == 201
 
-    payload2 = {"username": "seconduser", "email": "dup@example.com", "password": "StrongPass!123"}
+    payload2 = {
+        "username": "seconduser",
+        "email": "dup@example.com",
+        "password": "StrongPass!123",
+        "full_name": "Second User",
+    }
     resp2 = api_client.post("/api/auth/register/", payload2, format="json")
     assert resp2.status_code == 400
 

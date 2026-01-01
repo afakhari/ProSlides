@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion as Motion, AnimatePresence } from "framer-motion";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
@@ -12,6 +12,7 @@ function ManagerPlayerLeaderBoard({
   currentSlide = 1,
   totalSlides = 3,
   roomId,
+  quiz = null,
   players = [],
   quiz,
 }) {
@@ -64,7 +65,7 @@ function ManagerPlayerLeaderBoard({
     return () => clearTimeout(t);
   }, [players]);
 
-  const gameCode = roomId;
+  const accessCode = quiz?.access_code || roomId;
 
   // Calculate dynamic background style from quiz data
   const backgroundStyle = {
@@ -80,14 +81,14 @@ function ManagerPlayerLeaderBoard({
       style={backgroundStyle}
     >
       <TopBar
-        accessCode={quiz?.access_code}
+        accessCode={accessCode}
         showQRButton={true}
         onQRToggle={setShowQRModal}
         isQROpen={showQRModal}
       />
 
       <QRSidebar
-        accessCode={quiz?.access_code}
+        accessCode={accessCode}
         isOpen={showQRModal}
         onClose={() => setShowQRModal(false)}
       />
@@ -139,7 +140,7 @@ function ManagerPlayerLeaderBoard({
                         const widthPercent = calcPercent(p.total_points);
 
                         return (
-                          <motion.li
+                          <Motion.li
                             key={p.user_id || p.rank}
                             layout
                             initial={{ opacity: 0, x: -20 }}
@@ -227,7 +228,7 @@ function ManagerPlayerLeaderBoard({
                                 +{Math.round(p.new_points)}
                               </span>
                             </div>
-                          </motion.li>
+                          </Motion.li>
                         );
                       })}
                     </AnimatePresence>

@@ -31,7 +31,8 @@ from .serializers import (
     ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer,
     QuestionResultsReceiveSerializer, RegisterSerializer, QuizListSerializer,
     VerifyEmailSerializer, ResendVerificationSerializer, GoogleAuthSerializer,
-    PasswordResetRequestSerializer, PasswordResetConfirmSerializer
+    PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
+    TokenWithProfileSerializer,
 )
 from .permissions import IsQuizOwner, IsExportServiceOrQuizOwner, IsServiceToken
 from .pagination import StandardResultsSetPagination
@@ -83,6 +84,7 @@ QUIZ_ITEM_SCHEMA = openapi.Schema(
         "created_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
         "updated_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
         "owner_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+        "owner_full_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
         "access_code": openapi.Schema(type=openapi.TYPE_STRING),
         "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
         "music_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
@@ -279,6 +281,7 @@ class QuizViewSet(viewsets.ModelViewSet):
                             "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
                             "slides_count": openapi.Schema(type=openapi.TYPE_INTEGER),
                             "owner_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                            "owner_full_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
                         },
                     )
                 ),
@@ -289,125 +292,6 @@ class QuizViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='list')
     def list_quizzes(self, request):
         queryset = self.get_queryset()
-        queryset = queryset.annotate(slides_count=Count('slides', distinct=True))
-        queryset = queryset.order_by('-created_at')
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = QuizListSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        serializer = QuizListSerializer(queryset, many=True)
-        return Response(serializer.data)
-
-    def _filter_quizzes_for_request(self, request, queryset):
-        if request.user and request.user.is_authenticated:
-            return queryset.filter(owner=request.user)
-        owner_name = request.query_params.get('owner') or request.query_params.get('author')
-        if owner_name:
-            return queryset.filter(owner__username=owner_name)
-        return queryset.none()
-
-    def _next_copy_title(self, title):
-        match = re.match(r'^(.*)\s\(copy\d+\)$', title)
-        base_title = match.group(1) if match else title
-
-        pattern = re.compile(rf'^{re.escape(base_title)} \(copy(\d+)\)$')
-        existing = Quiz.objects.filter(
-            title__startswith=f"{base_title} (copy"
-        ).values_list('title', flat=True)
-        max_copy = 0
-        for existing_title in existing:
-            matched = pattern.match(existing_title)
-            if matched:
-                max_copy = max(max_copy, int(matched.group(1)))
-        return f"{base_title} (copy{max_copy + 1})"
-
-    @swagger_auto_schema(
-        operation_description="Resolve quiz_id by access_code.",
-        manual_parameters=[
-            openapi.Parameter(
-                "access_code",
-                openapi.IN_QUERY,
-                description="Quiz access code",
-                type=openapi.TYPE_STRING,
-                required=True,
-            )
-        ],
-        responses={
-            200: openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
-                },
-            ),
-            400: openapi.Response("Missing access_code"),
-            404: openapi.Response("Quiz not found"),
-        },
-        tags=["Quizzes"],
-    )
-    @action(
-        detail=False,
-        methods=['get'],
-        url_path='resolve-access-code',
-        permission_classes=[AllowAny],
-    )
-    def resolve_access_code(self, request):
-        access_code = request.query_params.get("access_code", "").strip()
-        if not access_code:
-            return Response(
-                {"detail": "access_code query parameter is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        quiz = Quiz.objects.filter(access_code=access_code).values("id").first()
-        if not quiz:
-            return Response(
-                {"detail": "Quiz not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        return Response({"quiz_id": quiz["id"]})
-
-    @swagger_auto_schema(
-        operation_description="List quizzes.",
-        manual_parameters=PAGINATION_PARAMS,
-        responses={
-            200: openapi.Response(
-                "Paginated quiz list",
-                schema=paginated_response_schema(QUIZ_ITEM_SCHEMA),
-            )
-        },
-        tags=["Quizzes"],
-    )
-    def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
-
-    @swagger_auto_schema(
-        operation_description="Return quiz list for user panel.",
-        manual_parameters=PAGINATION_PARAMS,
-        responses={
-            200: openapi.Response(
-                "Paginated quiz list",
-                schema=paginated_response_schema(
-                    openapi.Schema(
-                        type=openapi.TYPE_OBJECT,
-                        properties={
-                            "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
-                            "quiz_name": openapi.Schema(type=openapi.TYPE_STRING),
-                            "last_update": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
-                            "created_at": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
-                            "access_code": openapi.Schema(type=openapi.TYPE_STRING),
-                            "participants_count": openapi.Schema(type=openapi.TYPE_INTEGER),
-                            "slides_count": openapi.Schema(type=openapi.TYPE_INTEGER),
-                            "owner_name": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
-                        },
-                    )
-                ),
-            )
-        },
-        tags=["Quizzes"],
-    )
-    @action(detail=False, methods=['get'], url_path='list')
-    def list_quizzes(self, request):
-        queryset = self._filter_quizzes_for_request(request, self.get_queryset())
         queryset = queryset.annotate(slides_count=Count('slides', distinct=True))
         queryset = queryset.order_by('-created_at')
         page = self.paginate_queryset(queryset)
@@ -1697,15 +1581,20 @@ class RegisterView(APIView):
             user.is_active = True
             user.save(update_fields=["is_active"])
 
-        return Response(
-            {
-                "username": user.username,
-                "email": user.email,
-                "is_active": user.is_active,
-                "verification_sent": settings.AUTH_REQUIRE_EMAIL_VERIFICATION,
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        response_payload = {
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.first_name,
+            "is_active": user.is_active,
+            "verification_sent": settings.AUTH_REQUIRE_EMAIL_VERIFICATION,
+        }
+        if settings.AUTH_REQUIRE_EMAIL_VERIFICATION:
+            response_payload["resend_seconds"] = settings.EMAIL_VERIFICATION_RESEND_SECONDS
+            response_payload["code_expires_in_seconds"] = (
+                settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES * 60
+            )
+
+        return Response(response_payload, status=status.HTTP_201_CREATED)
 
 
 class VerifyEmailView(APIView):
@@ -1852,8 +1741,14 @@ class ResendVerificationView(APIView):
 
         resend_wait = settings.EMAIL_VERIFICATION_RESEND_SECONDS
         if verification.sent_at and (timezone.now() - verification.sent_at).total_seconds() < resend_wait:
+            remaining = int(resend_wait - (timezone.now() - verification.sent_at).total_seconds())
+            expires_remaining = int((verification.expires_at - timezone.now()).total_seconds())
             return Response(
-                {"detail": "Please wait before requesting a new code."},
+                {
+                    "detail": "Please wait before requesting a new code.",
+                    "retry_after_seconds": max(0, remaining),
+                    "code_expires_in_seconds": max(0, expires_remaining),
+                },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
@@ -1866,7 +1761,13 @@ class ResendVerificationView(APIView):
         verification.save()
         send_verification_email(user, verification.code)
 
-        return Response({"detail": "Verification code sent"})
+        return Response(
+            {
+                "detail": "Verification code sent",
+                "resend_seconds": settings.EMAIL_VERIFICATION_RESEND_SECONDS,
+                "code_expires_in_seconds": settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES * 60,
+            }
+        )
 
 
 class GoogleAuthView(APIView):
@@ -1946,6 +1847,7 @@ class GoogleAuthView(APIView):
             )
 
         email = id_info.get("email")
+        display_name = id_info.get("name", "").strip()
         if not email:
             return Response(
                 {"detail": "Google token did not include an email"},
@@ -1957,14 +1859,18 @@ class GoogleAuthView(APIView):
         if not user:
             user = User.objects.filter(username__iexact=normalized_email).first()
 
+        created = False
         if not user:
             user = User(
                 username=normalized_email,
                 email=normalized_email,
                 is_active=True,
             )
+            if display_name:
+                user.first_name = display_name
             user.set_unusable_password()
             user.save()
+            created = True
         else:
             updated_fields = []
             if not user.is_active:
@@ -1973,16 +1879,24 @@ class GoogleAuthView(APIView):
             if not user.email:
                 user.email = normalized_email
                 updated_fields.append("email")
+            if display_name and not user.first_name:
+                user.first_name = display_name
+                updated_fields.append("first_name")
             if updated_fields:
                 user.save(update_fields=updated_fields)
 
         refresh = RefreshToken.for_user(user)
+        needs_password_setup = not user.has_usable_password()
+        full_name = user.first_name or id_info.get("name", "")
         return Response(
             {
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
                 "email": normalized_email,
                 "name": id_info.get("name", ""),
+                "full_name": full_name,
+                "needs_password_setup": needs_password_setup,
+                "is_new_user": created,
             }
         )
 
@@ -2133,6 +2047,7 @@ class LogoutView(APIView):
 class ThrottledTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "auth"
+    serializer_class = TokenWithProfileSerializer
 
     @swagger_auto_schema(
         operation_description="Obtain access and refresh tokens.",

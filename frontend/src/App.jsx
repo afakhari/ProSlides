@@ -1,25 +1,5 @@
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  useParams,
-  useNavigate,
-} from "react-router-dom";
-import { useState, useEffect } from "react";
-
-import ManagerJoinPage from "./pages/presentation/manager/JoinPage";
-import ManagerPickAnswerQuestion from "./pages/presentation/manager/PickAnswerQuestion";
-import ManagerLeaderBoard from "./pages/presentation/manager/LeaderBoard";
-import ManagerPlayerLeaderBoard from "./pages/presentation/manager/PlayerLeaderBoard";
-import FinalLeaderboard from "./pages/presentation/manager/FinalLeaderboard";
-
-import PlayerJoinPage from "./pages/presentation/player/JoinPage";
-import PlayerPickAnswerQuestion from "./pages/presentation/player/PickAnswerQuestion";
-import PlayerLeaderBoard from "./pages/presentation/player/LeaderBoard";
-
-import Waiting from "./pages/loading/LoadingPage";
-
-import AuthPage from "./pages/auth/AuthPage";
+import { BrowserRouter as Router, Routes, Route, useParams } from "react-router-dom";
+import { useState, useEffect, lazy, Suspense } from "react";
 
 import { QuizSetup } from "./data/mockData";
 import { WebSocketProvider } from "./contexts/WebSocketContext";
@@ -27,35 +7,68 @@ import { ServerDataProvider } from "./contexts/ServerDataContext";
 import { useServerData } from "./hooks/useServerData";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { AudioProvider, useAudio } from "./contexts/AudioContext";
-import SessionDetail from "./pages/report/SessionDetail";
 import { apiFetch } from "./utils/apiFetch";
 
-import HomePage from "./pages/quiz/manager/HomePage";
-import EditorPage from "./pages/quiz/manager/EditorPage";
+const ManagerJoinPage = lazy(() =>
+  import("./pages/presentation/manager/JoinPage")
+);
+const ManagerPickAnswerQuestion = lazy(() =>
+  import("./pages/presentation/manager/PickAnswerQuestion")
+);
+const ManagerLeaderBoard = lazy(() =>
+  import("./pages/presentation/manager/LeaderBoard")
+);
+const FinalLeaderboard = lazy(() =>
+  import("./pages/presentation/manager/FinalLeaderboard")
+);
+
+const PlayerJoinPage = lazy(() =>
+  import("./pages/presentation/player/JoinPage")
+);
+const PlayerPickAnswerQuestion = lazy(() =>
+  import("./pages/presentation/player/PickAnswerQuestion")
+);
+const PlayerLeaderBoard = lazy(() =>
+  import("./pages/presentation/player/LeaderBoard")
+);
+
+const AuthPage = lazy(() => import("./pages/auth/AuthPage"));
+const Waiting = lazy(() => import("./pages/loading/LoadingPage"));
+const SessionDetail = lazy(() => import("./pages/report/SessionDetail"));
+const HomePage = lazy(() => import("./pages/quiz/manager/HomePage"));
+const EditorPage = lazy(() => import("./pages/quiz/manager/EditorPage"));
 
 export default function App() {
   return (
     <Router>
       <ServerDataProvider>
-        <Routes>
-          <Route path="/auth" element={<AuthPage />} />
-          <Route
-            path="/:role/presentation/:roomId"
-            element={<PresentationRouter />}
-          />
-          <Route path="/" element={<AuthPage />} />
-          {/* Access code route - resolves access code to quiz_id and redirects to player presentation */}
-          <Route path="/:accessCode" element={<AccessCodeResolver />} />
-          {/* Manager/Role panel (supports both /manager and any role param) */}
-          <Route path="/:role/panel" element={<HomePage />} />
-          <Route path="/:role/panel/:roomId" element={<EditorPage />} />
-          {/* Catch-all route for any undefined path */}
-          <Route path="*" element={<Waiting />} />
-          <Route
-            path="/:role/panel/:quizId/report"
-            element={<SessionDetail />}
-          />
-        </Routes>
+        <Suspense
+          fallback={
+            <div className="min-h-screen bg-gray-950 flex items-center justify-center text-white text-lg">
+              Loading...
+            </div>
+          }
+        >
+          <Routes>
+            <Route path="/auth" element={<AuthPage />} />
+            <Route
+              path="/:role/presentation/:roomId"
+              element={<PresentationRouter />}
+            />
+            <Route path="/" element={<AuthPage />} />
+            {/* Access code route - resolves access code to quiz_id and redirects to player presentation */}
+            <Route path="/:accessCode" element={<AccessCodeResolver />} />
+            {/* Manager/Role panel (supports both /manager and any role param) */}
+            <Route path="/:role/panel" element={<HomePage />} />
+            <Route path="/:role/panel/:roomId" element={<EditorPage />} />
+            {/* Catch-all route for any undefined path */}
+            <Route path="*" element={<Waiting />} />
+            <Route
+              path="/:role/panel/:quizId/report"
+              element={<SessionDetail />}
+            />
+          </Routes>
+        </Suspense>
       </ServerDataProvider>
     </Router>
   );
