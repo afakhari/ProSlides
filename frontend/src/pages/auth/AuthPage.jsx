@@ -28,6 +28,19 @@ function normalizeErrorValue(value) {
   return String(value);
 }
 
+function getGoogleAuthErrorMessage(payload) {
+  const detail = normalizeErrorValue(payload?.detail || "");
+  if (!detail) return "";
+  const normalized = detail.toLowerCase();
+  if (normalized.includes("not configured")) {
+    return "Google sign-in is not available. Contact support.";
+  }
+  if (normalized.includes("invalid google token")) {
+    return "Google sign-in failed. Please try again.";
+  }
+  return "";
+}
+
 function extractFieldErrors(payload) {
   if (!payload || typeof payload !== "object") return {};
   const errors = {};
@@ -147,11 +160,13 @@ function getCookieSettingsUrl() {
 
 function getGooglePromptReason(notification) {
   if (!notification) return "";
-  if (notification.isNotDisplayed?.()) {
-    return notification.getNotDisplayedReason?.() || "";
-  }
-  if (notification.isSkippedMoment?.()) {
+  if (!notification.getMomentType) return "";
+  const momentType = notification.getMomentType();
+  if (momentType === "skipped") {
     return notification.getSkippedReason?.() || "";
+  }
+  if (momentType === "dismissed") {
+    return notification.getDismissedReason?.() || "";
   }
   return "";
 }
@@ -159,6 +174,76 @@ function getGooglePromptReason(notification) {
 function isCookieBlockedReason(reason) {
   if (!reason) return false;
   return /cookie|storage/i.test(reason);
+}
+
+function getGooglePromptFeedback(reason) {
+  if (!reason) return null;
+  const normalized = String(reason).toLowerCase();
+  if (isCookieBlockedReason(normalized)) {
+    return {
+      type: "google-cookies",
+      message:
+        "Google sign-in was blocked by your browser's cookie settings. Enable third-party cookies or allow accounts.google.com, then try again.",
+    };
+  }
+  if (normalized.includes("browser_not_supported")) {
+    return {
+      type: "error",
+      message:
+        "Google sign-in isn't supported in this browser. Try a modern browser like Chrome or Edge.",
+    };
+  }
+  if (normalized.includes("secure_http_required")) {
+    return {
+      type: "error",
+      message: "Google sign-in requires HTTPS. Please use the secure site.",
+    };
+  }
+  if (
+    normalized.includes("invalid_client") ||
+    normalized.includes("unregistered_origin")
+  ) {
+    return {
+      type: "error",
+      message: "Google login isn't configured for this site. Contact support.",
+    };
+  }
+  if (
+    normalized.includes("opt_out_or_no_session") ||
+    normalized.includes("no_session")
+  ) {
+    return {
+      type: "info",
+      message:
+        "No active Google session found. Sign in to Google and try again.",
+    };
+  }
+  if (normalized.includes("suppressed_by_user")) {
+    return {
+      type: "info",
+      message:
+        "Google sign-in was dismissed. You can continue with email or try again later.",
+    };
+  }
+  if (normalized.includes("issuing_failed")) {
+    return {
+      type: "error",
+      message: "Google sign-in couldn't be completed. Please try again.",
+    };
+  }
+  if (
+    normalized.includes("credential_returned") ||
+    normalized.includes("user_cancel") ||
+    normalized.includes("tap_outside") ||
+    normalized.includes("auto_cancel") ||
+    normalized.includes("cancel")
+  ) {
+    return null;
+  }
+  return {
+    type: "error",
+    message: "Google sign-in is unavailable right now. Please try again.",
+  };
 }
 
 function GoogleIcon() {
@@ -637,12 +722,9 @@ export default function AuthPage() {
 
   const handleGooglePromptMoment = (notification) => {
     const reason = getGooglePromptReason(notification);
-    if (!reason || !isCookieBlockedReason(reason)) return;
-    setStatus({
-      type: "google-cookies",
-      message:
-        "Google sign-in was blocked by your browser's cookie settings. Enable third-party cookies or allow accounts.google.com, then try again.",
-    });
+    const feedback = getGooglePromptFeedback(reason);
+    if (!feedback) return;
+    setStatus(feedback);
   };
 
   const navigateToDashboard = useCallback(() => {
@@ -670,7 +752,8 @@ export default function AuthPage() {
         const payload = await parseJson(googleResponse);
         if (!googleResponse.ok) {
           setFieldErrors(extractFieldErrors(payload));
-          throw new Error(formatError(payload));
+          const friendlyMessage = getGoogleAuthErrorMessage(payload);
+          throw new Error(friendlyMessage || formatError(payload));
         }
 
         const { access, refresh } = payload || {};
@@ -691,6 +774,14 @@ export default function AuthPage() {
 
         navigateToDashboard();
       } catch (error) {
+        if (isNetworkError(error)) {
+          setStatus({
+            type: "network",
+            message:
+              "We couldn't reach the server. Check your connection and try again.",
+          });
+          return;
+        }
         setStatus({
           type: "error",
           message: error.message || "Google login failed.",
@@ -711,6 +802,7 @@ export default function AuthPage() {
         client_id: googleClientId,
         callback: handleGoogleResponse,
         ux_mode: "popup",
+        use_fedcm_for_prompt: true,
       });
       setGoogleReady(true);
     };
