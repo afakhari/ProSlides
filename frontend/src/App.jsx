@@ -178,7 +178,11 @@ export default function App() {
         const rawBg = initialQuizData.background || {};
         const background = {
           color: rawBg.color || initialQuizData.background_color || "#1e1e2e",
-          image: rawBg.image || initialQuizData.background_image || "",
+          image:
+            rawBg.image ||
+            initialQuizData.background_image ||
+            initialQuizData.background_image_url ||
+            "",
         };
 
         setRemoteQuiz({
