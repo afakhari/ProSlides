@@ -66,14 +66,14 @@ export default function LandingPage() {
           <div className="flex items-center gap-3 text-sm font-semibold">
             <button
               type="button"
-              onClick={() => navigate("/login")}
+              onClick={() => (window.location.href = "/login")}
               className="rounded-xl border border-[#e5e7eb] bg-white px-4 py-2 text-[#111827] transition hover:border-[#cbd5f5]"
             >
               Log in
             </button>
             <button
               type="button"
-              onClick={() => navigate("/signup")}
+              onClick={() => (window.location.href = "/signup")}
               className="rounded-xl bg-[#5b2ecf] px-4 py-2 text-white shadow-[0_12px_28px_rgba(91,46,207,0.25)] transition hover:bg-[#4b25b1]"
             >
               Free sign up
@@ -93,7 +93,7 @@ export default function LandingPage() {
         </p>
         <button
           type="button"
-          onClick={() => navigate("/signup")}
+          onClick={() => (window.location.href = "/signup")}
           className="mt-8 rounded-2xl bg-[#5b2ecf] px-8 py-3 text-base font-semibold text-white shadow-[0_18px_40px_rgba(91,46,207,0.3)] transition hover:bg-[#4b25b1]"
         >
           Try it for free

@@ -285,7 +285,7 @@ export default function App() {
       return () => {
         mounted = false;
       };
-    }, [roomId]);
+    }, [role, roomId, initialQuizData]);
 
     const quiz = remoteQuiz ?? QuizSetup;
     const isRemoteReady = !!quiz; // Always ready (remote or fallback)
