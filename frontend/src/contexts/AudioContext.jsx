@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, {
   createContext,
   useContext,
@@ -45,7 +46,6 @@ export function AudioProvider({ children }) {
 
     const CHORD_DURATION = 2; // Faster tempo - 2 seconds per chord
     let currentChord = 0;
-    let beatCount = 0;
 
     const playChord = (time) => {
       const chord = chordProgression[currentChord];
@@ -215,7 +215,6 @@ export function AudioProvider({ children }) {
       }
 
       currentChord = (currentChord + 1) % chordProgression.length;
-      beatCount++;
     };
 
     // Schedule chord progression

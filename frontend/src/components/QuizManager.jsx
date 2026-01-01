@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/confirm-dialog";
@@ -16,24 +16,29 @@ import {
   X,
 } from "lucide-react";
 import ShareMenu from "./ShareMenu";
+import { apiFetch } from "../utils/apiFetch";
+import { clearAuthStorage, getRefreshToken } from "../utils/auth";
 
 export default function QuizManager({ onNewPresentation }) {
   const navigate = useNavigate();
-  const [loggedInUser, setLoggedInUser] = useState("HesamAzmoun");
+  const [loggedInUser] = useState(() =>
+    localStorage.getItem("auth.name") || "You"
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [passwordPromptVisible, setPasswordPromptVisible] = useState(false);
+  const [passwordPromptStatus, setPasswordPromptStatus] = useState(null);
+  const [passwordPromptLoading, setPasswordPromptLoading] = useState(false);
 
   // Load quizzes from API on mount
   const [quizzes, setQuizzes] = useState([]);
 
-  const fetchQuizzes = async () => {
+  const fetchQuizzes = useCallback(async () => {
     try {
       setLoading(true);
       // Add a small delay for better UX
       await new Promise((resolve) => setTimeout(resolve, 100));
-      const response = await fetch(
-        "https://api.proslides.ir/api/quizzes/list/"
-      );
+      const response = await apiFetch("/quizzes/list/");
       if (!response.ok) {
         throw new Error("Failed to fetch quizzes");
       }
@@ -47,7 +52,7 @@ export default function QuizManager({ onNewPresentation }) {
         slides: quiz.slides_count,
         participants: quiz.participants_count,
         members: "",
-        createdBy: loggedInUser, // API doesn't provide this, using fallback
+        createdBy: quiz.owner_full_name || quiz.owner_name || loggedInUser,
         lastUpdated: new Date(quiz.last_update).toLocaleDateString("en-GB", {
           day: "2-digit",
           month: "short",
@@ -68,10 +73,18 @@ export default function QuizManager({ onNewPresentation }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loggedInUser]);
 
   useEffect(() => {
     fetchQuizzes();
+  }, [fetchQuizzes]);
+
+  useEffect(() => {
+    const promptFlag = localStorage.getItem("auth.promptSetPassword");
+    const email = localStorage.getItem("auth.email");
+    if (promptFlag && email) {
+      setPasswordPromptVisible(true);
+    }
   }, []);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,7 +92,6 @@ export default function QuizManager({ onNewPresentation }) {
   const [showMenu, setShowMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState("bottom"); // 'top' or 'bottom'
   const [showShareModal, setShowShareModal] = useState(null);
-  const [templatesExpanded, setTemplatesExpanded] = useState(true);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [renamingQuiz, setRenamingQuiz] = useState(null);
   const [newQuizName, setNewQuizName] = useState("");
@@ -103,14 +115,11 @@ export default function QuizManager({ onNewPresentation }) {
   const handleNewPresentation = async () => {
     try {
       setCreatingQuiz(true);
-      const response = await fetch("https://api.proslides.ir/api/quizzes/", {
+      const response = await apiFetch("/quizzes/", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+        json: {
           title: "Untitled Presentation",
-        }),
+        },
       });
 
       if (!response.ok) {
@@ -158,11 +167,6 @@ export default function QuizManager({ onNewPresentation }) {
       },
       onClose: () => setConfirmDialog((prev) => ({ ...prev, isOpen: false })),
     });
-  };
-
-  // Helper function to close confirmation dialog
-  const closeConfirmDialog = () => {
-    setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
   };
 
   // Helper function to parse date strings in "DD Mon YYYY" format
@@ -244,15 +248,9 @@ export default function QuizManager({ onNewPresentation }) {
         setDeletingQuizIds((prev) => [...prev, quizId]);
       }
 
-      const response = await fetch(
-        `https://api.proslides.ir/api/quizzes/${quizId}/`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await apiFetch(`/quizzes/${quizId}/`, {
+        method: "DELETE",
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to delete quiz: ${response.statusText}`);
@@ -275,18 +273,12 @@ export default function QuizManager({ onNewPresentation }) {
   // Rename a quiz via API
   const renameQuiz = async (quizId, newName) => {
     try {
-      const response = await fetch(
-        `https://api.proslides.ir/api/quizzes/${quizId}/`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            title: newName.trim(),
-          }),
-        }
-      );
+      const response = await apiFetch(`/quizzes/${quizId}/`, {
+        method: "PATCH",
+        json: {
+          title: newName.trim(),
+        },
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to rename quiz: ${response.statusText}`);
@@ -314,23 +306,9 @@ export default function QuizManager({ onNewPresentation }) {
         throw new Error("Quiz not found");
       }
 
-      const response = await fetch(
-        `https://api.proslides.ir/api/quizzes/${quizId}/reset-result/`,
-        {
-          method: "POST",
-          // headers: {
-          //   "Content-Type": "application/json",
-          // },
-          // body: JSON.stringify({
-          //   title: quiz.name,
-          //   author: quiz.createdBy,
-          //   access_code: quiz.accessCode,
-          //   music_url: "",
-          //   background_color: "",
-          //   background_image_url: "",
-          // }),
-        }
-      );
+      const response = await apiFetch(`/quizzes/${quizId}/reset-result/`, {
+        method: "POST",
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to reset quiz results: ${response.statusText}`);
@@ -465,23 +443,16 @@ export default function QuizManager({ onNewPresentation }) {
 
       const newName = `${quiz.name} (copy ${maxCopyNumber + 1})`;
 
-      const response = await fetch(
-        `https://api.proslides.ir/api/quizzes/${quiz.id}/duplicate/`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            title: newName,
-            author: quiz.createdBy,
-            access_code: generateAccessCode(), // Generate new access code for duplicate
-            music_url: "",
-            background_color: "",
-            background_image_url: "",
-          }),
-        }
-      );
+      const response = await apiFetch(`/quizzes/${quiz.id}/duplicate/`, {
+        method: "POST",
+        json: {
+          title: newName,
+          access_code: generateAccessCode(), // Generate new access code for duplicate
+          music_url: "",
+          background_color: "",
+          background_image_url: "",
+        },
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to duplicate quiz: ${response.statusText}`);
@@ -529,6 +500,67 @@ export default function QuizManager({ onNewPresentation }) {
   // Handle edit click
   const handleEdit = (quizId) => {
     navigate(`/manager/panel/${quizId}/`);
+  };
+
+  const handleLogout = async () => {
+    setShowProfileMenu(false);
+    try {
+      const refresh = getRefreshToken();
+      if (refresh) {
+        const response = await apiFetch("/auth/logout/", {
+          method: "POST",
+          json: { refresh },
+        });
+        if (!response.ok) {
+          console.warn("Logout request failed:", response.statusText);
+        }
+      }
+    } catch (err) {
+      console.warn("Logout error:", err);
+    } finally {
+      clearAuthStorage();
+      navigate("/auth");
+    }
+  };
+
+  const dismissPasswordPrompt = () => {
+    localStorage.removeItem("auth.promptSetPassword");
+    setPasswordPromptVisible(false);
+  };
+
+  const sendPasswordSetupEmail = async () => {
+    const email = localStorage.getItem("auth.email");
+    if (!email) {
+      setPasswordPromptStatus({
+        type: "error",
+        message: "Email address not found. Please log in again.",
+      });
+      return;
+    }
+    setPasswordPromptLoading(true);
+    setPasswordPromptStatus(null);
+    try {
+      const response = await apiFetch("/auth/password/reset/", {
+        method: "POST",
+        auth: false,
+        json: { email },
+      });
+      if (!response.ok) {
+        throw new Error("Unable to send password setup email.");
+      }
+      setPasswordPromptStatus({
+        type: "success",
+        message: "Password setup link sent. Check your inbox.",
+      });
+      dismissPasswordPrompt();
+    } catch (err) {
+      setPasswordPromptStatus({
+        type: "error",
+        message: err.message || "Unable to send password setup email.",
+      });
+    } finally {
+      setPasswordPromptLoading(false);
+    }
   };
 
   // Check menu position and adjust if needed
@@ -635,11 +667,10 @@ export default function QuizManager({ onNewPresentation }) {
                 <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg w-48 z-50">
                   <button
                     onClick={() => {
-                      setShowProfileMenu(false);
-                      // Add logout logic here
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
-                  >
+                    handleLogout();
+                  }}
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                >
                     <LogOut className="w-4 h-4" />
                     Logout
                   </button>
@@ -651,6 +682,45 @@ export default function QuizManager({ onNewPresentation }) {
 
         {/* Content with top padding to account for fixed header */}
         <div className="pt-24 px-6">
+          {passwordPromptVisible && (
+            <div className="mb-6 rounded-xl border border-purple-200 bg-white px-4 py-3 text-sm text-purple-900 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="font-semibold">Set a password for your account</div>
+                  <div className="text-xs text-purple-700">
+                    You signed up with Google. Set a password to log in without Google.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={sendPasswordSetupEmail}
+                    disabled={passwordPromptLoading}
+                    className="rounded-md bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {passwordPromptLoading ? "Sending..." : "Send link"}
+                  </button>
+                  <button
+                    onClick={dismissPasswordPrompt}
+                    className="rounded-md border border-purple-200 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-50"
+                  >
+                    Later
+                  </button>
+                </div>
+              </div>
+              {passwordPromptStatus && (
+                <div
+                  className={`mt-2 text-xs ${
+                    passwordPromptStatus.type === "error"
+                      ? "text-red-600"
+                      : "text-green-600"
+                  }`}
+                >
+                  {passwordPromptStatus.message}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* My Presentations Section */}
           <div className="mb-6">
             {/* <h3 className="text-xs uppercase text-gray-500 mb-2">

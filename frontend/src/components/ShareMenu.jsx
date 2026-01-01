@@ -213,6 +213,7 @@
 import { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import { X, Check, Loader2 } from "lucide-react";
+import { apiFetch } from "../utils/apiFetch";
 
 export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
   const [section, setSection] = useState("invite");
@@ -245,23 +246,18 @@ export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
     setSaveSuccess(false);
     
     try {
-      const response = await fetch(`https://api.proslides.ir/api/quizzes/${quizId}/`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          // اگر نیاز به احراز هویت دارید، هدر Authorization را اضافه کنید
-          // 'Authorization': `Bearer ${token}`,
+      const response = await apiFetch(`/quizzes/${quizId}/`, {
+        method: "PATCH",
+        json: {
+          access_code: code,
         },
-        body: JSON.stringify({
-          access_code: code
-        })
       });
       
       if (!response.ok) {
         throw new Error(`Failed to save: ${response.statusText}`);
       }
       
-      const data = await response.json();
+      await response.json();
       setSaveSuccess(true);
       
       // پیام موفقیت بعد از 3 ثانیه پاک می‌شود

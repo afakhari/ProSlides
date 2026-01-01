@@ -30,6 +30,8 @@ def test_question_create_rejects_content_slide(api_client):
     quiz = _create_quiz(owner)
     slide = SlideFactory(quiz=quiz, slide_type=2)
 
+    if "owner" in {field.name for field in Quiz._meta.get_fields()}:
+        api_client.force_authenticate(user=owner)
     payload = {
         "title": "Bad Question",
         "text": "Should be rejected",
@@ -55,6 +57,8 @@ def test_content_update_rejects_question_slide(api_client):
     quiz = _create_quiz(owner)
     slide = SlideFactory(quiz=quiz, slide_type=1)
 
+    if "owner" in {field.name for field in Quiz._meta.get_fields()}:
+        api_client.force_authenticate(user=owner)
     resp = api_client.put(
         f"/api/quizzes/{quiz.id}/slides/{slide.id}/content/",
         {"title": "Should be rejected"},

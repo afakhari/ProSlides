@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  DefaultFooterStats,
   DefaultChatMessages,
   FooterMenuItems,
   KeyboardShortcuts,
@@ -10,9 +9,6 @@ import ReactionEffects from "./ReactionEffects";
 
 export default function Footer({
   currentSlide = 1,
-  totalSlides = 3,
-  stats = DefaultFooterStats,
-  showQRButton = true,
   onQRToggle = null,
   isQROpen = false,
   onShowLeaderboard = null,

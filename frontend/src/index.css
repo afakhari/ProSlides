@@ -1,6 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
-
-@import "tailwindcss/preflight" /* instead @tailwind base */ @tailwind utilities; /* Covers both @tailwind utilities & @tailwind components */
 
 /*
 :root {
@@ -150,6 +149,27 @@ body,
 
 .animate-drum-shake {
   animation: drumShake 0.1s ease-in-out infinite;
+}
+
+@keyframes auth-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes auth-card-in {
+  0% {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes soundWave {

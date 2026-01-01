@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('office', '0009_quiz_owner'),
+        ('office', '0008_cleanup_session_id_fields'),
     ]
 
     operations = [

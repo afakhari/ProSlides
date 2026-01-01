@@ -2,7 +2,7 @@ from contextlib import contextmanager
 import logging
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -34,8 +34,6 @@ class OfficeAPITests(TestCase):
 
         quiz_fields = {field.name for field in Quiz._meta.get_fields()}
         quiz_kwargs = {"title": "Test Quiz"}
-        if "author" in quiz_fields:
-            quiz_kwargs["author"] = self.user.username
         if "owner" in quiz_fields:
             quiz_kwargs["owner"] = self.user
         self.quiz = Quiz.objects.create(**quiz_kwargs)
@@ -73,7 +71,7 @@ class OfficeAPITests(TestCase):
         create_url = reverse("quiz-list")
         response = self.client.post(
             create_url,
-            {"title": "New Quiz", "author": self.user.username},
+            {"title": "New Quiz"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -188,6 +186,7 @@ class OfficeAPITests(TestCase):
         self.assertIn("question", question_slide)
         self.assertEqual(len(question_slide["question"]["options"]), 2)
 
+    @override_settings(EXPORT_SERVICE_TOKEN="test-export-token")
     def test_question_results_persists_votes(self):
         url = reverse(
             "question-results",
@@ -199,7 +198,12 @@ class OfficeAPITests(TestCase):
                 {"option_id": self.option2.id, "number_of_submits": 2},
             ]
         }
-        response = self.client.post(url, payload, format="json")
+        response = self.client.post(
+            url,
+            payload,
+            format="json",
+            HTTP_X_EXPORT_TOKEN="test-export-token",
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.option1.refresh_from_db()
@@ -207,6 +211,7 @@ class OfficeAPITests(TestCase):
         self.assertEqual(self.option1.votes, 5)
         self.assertEqual(self.option2.votes, 2)
 
+    @override_settings(EXPORT_SERVICE_TOKEN="test-export-token")
     def test_question_results_requires_all_options(self):
         url = reverse(
             "question-results",
@@ -216,9 +221,15 @@ class OfficeAPITests(TestCase):
             "options": [{"option_id": self.option1.id, "number_of_submits": 1}]
         }
         with suppress_request_warnings():
-            response = self.client.post(url, payload, format="json")
+            response = self.client.post(
+                url,
+                payload,
+                format="json",
+                HTTP_X_EXPORT_TOKEN="test-export-token",
+            )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    @override_settings(EXPORT_SERVICE_TOKEN="test-export-token")
     def test_leaderboard_receive_creates_entries(self):
         url = reverse(
             "question-leaderboard",
@@ -236,7 +247,12 @@ class OfficeAPITests(TestCase):
                 }
             ]
         }
-        response = self.client.post(url, payload, format="json")
+        response = self.client.post(
+            url,
+            payload,
+            format="json",
+            HTTP_X_EXPORT_TOKEN="test-export-token",
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.assertTrue(PlayerSession.objects.filter(rust_session_id="player-1").exists())

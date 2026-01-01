@@ -33,6 +33,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { buildApiUrl } from "../utils/api";
+import { getAuthHeaders } from "../utils/auth";
 import ShareMenu from "./ShareMenu";
 
 export default function QuizHeader({
@@ -77,16 +79,12 @@ export default function QuizHeader({
     setIsUpdating(true);
     try {
       const response = await axios.patch(
-        `https://api.proslides.ir/api/quizzes/${quizId}/`,
+        buildApiUrl(`/quizzes/${quizId}/`),
         {
           title: trimmedTitle,
         },
         {
-          headers: {
-            "Content-Type": "application/json",
-            // اگر نیاز به Authorization دارید، هدر را اضافه کنید
-            // 'Authorization': `Bearer ${token}`
-          },
+          headers: getAuthHeaders({ "Content-Type": "application/json" }),
         }
       );
 

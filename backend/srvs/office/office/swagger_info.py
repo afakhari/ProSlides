@@ -16,11 +16,24 @@ Stable REST API for authoring and running interactive quizzes.
 - **Player Session**: live participant record.
 - **Leaderboard**: per-question scoring records.
 
+## Authentication
+- `POST /api/auth/register/`
+- `POST /api/auth/verify/`
+- `POST /api/auth/verify/resend/`
+- `POST /api/auth/token/`
+- `POST /api/auth/password/reset/`
+- `POST /api/auth/password/reset/confirm/`
+- `POST /api/auth/logout/`
+- Header: `Authorization: Bearer <access>`
+
 ## Typical Flow
 1) Create a quiz and slides.
 2) Export quiz data for the player client.
 3) Receive leaderboard updates per question.
 4) Use final leaderboard or reset results if needed.
+
+## Error Format
+- Most validation errors return: `{ "detail": "message" }` or field-based errors.
 
 ## Pagination
 Endpoints that return lists use page-number pagination.

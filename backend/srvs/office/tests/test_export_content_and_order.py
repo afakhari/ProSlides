@@ -14,6 +14,7 @@ def test_export_includes_content_slide_fields(api_client):
         content_image_url="http://example.com/img.png",
     )
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.get(f"/api/quizzes/{quiz.id}/export/")
     assert resp.status_code == 200
 
@@ -43,6 +44,7 @@ def test_export_preserves_order_and_inserts_leaderboard(api_client):
         title="Content",
     )
 
+    api_client.force_authenticate(user=quiz.owner)
     resp = api_client.get(f"/api/quizzes/{quiz.id}/export/")
     assert resp.status_code == 200
 

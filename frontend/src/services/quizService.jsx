@@ -205,17 +205,23 @@
 
 
 // services/quizService.js
-import axios from 'axios';
+import axios from "axios";
+import { getApiBase } from "../utils/api";
+import { getAuthHeaders } from "../utils/auth";
 
-const API_BASE_URL = 'https://api.proslides.ir/api';
+const api = axios.create({ baseURL: getApiBase() });
+
+api.interceptors.request.use((config) => {
+  config.headers = { ...config.headers, ...getAuthHeaders() };
+  return config;
+});
 
 export const quizService = {
   // ایجاد کوئیز خالی
   createEmptyQuiz: async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/quizzes/`, {
+      const response = await api.post(`/quizzes/`, {
         title: "Default",
-        author: "anonymous",
         music_url: "",
         background_color: "#ffffff",
         background_image_url: ""
@@ -230,7 +236,7 @@ export const quizService = {
   // دریافت کوئیز
   getQuiz: async (quizId) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/quizzes/${quizId}/`);
+      const response = await api.get(`/quizzes/${quizId}/`);
       return response.data;
     } catch (error) {
       console.error('Error fetching quiz:', error);
@@ -241,7 +247,7 @@ export const quizService = {
   // به‌روزرسانی کوئیز
   updateQuiz: async (quizId, quizData) => {
     try {
-      const response = await axios.put(`${API_BASE_URL}/quizzes/${quizId}/`, quizData);
+      const response = await api.put(`/quizzes/${quizId}/`, quizData);
       return response.data;
     } catch (error) {
       console.error('Error updating quiz:', error);
@@ -251,8 +257,8 @@ export const quizService = {
 
   updateQuizMusic: async (quizId, musicUrl) => {
     try {
-      const response = await axios.patch(
-        `${API_BASE_URL}/quizzes/${quizId}/`,
+      const response = await api.patch(
+        `/quizzes/${quizId}/`,
         { music_url: musicUrl } // تغییر فیلد به music_url
       );
       return response.data;
@@ -275,8 +281,8 @@ export const quizService = {
         payload.background_image_url = backgroundData.background_image_url;
       }
       
-      const response = await axios.patch(
-        `${API_BASE_URL}/quizzes/${quizId}/`,
+      const response = await api.patch(
+        `/quizzes/${quizId}/`,
         payload
       );
       return response.data;
@@ -289,8 +295,8 @@ export const quizService = {
   // دریافت سوال
   getQuestion: async (quizId, slideId) => {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/quizzes/${quizId}/slides/${slideId}/question/`
+      const response = await api.get(
+        `/quizzes/${quizId}/slides/${slideId}/question/`
       );
       return response.data;
     } catch (error) {
@@ -306,8 +312,8 @@ export const quizService = {
   // ایجاد سوال جدید
   createQuestion: async (quizId, slideId, questionData) => {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/quizzes/${quizId}/slides/${slideId}/question/`,
+      const response = await api.post(
+        `/quizzes/${quizId}/slides/${slideId}/question/`,
         questionData
       );
       return response.data;
@@ -320,8 +326,8 @@ export const quizService = {
   // به‌روزرسانی سوال موجود
   updateQuestion: async (quizId, slideId, questionData) => {
     try {
-      const response = await axios.put(
-        `${API_BASE_URL}/quizzes/${quizId}/slides/${slideId}/question/`,
+      const response = await api.put(
+        `/quizzes/${quizId}/slides/${slideId}/question/`,
         questionData
       );
       return response.data;
@@ -334,8 +340,8 @@ export const quizService = {
   // دریافت گزینه‌های سوال
   getOptions: async (quizId, slideId) => {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/quizzes/${quizId}/slides/${slideId}/question/options/`
+      const response = await api.get(
+        `/quizzes/${quizId}/slides/${slideId}/question/options/`
       );
       return response.data;
     } catch (error) {
@@ -347,8 +353,8 @@ export const quizService = {
   // ایجاد گزینه جدید
   createOption: async (quizId, slideId, optionData) => {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/quizzes/${quizId}/slides/${slideId}/question/options/`,
+      const response = await api.post(
+        `/quizzes/${quizId}/slides/${slideId}/question/options/`,
         optionData
       );
       return response.data;
@@ -361,8 +367,8 @@ export const quizService = {
   // به‌روزرسانی گزینه موجود
   updateOption: async (quizId, slideId, optionId, optionData) => {
     try {
-      const response = await axios.put(
-        `${API_BASE_URL}/quizzes/${quizId}/slides/${slideId}/question/options/${optionId}/`,
+      const response = await api.put(
+        `/quizzes/${quizId}/slides/${slideId}/question/options/${optionId}/`,
         optionData
       );
       return response.data;
@@ -375,8 +381,8 @@ export const quizService = {
   // حذف گزینه
   deleteOption: async (quizId, slideId, optionId) => {
     try {
-      await axios.delete(
-        `${API_BASE_URL}/quizzes/${quizId}/slides/${slideId}/question/options/${optionId}/`
+      await api.delete(
+        `/quizzes/${quizId}/slides/${slideId}/question/options/${optionId}/`
       );
     } catch (error) {
       console.error('Error deleting option:', error);
@@ -387,8 +393,8 @@ export const quizService = {
 
   createSlide: async (quizId, slideData) => {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/quizzes/${quizId}/slides/`, 
+      const response = await api.post(
+        `/quizzes/${quizId}/slides/`, 
         slideData
       );
       return response.data;
@@ -401,8 +407,8 @@ export const quizService = {
   // به‌روزرسانی اسلاید (برای show_leaderboard_after)
   updateSlide: async (quizId, slideId, slideData) => {
     try {
-      const response = await axios.put(
-        `${API_BASE_URL}/quizzes/${quizId}/slides/${slideId}/`,
+      const response = await api.put(
+        `/quizzes/${quizId}/slides/${slideId}/`,
         slideData
       );
       return response.data;
@@ -415,8 +421,8 @@ export const quizService = {
   // حذف اسلاید
   deleteSlide: async (quizId, slideId) => {
     try {
-      await axios.delete(
-        `${API_BASE_URL}/quizzes/${quizId}/slides/${slideId}/`
+      await api.delete(
+        `/quizzes/${quizId}/slides/${slideId}/`
       );
     } catch (error) {
       console.error('Error deleting slide:', error);
