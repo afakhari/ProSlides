@@ -77,7 +77,7 @@ export default function App() {
   function AccessCodeResolver() {
     const { accessCode } = useParams();
     const [status, setStatus] = useState("loading"); // loading | error | success
-    const [resolvedQuizId, setResolvedQuizId] = useState(null);
+    const [resolvedData, setResolvedData] = useState(null);
 
     useEffect(() => {
       let mounted = true;
@@ -95,7 +95,7 @@ export default function App() {
 
           if (data.quiz_id) {
             // Access code valid - store quiz_id and show player presentation
-            setResolvedQuizId(data.quiz_id);
+            setResolvedData(data);
             setStatus("success");
           } else {
             // Invalid access code
@@ -124,11 +124,15 @@ export default function App() {
     }
 
     // Success - render player presentation directly (URL stays the same)
-    if (status === "success" && resolvedQuizId) {
+    if (status === "success" && resolvedData) {
       return (
         <AudioProvider>
           <WebSocketProvider role="player">
-            <AppPresentation roomId={String(resolvedQuizId)} role="player" />
+            <AppPresentation
+              roomId={String(resolvedData.quiz_id)}
+              role="player"
+              initialQuizData={resolvedData}
+            />
             <WSMessageHandler />
           </WebSocketProvider>
         </AudioProvider>
@@ -154,17 +158,45 @@ export default function App() {
   }
 
   /* ------------------------ Main Flow ------------------------ */
-  function AppPresentation({ roomId, role }) {
+  function AppPresentation({ roomId, role, initialQuizData }) {
     const [data, setData] = useState({ type: "ManagerJoinPage" });
     const [currentSlide, setCurrentSlide] = useState(1);
 
     // Fetch full quiz once at top-level and transform to internal shape
     const [remoteQuiz, setRemoteQuiz] = useState(null);
+
+    // Initialize remoteQuiz with initialQuizData if available (for player)
+    useEffect(() => {
+      if (initialQuizData && role === "player") {
+        setRemoteQuiz({
+          quiz_id: initialQuizData.quiz_id,
+          title: initialQuizData.title || "",
+          access_code: initialQuizData.access_code || "",
+          background: initialQuizData.background || {
+            color: "#1e1e2e",
+            image: "",
+          },
+          music_url: initialQuizData.music_url || "",
+          slides: [], // Player doesn't need full slides initially
+        });
+      }
+    }, [initialQuizData, role]);
+
     useEffect(() => {
       let mounted = true;
       const fetchQuiz = async () => {
         try {
           if (!roomId) return;
+
+          // If we already have initial data for player, we might skip full fetch or do it in background
+          // But if user wants ONLY this API for player, we skip fetch for player
+          if (role === "player" && initialQuizData) {
+            console.log(
+              "[AppPresentation] Skipping full export fetch for player, using initial data"
+            );
+            return;
+          }
+
           const res = await apiFetch(`/quizzes/${roomId}/export/`);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
