@@ -335,7 +335,7 @@ function ManagerLeaderBoard({
                                       >
                                         👁️
                                       </button>
-                                      <button
+                                      {/* <button
                                         onClick={() =>
                                           handleClick("✏️ Edit", p.name)
                                         }
@@ -350,7 +350,7 @@ function ManagerLeaderBoard({
                                         className="bg-white/90 text-green-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
                                       >
                                         📞
-                                      </button>
+                                      </button> */}
                                     </div>
                                   )}
                                 </div>

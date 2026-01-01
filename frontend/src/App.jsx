@@ -1,4 +1,9 @@
-import { BrowserRouter as Router, Routes, Route, useParams } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  useParams,
+} from "react-router-dom";
 import { useState, useEffect, lazy, Suspense } from "react";
 
 import { QuizSetup } from "./data/mockData";
@@ -8,6 +13,8 @@ import { useServerData } from "./hooks/useServerData";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { AudioProvider, useAudio } from "./contexts/AudioContext";
 import { apiFetch } from "./utils/apiFetch";
+
+import Waiting from "./pages/loading/LoadingPage";
 
 const ManagerJoinPage = lazy(() =>
   import("./pages/presentation/manager/JoinPage")
@@ -33,7 +40,6 @@ const PlayerLeaderBoard = lazy(() =>
 );
 
 const AuthPage = lazy(() => import("./pages/auth/AuthPage"));
-const Waiting = lazy(() => import("./pages/loading/LoadingPage"));
 const SessionDetail = lazy(() => import("./pages/report/SessionDetail"));
 const HomePage = lazy(() => import("./pages/quiz/manager/HomePage"));
 const EditorPage = lazy(() => import("./pages/quiz/manager/EditorPage"));
@@ -42,13 +48,7 @@ export default function App() {
   return (
     <Router>
       <ServerDataProvider>
-        <Suspense
-          fallback={
-            <div className="min-h-screen bg-gray-950 flex items-center justify-center text-white text-lg">
-              Loading...
-            </div>
-          }
-        >
+        <Suspense fallback={<Waiting />}>
           <Routes>
             <Route path="/auth" element={<AuthPage />} />
             <Route
@@ -341,7 +341,7 @@ export default function App() {
           return (
             <FinalLeaderboard
               leaderboardData={modalLeaderboardResults || leaderboardResults}
-              onExit={() => (window.location.href = "/")}
+              onExit={() => (window.location.href = "/manager/panel")}
             />
           );
         default:

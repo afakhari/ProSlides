@@ -51,6 +51,9 @@ import { getColorForUser } from "../../../lib/colorUtils";
 // ];
 
 function PlayerLeaderBoard({ players, quiz }) {
+  // Ensure players is always an array to prevent crashes
+  const validPlayers = Array.isArray(players) ? players : [];
+
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
   const [displayedPlayers, setDisplayedPlayers] = useState([]);
@@ -60,7 +63,7 @@ function PlayerLeaderBoard({ players, quiz }) {
 
   console.log(
     "[PlayerLeaderBoard] Rendering with",
-    players?.length || 0,
+    validPlayers.length,
     "players"
   );
 
@@ -81,7 +84,7 @@ function PlayerLeaderBoard({ players, quiz }) {
   };
 
   const maxScore = Math.max(
-    ...players.map((p) => parseFloat(p.total_points) || 0)
+    ...validPlayers.map((p) => parseFloat(p.total_points) || 0)
   );
   const minScore = 0;
 
@@ -95,7 +98,7 @@ function PlayerLeaderBoard({ players, quiz }) {
 
   useEffect(() => {
     // Ensure players have colors based on user_id
-    const processedPlayers = players.map((p) => ({
+    const processedPlayers = validPlayers.map((p) => ({
       ...p,
       color: getColorForUser(p.user_id),
     }));
@@ -108,7 +111,7 @@ function PlayerLeaderBoard({ players, quiz }) {
       }, 500);
       return () => clearTimeout(t);
     }
-  }, [players, currentUserId, animateBars]);
+  }, [validPlayers, currentUserId, animateBars]);
 
   // Calculate dynamic background style from quiz data
   const backgroundStyle = {
@@ -137,7 +140,7 @@ function PlayerLeaderBoard({ players, quiz }) {
           <div className="text-center">
             <h1 className="text-white px-4 text-5xl font-bold">Leaderboard</h1>
             <p className="text-white/70 text-lg mt-2">
-              {players.length} players
+              {validPlayers.length} players
             </p>
           </div>
 
@@ -274,29 +277,6 @@ function PlayerLeaderBoard({ players, quiz }) {
                                 </span>
                               )}
                             </div>
-
-                            {hovered === p.rank && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleToggleBlur(p.rank)}
-                                  className="bg-white/90 text-gray-800 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                >
-                                  👁️
-                                </button>
-                                <button
-                                  onClick={() => handleClick("✏️ Edit", p.name)}
-                                  className="bg-white/90 text-blue-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  onClick={() => handleClick("📞 Call", p.name)}
-                                  className="bg-white/90 text-green-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                >
-                                  📞
-                                </button>
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>
