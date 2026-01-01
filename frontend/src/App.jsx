@@ -1,4 +1,9 @@
-import { BrowserRouter as Router, Routes, Route, useParams } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  useParams,
+} from "react-router-dom";
 import { useState, useEffect, lazy, Suspense } from "react";
 
 import { QuizSetup } from "./data/mockData";
@@ -341,7 +346,7 @@ export default function App() {
           return (
             <FinalLeaderboard
               leaderboardData={modalLeaderboardResults || leaderboardResults}
-              onExit={() => (window.location.href = "/")}
+              onExit={() => (window.location.href = "/manager/panel")}
             />
           );
         default:

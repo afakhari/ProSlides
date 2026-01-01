@@ -274,29 +274,6 @@ function PlayerLeaderBoard({ players, quiz }) {
                                 </span>
                               )}
                             </div>
-
-                            {hovered === p.rank && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleToggleBlur(p.rank)}
-                                  className="bg-white/90 text-gray-800 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                >
-                                  👁️
-                                </button>
-                                <button
-                                  onClick={() => handleClick("✏️ Edit", p.name)}
-                                  className="bg-white/90 text-blue-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  onClick={() => handleClick("📞 Call", p.name)}
-                                  className="bg-white/90 text-green-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
-                                >
-                                  📞
-                                </button>
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>

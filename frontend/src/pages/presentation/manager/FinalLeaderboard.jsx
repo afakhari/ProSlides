@@ -200,7 +200,7 @@ function PlayerPodium({ player, rank, isVisible }) {
                 {player.name}
               </h3>
               <p className={`font-mono font-bold ${style.text}`}>
-                {player.total_points} pts
+                {Math.round(player.total_points)} pts
               </p>
             </div>
 
