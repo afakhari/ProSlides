@@ -51,8 +51,10 @@ import { getColorForUser } from "../../../lib/colorUtils";
 // ];
 
 function PlayerLeaderBoard({ players, quiz }) {
-  // Ensure players is always an array to prevent crashes
-  const validPlayers = Array.isArray(players) ? players : [];
+  // Ensure players is always an array to prevent crashes and filter out invalid entries
+  const validPlayers = (Array.isArray(players) ? players : []).filter(
+    (p) => p && typeof p === "object"
+  );
 
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
@@ -151,7 +153,7 @@ function PlayerLeaderBoard({ players, quiz }) {
           >
             <ul className="space-y-4 w-full flex flex-col items-stretch py-2">
               <AnimatePresence>
-                {displayedPlayers.map((p) => {
+                {displayedPlayers.map((p, index) => {
                   const isHidden = hiddenNames.includes(p.rank);
                   const scoreVal = parseFloat(p.total_points) || 0;
                   const hasScore = scoreVal > 0;
@@ -160,8 +162,8 @@ function PlayerLeaderBoard({ players, quiz }) {
 
                   return (
                     <Motion.li
-                      key={p.user_id || p.rank}
-                      id={`player-${p.user_id}`}
+                      key={p.user_id || p.rank || index}
+                      id={`player-${p.user_id || index}`}
                       layout
                       initial={{
                         opacity: 0,
