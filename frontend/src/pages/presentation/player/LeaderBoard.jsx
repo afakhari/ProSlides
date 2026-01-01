@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import { getColorForUser } from "../../../lib/colorUtils";
 
@@ -52,8 +52,12 @@ import { getColorForUser } from "../../../lib/colorUtils";
 
 function PlayerLeaderBoard({ players, quiz }) {
   // Ensure players is always an array to prevent crashes and filter out invalid entries
-  const validPlayers = (Array.isArray(players) ? players : []).filter(
-    (p) => p && typeof p === "object"
+  const validPlayers = useMemo(
+    () =>
+      (Array.isArray(players) ? players : []).filter(
+        (p) => p && typeof p === "object"
+      ),
+    [players]
   );
 
   const [hovered, setHovered] = useState(null);
@@ -105,15 +109,15 @@ function PlayerLeaderBoard({ players, quiz }) {
       color: getColorForUser(p.user_id),
     }));
     setDisplayedPlayers(processedPlayers);
+  }, [validPlayers, currentUserId]);
 
+  useEffect(() => {
     // Trigger animation only if not already animated
-    if (!animateBars) {
-      const t = setTimeout(() => {
-        setAnimateBars(true);
-      }, 500);
-      return () => clearTimeout(t);
-    }
-  }, [validPlayers, currentUserId, animateBars]);
+    const t = setTimeout(() => {
+      setAnimateBars(true);
+    }, 500);
+    return () => clearTimeout(t);
+  }, []);
 
   // Calculate dynamic background style from quiz data
   const backgroundStyle = {
