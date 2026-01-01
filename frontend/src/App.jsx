@@ -14,6 +14,7 @@ import { useWebSocket } from "./hooks/useWebSocket";
 import { AudioProvider, useAudio } from "./contexts/AudioContext";
 import { apiFetch } from "./utils/apiFetch";
 
+import LandingPage from "./pages/landing/LandingPage";
 import Waiting from "./pages/loading/LoadingPage";
 
 const ManagerJoinPage = lazy(() =>
@@ -50,6 +51,9 @@ export default function App() {
       <ServerDataProvider>
         <Suspense fallback={<Waiting />}>
           <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<AuthPage />} />
+            <Route path="/signup" element={<AuthPage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route
               path="/:role/presentation/:roomId"
