@@ -127,12 +127,12 @@ def generate_verification_code():
 def send_verification_email(user, code):
     ttl_minutes = settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
     send_mail(
-        subject="Your ProSlides verification code",
+        subject="کد ورود ProSlides",
         message=(
-            "Your verification code is {code}. "
-            "It expires in {ttl} minutes."
+            "کد ورود شما به ProSlides: {code}\n"
+            "این کد تا {ttl} دقیقه معتبر است."
         ).format(code=code, ttl=ttl_minutes),
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=settings.EMAIL_FROM_ADDRESS,
         recipient_list=[user.email],
         fail_silently=False,
     )
@@ -1951,7 +1951,7 @@ class PasswordResetRequestView(APIView):
                 message=(
                     "Use the link below to reset your password:\n{link}"
                 ).format(link=reset_link),
-                from_email=settings.DEFAULT_FROM_EMAIL,
+                from_email=settings.EMAIL_FROM_ADDRESS,
                 recipient_list=[user.email],
                 fail_silently=False,
             )
