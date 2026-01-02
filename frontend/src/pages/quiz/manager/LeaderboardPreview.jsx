@@ -7,15 +7,17 @@ export default function LeaderboardPreview({
   quizBackground,
   quizBackgroundImage,
   isFullSize = true,
+  customLeaderboard = null,
 }) {
   const [animateBars, setAnimateBars] = useState(false);
   const [hovered, setHovered] = useState(null);
 
   // Prepare players data
   const players = useMemo(() => {
-    if (!slide?.leaderboard || !Array.isArray(slide.leaderboard)) return [];
+    const sourceData = customLeaderboard || slide?.leaderboard;
+    if (!sourceData || !Array.isArray(sourceData)) return [];
 
-    return slide.leaderboard
+    return sourceData
       .sort((a, b) => (a.rank || 0) - (b.rank || 0))
       .slice(0, 5) // Limit to top 5 for preview
       .map((player, index) => ({
@@ -27,7 +29,7 @@ export default function LeaderboardPreview({
         total_points: player.score || 0,
         new_points: 0,
       }));
-  }, [slide?.leaderboard]);
+  }, [slide?.leaderboard, customLeaderboard]);
 
   const maxScore = Math.max(...players.map((p) => p.total_points), 0);
   const minScore = 0;

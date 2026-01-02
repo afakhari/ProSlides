@@ -438,6 +438,52 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
     navigate(`/manager/presentation/${quiz.quiz_id}/`);
   };
 
+  // Calculate cumulative leaderboard for the current slide if it's a leaderboard slide
+  const getCumulativeLeaderboard = () => {
+    if (activeSlideType !== 3) return null;
+
+    const playerScores = {};
+    const playerDetails = {};
+
+    // Iterate through all slides up to the current one
+    for (let i = 0; i < activeSlideIndex; i++) {
+      const slide = slides[i];
+      // Check if the slide has leaderboard data (assuming it's a question slide with scores)
+      if (slide.leaderboard && Array.isArray(slide.leaderboard)) {
+        slide.leaderboard.forEach((player) => {
+          const id = player.rust_session_id || player.player_name;
+
+          if (!playerScores[id]) {
+            playerScores[id] = 0;
+            playerDetails[id] = {
+              rust_session_id: player.rust_session_id,
+              player_name: player.player_name,
+              avatar: player.avatar,
+            };
+          }
+
+          playerScores[id] += player.score || 0;
+        });
+      }
+    }
+
+    // Convert back to array
+    const cumulativeLeaderboard = Object.keys(playerScores).map((id) => ({
+      ...playerDetails[id],
+      score: playerScores[id],
+    }));
+
+    // Sort by score descending
+    cumulativeLeaderboard.sort((a, b) => b.score - a.score);
+
+    // Assign ranks
+    cumulativeLeaderboard.forEach((p, index) => {
+      p.rank = index + 1;
+    });
+
+    return cumulativeLeaderboard;
+  };
+
   return (
     <div className="h-full flex flex-col relative pt-14">
       {/* ----- Header -----*/}
@@ -553,7 +599,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
               <div className="text-center text-gray-400">
                 <p className="text-lg mb-4">No slides yet</p>
               </div>
-            )} */}
+            } */}
 
             {activeSlide ? (
               activeSlideType === 3 ? (
@@ -565,6 +611,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
                     isFullSize={
                       !showSidebar && !showDesignPanel && !showAudioPanel
                     }
+                    customLeaderboard={getCumulativeLeaderboard()}
                   />
                 </div>
               ) : activeSlideType === 1 && activeSlide.question ? (
