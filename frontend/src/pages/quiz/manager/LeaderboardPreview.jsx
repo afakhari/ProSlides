@@ -7,15 +7,17 @@ export default function LeaderboardPreview({
   quizBackground,
   quizBackgroundImage,
   isFullSize = true,
+  customLeaderboard = null,
 }) {
   const [animateBars, setAnimateBars] = useState(false);
   const [hovered, setHovered] = useState(null);
 
   // Prepare players data
   const players = useMemo(() => {
-    if (!slide?.leaderboard || !Array.isArray(slide.leaderboard)) return [];
+    const sourceData = customLeaderboard || slide?.leaderboard;
+    if (!sourceData || !Array.isArray(sourceData)) return [];
 
-    return slide.leaderboard
+    return sourceData
       .sort((a, b) => (a.rank || 0) - (b.rank || 0))
       .slice(0, 5) // Limit to top 5 for preview
       .map((player, index) => ({
@@ -27,7 +29,7 @@ export default function LeaderboardPreview({
         total_points: player.score || 0,
         new_points: 0,
       }));
-  }, [slide?.leaderboard]);
+  }, [slide?.leaderboard, customLeaderboard]);
 
   const maxScore = Math.max(...players.map((p) => p.total_points), 0);
   const minScore = 0;
@@ -67,6 +69,7 @@ export default function LeaderboardPreview({
   const rankSize = isFullSize ? "w-10 h-10 text-lg" : "w-8 h-8 text-base";
   const nameSize = isFullSize ? "text-base" : "text-sm";
   const scoreSize = isFullSize ? "text-base" : "text-sm";
+  const scoreWidth = isFullSize ? "w-16" : "w-12";
 
   return (
     <div
@@ -126,7 +129,9 @@ export default function LeaderboardPreview({
                       </div>
 
                       {/* Fixed-width translucent track */}
-                      <div className={`relative overlay-hidden bg-white/10 w-full ${rowHeight} mr-3 rounded-lg flex-1`}>
+                      <div
+                        className={`relative overlay-hidden bg-white/10 w-full ${rowHeight} mr-3 rounded-lg flex-1`}
+                      >
                         {/* Colored fill */}
                         {hasScore && (
                           <Motion.div
@@ -148,15 +153,21 @@ export default function LeaderboardPreview({
 
                         {/* Content on top */}
                         <div className="relative z-20 flex items-center px-4 gap-4 h-full">
-                          <div className={`${avatarSize} shrink-0`}>{p.character}</div>
-                          <div className={`font-medium text-white truncate ${nameSize}`}>
+                          <div className={`${avatarSize} shrink-0`}>
+                            {p.character}
+                          </div>
+                          <div
+                            className={`font-medium text-white truncate ${nameSize}`}
+                          >
                             {p.name}
                           </div>
                         </div>
                       </div>
 
                       {/* Score */}
-                      <div className={`w-[15%] font-semibold text-white text-right shrink-0 ${scoreSize}`}>
+                      <div
+                        className={`${scoreWidth} font-semibold text-white text-right shrink-0 ${scoreSize}`}
+                      >
                         {Math.round(p.total_points)}
                       </div>
                     </Motion.li>
