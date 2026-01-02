@@ -21,6 +21,8 @@ export default function Sidebar({
   setSlide, 
   onCreateLeaderboardSlide, 
   onDeleteLeaderboardSlide, 
+  slides, 
+  activeSlideType,
   onClose,
   onSlideUpdated
 }) {
@@ -336,6 +338,9 @@ export default function Sidebar({
   };
 
   // بررسی وجود اسلاید لیدربرد مرتبط
+  const hasLinkedLeaderboard = slides.some(
+    s => s.slide_type === 3 && s.order === safeSlide.order
+  );
 
   // مدیریت تغییرات فیلدها
   const handleFieldChange = (field, value) => {
@@ -526,7 +531,7 @@ export default function Sidebar({
             setLoading(false);
           }
         }, 5000);
-      } catch {
+      } catch (err) {
         setError("خطا در بررسی لینک");
         setLoading(false);
       }
@@ -656,7 +661,7 @@ export default function Sidebar({
                 type="text"
                 value={question.question_text || ""}
                 onChange={(e) => handleQuestionChange(e.target.value)}
-                className="flex-1 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                className="flex-1 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent text-center"
                 placeholder="Enter your question here..."
                 disabled={isSaving}
               />
@@ -769,7 +774,7 @@ export default function Sidebar({
                                     e.target.value
                                   )
                                 }
-                                className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                                className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent text-center"
                                 placeholder="Option text..."
                                 disabled={isSaving}
                               />
@@ -867,7 +872,7 @@ export default function Sidebar({
                 onChange={(e) =>
                   handleFieldChange("question_time", parseInt(e.target.value) || 10)
                 }
-                className="w-20 border border-gray-300 rounded-lg p-2 text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-20 border border-gray-300 rounded-lg p-2 text-center focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                 disabled={isSaving}
               />
               <div>
@@ -891,7 +896,7 @@ export default function Sidebar({
                   onChange={(e) =>
                     handleFieldChange("max_point", parseInt(e.target.value) || 0)
                   }
-                  className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                   disabled={isSaving}
                 />
                 <p className="text-xs text-gray-500 mt-1">Points for answering at the start</p>
@@ -905,7 +910,7 @@ export default function Sidebar({
                   onChange={(e) =>
                     handleFieldChange("min_point", parseInt(e.target.value) || 0)
                   }
-                  className={`w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  className={`w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent ${
                     !question.faster_answers_more_points ? "bg-gray-100 cursor-not-allowed opacity-50" : ""
                   }`}
                   disabled={isSaving || !question.faster_answers_more_points}
@@ -969,11 +974,11 @@ export default function Sidebar({
                   handleSlideFieldChange("show_leaderboard_after", isChecked);
                   
                   // ایجاد یا حذف اسلاید لیدربرد
-                  if (isChecked && onCreateLeaderboardSlide) {
-                    onCreateLeaderboardSlide(slide.order);
-                  } else if (!isChecked && onDeleteLeaderboardSlide) {
-                    onDeleteLeaderboardSlide(slide.order);
-                  }
+                  // if (isChecked && onCreateLeaderboardSlide) {
+                  //   onCreateLeaderboardSlide(slide.order);
+                  // } else if (!isChecked && onDeleteLeaderboardSlide) {
+                  //   onDeleteLeaderboardSlide(slide.order);
+                  // }
                 }}
                 className="w-4 h-4 mt-0.5 rounded border-gray-300 cursor-pointer text-blue-600 focus:ring-blue-500"
                 disabled={isSaving}
@@ -988,7 +993,7 @@ export default function Sidebar({
       )}
 
       {/* Leaderboard Title (only for leaderboard slides) */}
-      {safeSlide.slide_type === 3 && (
+      {/* {safeSlide.slide_type === 3 && (
         <div>
           <h3 className="text-sm font-medium text-gray-700 mb-3">Leaderboard Title</h3>
           <input
@@ -1002,7 +1007,22 @@ export default function Sidebar({
             disabled={isSaving}
           />
         </div>
+      )} */}
+
+
+      {activeSlideType === 3 && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 mb-3">Leaderboard Title</h3>
+          
+        </div>
       )}
+
+
+
+
+
+
+
 
       {/* دکمه‌های Cancel و Save Changes */}
       <div className="mt-8 pt-6 border-t border-gray-200">
