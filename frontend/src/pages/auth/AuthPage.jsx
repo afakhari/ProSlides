@@ -269,17 +269,6 @@ function GoogleIcon() {
   );
 }
 
-function MicrosoftIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
-      <rect x="3" y="3" width="8" height="8" fill="#F25022" />
-      <rect x="13" y="3" width="8" height="8" fill="#7FBA00" />
-      <rect x="3" y="13" width="8" height="8" fill="#00A4EF" />
-      <rect x="13" y="13" width="8" height="8" fill="#FFB900" />
-    </svg>
-  );
-}
-
 function MailIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
@@ -561,8 +550,11 @@ export default function AuthPage() {
   const handleModeSwitch = () => {
     if (mode === "verify") {
       setMode("login");
+      navigate("/login", { replace: true });
     } else {
-      setMode((prev) => (prev === "login" ? "signup" : "login"));
+      const nextMode = mode === "login" ? "signup" : "login";
+      setMode(nextMode);
+      navigate(`/${nextMode}`, { replace: true });
     }
     setStatus(null);
     setFieldErrors({});
@@ -1155,7 +1147,7 @@ export default function AuthPage() {
         </div>
       </div>
 
-      {!isSignup && (
+      {!isVerify && (
         <div className="pointer-events-none absolute inset-0 z-[1] hidden md:block">
           <Cloud className="absolute left-[10%] top-[22%] w-[200px] opacity-90 animate-[auth-float_6s_ease-in-out_infinite]" />
           <Cloud
@@ -1174,7 +1166,7 @@ export default function AuthPage() {
       )}
 
       <div className="relative z-[2] w-[min(92vw,430px)] max-h-[78vh] overflow-y-auto animate-[auth-card-in_0.6s_ease-out_both] rounded-[28px] bg-white px-6 pb-7 pt-8 text-center shadow-[0_28px_60px_rgba(15,23,42,0.14)] sm:max-h-none sm:overflow-visible sm:px-8 sm:pb-8 sm:pt-9 md:px-6 md:pt-8">
-        <h1 className="text-[26px] font-semibold text-[#1f2937]">
+        <h1 className="text-[28px] font-semibold leading-tight text-[#1f2937]">
           {isVerify ? "Verify email" : isSignup ? "Sign up" : "Log in"}
         </h1>
         {isVerify && trimmedEmail && (
@@ -1227,7 +1219,7 @@ export default function AuthPage() {
         </p>
 
         {!isVerify && (
-          <div className="mt-5 flex flex-col gap-3">
+          <div className="mt-4 flex flex-col gap-3 sm:gap-2">
             <button
               type="button"
               onClick={handleGoogleSignIn}
@@ -1237,22 +1229,11 @@ export default function AuthPage() {
               <GoogleIcon />
               {isSignup ? "Sign up with Google" : "Log in with Google"}
             </button>
-            <button
-              type="button"
-              className="flex items-center justify-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-semibold text-[#111827] transition hover:border-[#d1d5db] hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
-              disabled
-            >
-              <MicrosoftIcon />
-              {isSignup ? "Sign up with Microsoft" : "Log in with Microsoft"}
-              <span className="rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#6b7280]">
-                Coming soon
-              </span>
-            </button>
           </div>
         )}
 
         {!isVerify && (
-          <div className="my-4 flex items-center gap-3 text-xs tracking-[0.2em] text-[#9ca3af]">
+          <div className="my-4 flex items-center gap-3 text-xs tracking-[0.2em] text-[#9ca3af] sm:my-3">
             <span className="h-px flex-1 bg-[#e5e7eb]" />
             OR
             <span className="h-px flex-1 bg-[#e5e7eb]" />
@@ -1261,7 +1242,7 @@ export default function AuthPage() {
 
         <form className="flex flex-col" onSubmit={handleSubmit}>
           <label
-            className={`mb-3 flex items-center overflow-hidden rounded-xl border bg-white ${fieldErrors.email ? "border-[#fca5a5]" : "border-[#e5e7eb]"
+            className={`mb-3 flex items-center overflow-hidden rounded-xl border bg-white sm:mb-2 ${fieldErrors.email ? "border-[#fca5a5]" : "border-[#e5e7eb]"
               }`}
           >
             <span className="flex h-12 w-12 items-center justify-center border-r border-[#e5e7eb] text-[#6b7280]">
@@ -1288,14 +1269,14 @@ export default function AuthPage() {
             />
           </label>
           {emailError && (
-            <div className="mb-3 text-left text-xs text-[#b91c1c]">
+            <div className="mb-3 text-left text-xs text-[#b91c1c] sm:mb-2">
               {emailError}
             </div>
           )}
 
           {!isVerify && (
             <label
-              className={`mb-3 flex items-center overflow-hidden rounded-xl border bg-white ${fieldErrors.password ? "border-[#fca5a5]" : "border-[#e5e7eb]"
+              className={`mb-3 flex items-center overflow-hidden rounded-xl border bg-white sm:mb-2 ${fieldErrors.password ? "border-[#fca5a5]" : "border-[#e5e7eb]"
                 }`}
             >
               <span className="flex h-12 w-12 items-center justify-center border-r border-[#e5e7eb] text-[#6b7280]">
@@ -1329,17 +1310,17 @@ export default function AuthPage() {
             </label>
           )}
           {!isVerify && fieldErrors.password && (
-            <div className="mb-3 text-left text-xs text-[#b91c1c]">
+            <div className="mb-3 text-left text-xs text-[#b91c1c] sm:mb-2">
               {fieldErrors.password}
             </div>
           )}
           {!isVerify && isSignup && !fieldErrors.password && passwordPolicyError && (
-            <div className="mb-3 text-left text-xs text-[#b91c1c]">
+            <div className="mb-3 text-left text-xs text-[#b91c1c] sm:mb-2">
               {passwordPolicyError}
             </div>
           )}
           {!isVerify && isSignup && password.trim() && (
-            <div className="mb-3 text-left text-xs text-[#6b7280]">
+            <div className="mb-3 text-left text-xs text-[#6b7280] sm:mb-2">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-[#374151]">Strength:</span>
                 <span className="text-[#6b7280]">{passwordStrength.label}</span>
@@ -1364,7 +1345,7 @@ export default function AuthPage() {
 
           {isVerify ? (
             <label
-              className={`mb-3 flex items-center overflow-hidden rounded-xl border bg-white ${fieldErrors.code ? "border-[#fca5a5]" : "border-[#e5e7eb]"
+              className={`mb-3 flex items-center overflow-hidden rounded-xl border bg-white sm:mb-2 ${fieldErrors.code ? "border-[#fca5a5]" : "border-[#e5e7eb]"
                 }`}
             >
               <span className="flex h-12 w-12 items-center justify-center border-r border-[#e5e7eb] text-[#6b7280]">
@@ -1421,7 +1402,7 @@ export default function AuthPage() {
               />
             </label>
           ) : (
-            <div className="mb-3 flex justify-start">
+            <div className="mb-3 flex justify-start sm:mb-2">
               <button
                 type="button"
                 onClick={handleForgotPassword}
@@ -1432,14 +1413,14 @@ export default function AuthPage() {
             </div>
           )}
           {isSignup && fullNameError && (
-            <div className="mb-3 text-left text-xs text-[#b91c1c]">
+            <div className="mb-3 text-left text-xs text-[#b91c1c] sm:mb-2">
               {fullNameError}
             </div>
           )}
 
           {status && (
             <div
-              className={`mb-3 rounded-xl px-3 py-2 text-left text-xs ${status.type === "error"
+              className={`mb-3 rounded-xl px-3 py-2 text-left text-xs sm:mb-2 ${status.type === "error"
                   ? "bg-[#fee2e2] text-[#991b1b]"
                   : status.type === "network" || status.type === "google-cookies"
                     ? "bg-[#fef9c3] text-[#92400e]"
@@ -1532,18 +1513,6 @@ export default function AuthPage() {
           </button>
         </form>
 
-        {!isVerify && (
-          <button
-            type="button"
-            className="mt-4 inline-flex items-center justify-center gap-2 text-sm font-semibold text-[#6c4cf5] transition hover:text-[#4f32e6] hover:underline cursor-pointer disabled:cursor-not-allowed disabled:text-[#9ca3af]"
-            disabled
-          >
-            {isSignup ? "Sign up with SSO" : "Log in with SSO"}
-            <span className="rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#6b7280]">
-              Coming soon
-            </span>
-          </button>
-        )}
       </div>
     </div>
   );
