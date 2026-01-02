@@ -40,7 +40,7 @@ export default function MiniResultsResultsOnly({
   const optionTextSize = isFullSize ? "text-lg" : "text-xs";
   const voteTextSize = isFullSize ? "text-xl" : "text-sm";
   const imageWidth = isFullSize ? "w-1/4" : "w-1/5";
-  const optionImageHeight = isFullSize ? "h-20" : "h-12";
+  const optionImageHeight = isFullSize ? "max-h-32" : "max-h-20";
 
   return (
     <div
@@ -100,7 +100,7 @@ export default function MiniResultsResultsOnly({
                   <img
                     src={opt.image_url}
                     alt={opt.option_text || opt.text}
-                    className={`w-3/4 ${optionImageHeight} rounded-t-lg object-cover mb-0`}
+                    className={`w-3/4 h-auto ${optionImageHeight} rounded-t-lg object-contain mb-0`}
                   />
                 )}
 

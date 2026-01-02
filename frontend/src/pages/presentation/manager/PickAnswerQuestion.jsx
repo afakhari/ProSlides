@@ -470,7 +470,7 @@ export default function ManagerPickAnswerQuestion({
                         <img
                           src={opt.image_url}
                           alt={opt.option_text}
-                          className="w-3/4 h-20 lg:h-28 rounded-t-lg object-cover"
+                          className="w-3/4 h-auto max-h-40 rounded-t-lg object-contain"
                         />
                       )}
 
