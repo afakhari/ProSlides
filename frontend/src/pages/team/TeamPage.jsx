@@ -1,12 +1,12 @@
 ﻿import SiteHeader from "../../components/SiteHeader";
 import dotGrid from "../../assets/patterns/dot-grid.svg";
-import amiraliFakhari from "../../assets/avatars/AmiraliFakhari.png";
-import aminBidad from "../../assets/avatars/AminBidad.png";
-import alirezaReazaei from "../../assets/avatars/AlirezaRezaei.png";
-import kianJanbozorgi from "../../assets/avatars/KianJanbozorgi.png";
-import ZahraKefayati from "../../assets/avatars/ZahraKefayati.png";
-import HesamAzmoun from "../../assets/avatars/HesamAzmoun.png";
-import SimaKazemi from "../../assets/avatars/SimaKazemi.png";
+import amiraliFakhari from "../../assets/avatars/AmiraliFakhari.jpg";
+import aminBidad from "../../assets/avatars/AminBidad.jpg";
+import alirezaReazaei from "../../assets/avatars/AlirezaRezaei.jpg";
+import kianJanbozorgi from "../../assets/avatars/KianJanbozorgi.jpg";
+import ZahraKefayati from "../../assets/avatars/ZahraKefayati.jpg";
+import HesamAzmoun from "../../assets/avatars/HesamAzmoun.jpg";
+import SimaKazemi from "../../assets/avatars/SimaKazemi.jpg";
 
 const backendTheme = {
   cover: "#E9F1FB",
