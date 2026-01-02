@@ -57,8 +57,16 @@ export default function LeaderboardPreview({
   };
 
   const containerClasses = isFullSize
-    ? "w-full h-full rounded-xl shadow-lg overflow-hidden"
-    : "w-full h-full rounded-xl shadow-md overflow-hidden";
+    ? "aspect-[3/2] w-full max-w-[80%] h-auto max-h-[80%] rounded-xl shadow-lg overflow-hidden"
+    : "aspect-[3/2] w-full max-w-[95%] h-auto max-h-[95%] rounded-xl shadow-md overflow-hidden";
+
+  const titleSize = isFullSize ? "text-4xl" : "text-2xl";
+  const subtitleSize = isFullSize ? "text-lg" : "text-sm";
+  const rowHeight = isFullSize ? "h-14" : "h-10";
+  const avatarSize = isFullSize ? "text-2xl" : "text-lg";
+  const rankSize = isFullSize ? "w-10 h-10 text-lg" : "w-8 h-8 text-base";
+  const nameSize = isFullSize ? "text-base" : "text-sm";
+  const scoreSize = isFullSize ? "text-base" : "text-sm";
 
   return (
     <div
@@ -68,10 +76,10 @@ export default function LeaderboardPreview({
       <div className="flex flex-col items-center justify-center w-full h-full px-4 py-6 overflow-y-auto no-scrollbar">
         {/* Title Section */}
         <div className="text-center w-full mb-6">
-          <h2 className="text-4xl text-white font-bold mb-2">
+          <h2 className={`${titleSize} text-white font-bold mb-2`}>
             {slide?.leaderboard_title || "Leaderboard"}
           </h2>
-          <p className="text-white/70 text-lg">
+          <p className={`text-white/70 ${subtitleSize}`}>
             {players.length} {players.length === 1 ? "player" : "players"}
           </p>
         </div>
@@ -79,9 +87,7 @@ export default function LeaderboardPreview({
         {/* Players List */}
         <div className="w-full max-w-3xl flex-1">
           {players.length === 0 ? (
-            <div className="text-white/80 text-center py-6">
-              No results yet
-            </div>
+            <div className="text-white/80 text-center py-6">No results yet</div>
           ) : (
             <ul className="space-y-4 w-full flex flex-col items-stretch py-2">
               <AnimatePresence>
@@ -109,7 +115,7 @@ export default function LeaderboardPreview({
                     >
                       {/* Rank */}
                       <div
-                        className="text-lg font-bold w-10 h-10 flex items-center justify-center rounded-full mr-3 shrink-0"
+                        className={`${rankSize} font-bold flex items-center justify-center rounded-full mr-3 shrink-0`}
                         style={{
                           backgroundColor: p.color,
                           color: "#fff",
@@ -120,7 +126,7 @@ export default function LeaderboardPreview({
                       </div>
 
                       {/* Fixed-width translucent track */}
-                      <div className="relative overlay-hidden bg-white/10 w-full h-14 mr-3 rounded-lg flex-1">
+                      <div className={`relative overlay-hidden bg-white/10 w-full ${rowHeight} mr-3 rounded-lg flex-1`}>
                         {/* Colored fill */}
                         {hasScore && (
                           <Motion.div
@@ -142,17 +148,15 @@ export default function LeaderboardPreview({
 
                         {/* Content on top */}
                         <div className="relative z-20 flex items-center px-4 gap-4 h-full">
-                          <div className="text-2xl shrink-0">
-                            {p.character}
-                          </div>
-                          <div className="font-medium text-white truncate">
+                          <div className={`${avatarSize} shrink-0`}>{p.character}</div>
+                          <div className={`font-medium text-white truncate ${nameSize}`}>
                             {p.name}
                           </div>
                         </div>
                       </div>
 
                       {/* Score */}
-                      <div className="w-[15%] font-semibold text-white text-right shrink-0">
+                      <div className={`w-[15%] font-semibold text-white text-right shrink-0 ${scoreSize}`}>
                         {Math.round(p.total_points)}
                       </div>
                     </Motion.li>
