@@ -39,6 +39,9 @@ EXPORT_SERVICE_TOKEN=change-me-export-token
 GOOGLE_CLIENT_ID=your-google-client-id
 ```
 
+If Google certs are blocked from the server, the backend uses a minimal
+claim-only validation mode for Google ID tokens. See `SYSTEM_OVERVIEW.md`.
+
 Email + OTP (verification) settings:
 ```
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend

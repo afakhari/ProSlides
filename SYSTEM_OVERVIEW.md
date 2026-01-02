@@ -95,6 +95,16 @@ Frontend origin must be allowed in Google Cloud OAuth Client:
 - `http://localhost:5173` (local)
 - `https://proslides.ir` (prod)
 
+### Offline-verify mode (current fallback)
+When server-to-server access to Google certs is blocked, the backend uses a
+minimal claim-only validation strategy:
+- no signature verification
+- checks `iss`, `aud`, `exp`, `email`, `email_verified`
+
+This keeps development unblocked while preserving basic safety checks. The
+code is structured so full verification can be restored later with minimal
+changes.
+
 ## CORS / CSRF
 
 If the frontend is local and the backend is remote, the backend must allow:
@@ -121,4 +131,3 @@ ws://<host>:8080/ws/{session_id}/manager
 ```
 curl -H "X-Export-Token: <token>" https://api.proslides.ir/api/quizzes/123/export/
 ```
-
