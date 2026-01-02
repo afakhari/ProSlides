@@ -1,6 +1,8 @@
 # ProSlides Local Setup (Frontend Team)
 
 This guide is for running the backend API locally so the frontend can consume it.
+For a full architecture overview and service-to-service communication,
+see `SYSTEM_OVERVIEW.md`.
 
 ## 1) Get the right branch
 Auth endpoints exist only on `feature/auth-permissions`.
@@ -49,7 +51,8 @@ Minimum suggested values for local dev:
 DEBUG=True
 DJANGO_SETTINGS_MODULE=backend.srvs.office.office.settings
 ALLOWED_HOSTS=127.0.0.1,localhost
-CORS_ALLOWED_ORIGINS=http://127.0.0.1:3000,http://localhost:3000
+CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+CSRF_TRUSTED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
 EXPORT_SERVICE_TOKEN=dev-export-token
 GOOGLE_CLIENT_ID=your-google-client-id
 ```
