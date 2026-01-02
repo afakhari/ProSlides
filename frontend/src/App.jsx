@@ -4,6 +4,7 @@ import { lazy, Suspense } from "react";
 import LandingPage from "./pages/landing/LandingPage";
 
 const AuthPage = lazy(() => import("./pages/auth/AuthPage"));
+const TeamPage = lazy(() => import("./pages/team/TeamPage"));
 const SessionDetail = lazy(() => import("./pages/report/SessionDetail"));
 const HomePage = lazy(() => import("./pages/quiz/manager/HomePage"));
 const EditorPage = lazy(() => import("./pages/quiz/manager/EditorPage"));
@@ -20,6 +21,7 @@ export default function App() {
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/team" element={<TeamPage />} />
           <Route path="/login" element={<AuthPage />} />
           <Route path="/signup" element={<AuthPage />} />
           <Route path="/auth" element={<AuthPage />} />
