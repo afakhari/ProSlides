@@ -445,12 +445,19 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
     const playerScores = {};
     const playerDetails = {};
 
-    // Iterate through all slides up to the current one
-    for (let i = 0; i < activeSlideIndex; i++) {
+    // Check if current slide has data
+    const currentSlideHasData =
+      activeSlide.leaderboard &&
+      Array.isArray(activeSlide.leaderboard) &&
+      activeSlide.leaderboard.length > 0;
+
+    // Iterate through all slides up to AND INCLUDING the current one
+    for (let i = 0; i <= activeSlideIndex; i++) {
       const slide = slides[i];
-      // Check if the slide has leaderboard data (assuming it's a question slide with scores)
-      if (slide.leaderboard && Array.isArray(slide.leaderboard)) {
-        slide.leaderboard.forEach((player) => {
+
+      // Helper to add scores
+      const addScores = (leaderboardData) => {
+        leaderboardData.forEach((player) => {
           const id = player.rust_session_id || player.player_name;
 
           if (!playerScores[id]) {
@@ -464,6 +471,26 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
 
           playerScores[id] += player.score || 0;
         });
+      };
+
+      // Case 1: Current Slide (The Leaderboard Slide itself)
+      if (i === activeSlideIndex) {
+        if (currentSlideHasData) {
+          addScores(slide.leaderboard);
+        }
+      }
+      // Case 2: Question Slides (Type 1)
+      else if (
+        slide.slide_type === 1 &&
+        slide.leaderboard &&
+        Array.isArray(slide.leaderboard)
+      ) {
+        // Special check: If this is the immediately preceding slide AND current slide has data,
+        // skip it to avoid double counting (assuming current leaderboard covers the latest question)
+        if (i === activeSlideIndex - 1 && currentSlideHasData) {
+          continue;
+        }
+        addScores(slide.leaderboard);
       }
     }
 
