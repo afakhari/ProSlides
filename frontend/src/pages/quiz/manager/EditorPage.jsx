@@ -446,7 +446,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
     const playerDetails = {};
 
     // Iterate through all slides BEFORE the current one
-    for (let i = 0; i < activeSlideIndex; i++) {
+    for (let i = 0; i <= activeSlideIndex; i++) {
       const slide = slides[i];
 
       // Only aggregate scores from Question slides (Type 1)
