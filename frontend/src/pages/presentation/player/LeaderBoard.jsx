@@ -60,8 +60,6 @@ function PlayerLeaderBoard({ players, quiz }) {
     [players]
   );
 
-  const [hovered, setHovered] = useState(null);
-  const [hiddenNames, setHiddenNames] = useState([]);
   const [displayedPlayers, setDisplayedPlayers] = useState([]);
   const [animateBars, setAnimateBars] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
@@ -78,16 +76,6 @@ function PlayerLeaderBoard({ players, quiz }) {
     const userId = localStorage.getItem("user_id");
     setCurrentUserId(userId);
   }, []);
-
-  const handleToggleBlur = (id) => {
-    setHiddenNames((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  const handleClick = (action, name) => {
-    alert(`${action} clicked for ${name}`);
-  };
 
   const maxScore = Math.max(
     ...validPlayers.map((p) => parseFloat(p.total_points) || 0)
@@ -158,7 +146,6 @@ function PlayerLeaderBoard({ players, quiz }) {
             <ul className="space-y-4 w-full flex flex-col items-stretch py-2">
               <AnimatePresence>
                 {displayedPlayers.map((p, index) => {
-                  const isHidden = hiddenNames.includes(p.rank);
                   const scoreVal = parseFloat(p.total_points) || 0;
                   const hasScore = scoreVal > 0;
                   const widthPercent = hasScore ? calcPercent(scoreVal) : 0;
@@ -198,8 +185,6 @@ function PlayerLeaderBoard({ players, quiz }) {
                             }
                           : {}
                       }
-                      onMouseEnter={() => setHovered(p.rank)}
-                      onMouseLeave={() => setHovered(null)}
                     >
                       {/* Glow effect for current user */}
                       {isCurrentUser && (
@@ -274,9 +259,9 @@ function PlayerLeaderBoard({ players, quiz }) {
                                 isCurrentUser
                                   ? "text-white text-lg font-bold"
                                   : "text-white"
-                              } ${isHidden ? "blur-sm select-none" : ""}`}
+                              }`}
                             >
-                              {isHidden ? "****" : p.name}
+                              {p.name}
                               {isCurrentUser && (
                                 <span className="ml-2 text-yellow-400 text-sm animate-pulse">
                                   ← You

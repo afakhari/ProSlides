@@ -1,18 +1,15 @@
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { GripVertical, Trash2, Trophy } from "lucide-react";
 import { quizService } from "../../../services/quizService";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 export default function SlidesPanel({
-  slides,
   activeSlideId,
   setActiveSlideId,
   setActiveSlideTypeParent,
   addNewSlide,
   deleteSlide,
-  reorderSlides,
   idKey = "slide_id",
-  titleKey = "title",
   getSlideTitle,
   quizId,
   quizBackground = "#ffffff",
@@ -53,7 +50,7 @@ export default function SlidesPanel({
 
 
   // تابع برای پردازش اسلایدها
-const processSlides = (slidesData) => {
+const processSlides = useCallback((slidesData) => {
   const result = [];
   let i = 0;
 
@@ -87,14 +84,14 @@ const processSlides = (slidesData) => {
 
   console.log("Processed result:", result);
   return result;
-};
+}, []);
 
 
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   // تابع برای دریافت اسلایدها از API
-  const fetchSlides = async () => {
+  const fetchSlides = useCallback(async () => {
     try {
       const quizData = await quizService.getSlidesFromAPI(quizId);
       const slidesData = quizData.slides;
@@ -104,14 +101,14 @@ const processSlides = (slidesData) => {
     } catch (error) {
       console.error("Error fetching slides:", error);
     }
-  };
+  }, [processSlides, quizId]);
 
   // دریافت اولیه اسلایدها
   useEffect(() => {
     if (quizId) {
       fetchSlides();
     }
-  }, [quizId]);
+  }, [fetchSlides, quizId]);
 
 
   // به‌روزرسانی localSlides وقتی processedSlides تغییر کرد
@@ -276,7 +273,7 @@ const processSlides = (slidesData) => {
   };
 
   // تابع برای دریافت پس‌زمینه اسلاید
-  const getSlideBackground = (slide) => {
+  const getSlideBackground = () => {
     if (quizBackgroundImage) {
       return {
         backgroundImage: `url(${quizBackgroundImage})`,
@@ -319,9 +316,6 @@ const processSlides = (slidesData) => {
   };
 
   // محاسبه order برای نمایش
-  const getDisplayOrder = (slide, index) => {
-    return slide.order || index + 1;
-  };
 
   // تابع برای ایجاد key منحصربفرد برای هر اسلاید
   const getUniqueKey = (slide) => {
@@ -347,7 +341,7 @@ const processSlides = (slidesData) => {
               className="space-y-4"
             >
               {localSlides.map((slide, index) => {
-                const slideBackground = getSlideBackground(slide);
+                const slideBackground = getSlideBackground();
                 const isLeaderboardSlide = slide.slide_type === 3;
                 const isQuestionSlide = slide.slide_type === 1;
                 const slideTitle = getSlideTitle(slide);

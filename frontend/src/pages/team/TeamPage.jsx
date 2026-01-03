@@ -1,4 +1,5 @@
 ﻿import SiteHeader from "../../components/SiteHeader";
+import Seo from "../../components/Seo";
 import dotGrid from "../../assets/patterns/dot-grid.svg";
 import amiraliFakhari from "../../assets/avatars/AmiraliFakhari.jpg";
 import aminBidad from "../../assets/avatars/AminBidad.jpg";
@@ -116,10 +117,11 @@ function TeamSection({ id, title, description, members, gridClassName }) {
                       <div className="rounded-full bg-white p-[3px]">
                         <img
                           src={member.avatar}
-                          alt={member.name}
+                          alt={`Avatar of ${member.name}`}
                           width="96"
                           height="96"
                           loading="lazy"
+                          decoding="async"
                           className="h-24 w-24 rounded-full object-cover"
                         />
                       </div>
@@ -162,6 +164,11 @@ export default function TeamPage() {
         backgroundSize: "56px 56px",
       }}
     >
+      <Seo
+        title="تیم پرو اسلایدز | آشنایی با مهندسان ما"
+        description="با تیم مهندسی پرو اسلایدز آشنا شوید؛ سازندگان تجربه‌های ارائه تعاملی برای کلاس‌ها و تیم‌ها."
+        canonical="https://proslides.ir/team"
+      />
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-28 -left-24 h-72 w-72 rounded-full bg-sky-100/50 blur-3xl" />
         <div className="absolute top-20 right-[-140px] h-80 w-80 rounded-full bg-rose-100/45 blur-3xl" />

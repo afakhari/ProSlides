@@ -157,10 +157,6 @@ function ManagerLeaderBoard({
     );
   };
 
-  const handleClick = (action, name) => {
-    alert(`${action} clicked for ${name}`);
-  };
-
   const maxScore = Math.max(...players.map((p) => p.total_points));
   const minScore = 0;
 

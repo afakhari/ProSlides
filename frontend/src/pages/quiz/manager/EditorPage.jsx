@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useLocation, useParams, useNavigate } from "react-router-dom";
+﻿import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import MiniResultsResultsOnly from "./MiniResultsResultsOnly";
 import LeaderboardPreview from "./LeaderboardPreview";
 import QuizHeader from "../../../components/QuizHeader";
@@ -13,7 +13,7 @@ import Waiting from "../../loading/LoadingPage";
 
 export default function EditorPage() {
   const navigate = useNavigate();
-  const { roomId, role } = useParams();
+  const { roomId } = useParams();
   const quizId = parseInt(roomId, 10);
 
   const [quiz, setQuiz] = useState(null);
@@ -29,7 +29,7 @@ export default function EditorPage() {
       }
 
       try {
-        // اگر quiz_id داریم، کوئیز را از سرور بگیر
+        // Ø§Ú¯Ø± quiz_id Ø¯Ø§Ø±ÛŒÙ…ØŒ Ú©ÙˆØ¦ÛŒØ² Ø±Ø§ Ø§Ø² Ø³Ø±ÙˆØ± Ø¨Ú¯ÛŒØ±
         const quizData = await quizService.getQuiz(quizId);
         setQuiz(quizData);
       } catch (err) {
@@ -47,18 +47,6 @@ export default function EditorPage() {
     setQuiz(updatedQuiz);
   };
 
-  const saveQuiz = async () => {
-    if (!quiz) return;
-
-    try {
-      const savedQuiz = await quizService.updateQuiz(quiz.quiz_id, quiz);
-      setQuiz(savedQuiz);
-      alert("✅ Quiz saved successfully!");
-    } catch (err) {
-      alert("❌ Failed to save quiz");
-      console.error(err);
-    }
-  };
 
   if (loading) {
     return <Waiting />;
@@ -73,16 +61,16 @@ export default function EditorPage() {
   }
 
   return (
-    <QuestionEditor quiz={quiz} updateQuiz={updateQuiz} saveQuiz={saveQuiz} />
+    <QuestionEditor quiz={quiz} updateQuiz={updateQuiz} />
   );
 }
 
-function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
+function QuestionEditor({ quiz, updateQuiz }) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const navigate = useNavigate();
   const [activeSlideType, setActiveSlideType] = useState(null);
 
-  // استفاده مستقیم از ساختار بک‌اند
+  // Ø§Ø³ØªÙØ§Ø¯Ù‡ Ù…Ø³ØªÙ‚ÛŒÙ… Ø§Ø² Ø³Ø§Ø®ØªØ§Ø± Ø¨Ú©â€ŒØ§Ù†Ø¯
   const slides = quiz.slides || [];
   const activeSlide = slides[activeSlideIndex] || null;
 
@@ -92,7 +80,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
   const [showAudioPanel, setShowAudioPanel] = useState(false);
   const [showTypeBox, setShowTypeBox] = useState(false);
 
-  // توابع برای مدیریت تب‌ها
+  // ØªÙˆØ§Ø¨Ø¹ Ø¨Ø±Ø§ÛŒ Ù…Ø¯ÛŒØ±ÛŒØª ØªØ¨â€ŒÙ‡Ø§
   const handleTabClick = (tabId) => {
     if (tabId === "audio") {
       setShowAudioPanel((prev) => !prev);
@@ -137,7 +125,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
     setActiveTab(null);
   };
 
-  // تابع کمکی برای گرفتن عنوان اسلاید
+  // ØªØ§Ø¨Ø¹ Ú©Ù…Ú©ÛŒ Ø¨Ø±Ø§ÛŒ Ú¯Ø±ÙØªÙ† Ø¹Ù†ÙˆØ§Ù† Ø§Ø³Ù„Ø§ÛŒØ¯
   const getSlideTitle = (slide) => {
     if (slide.slide_type === 1 && slide.question) {
       return slide.question.text || "Question Slide";
@@ -148,7 +136,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
     return "No Question Yet";
   };
 
-  // ایجاد اسلاید جدید
+  // Ø§ÛŒØ¬Ø§Ø¯ Ø§Ø³Ù„Ø§ÛŒØ¯ Ø¬Ø¯ÛŒØ¯
   const addNewSlide = async () => {
     try {
       const newSlideData = {
@@ -160,38 +148,38 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
         content_image_url: "",
       };
 
-      // ارسال به سرور برای ایجاد اسلاید جدید
+      // Ø§Ø±Ø³Ø§Ù„ Ø¨Ù‡ Ø³Ø±ÙˆØ± Ø¨Ø±Ø§ÛŒ Ø§ÛŒØ¬Ø§Ø¯ Ø§Ø³Ù„Ø§ÛŒØ¯ Ø¬Ø¯ÛŒØ¯
       const createdSlide = await quizService.createSlide(
         quiz.quiz_id,
         newSlideData
       );
 
-      // به‌روزرسانی quiz با اسلاید جدید
+      // Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ quiz Ø¨Ø§ Ø§Ø³Ù„Ø§ÛŒØ¯ Ø¬Ø¯ÛŒØ¯
       const updatedSlides = [...slides, createdSlide];
       updateQuiz({
         ...quiz,
         slides: updatedSlides,
       });
 
-      // انتخاب اسلاید جدید
+      // Ø§Ù†ØªØ®Ø§Ø¨ Ø§Ø³Ù„Ø§ÛŒØ¯ Ø¬Ø¯ÛŒØ¯
       setActiveSlideIndex(updatedSlides.length - 1);
     } catch (error) {
       console.error("Failed to create new slide:", error);
-      alert("❌ Failed to create new slide");
+      alert("âŒ Failed to create new slide");
     }
   };
 
-  // ایجاد اسلاید لیدربرد
+  // Ø§ÛŒØ¬Ø§Ø¯ Ø§Ø³Ù„Ø§ÛŒØ¯ Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯
   const createLeaderboardSlide = async (questionOrder) => {
     try {
-      // ابتدا اسلاید سوال را پیدا کن
+      // Ø§Ø¨ØªØ¯Ø§ Ø§Ø³Ù„Ø§ÛŒØ¯ Ø³ÙˆØ§Ù„ Ø±Ø§ Ù¾ÛŒØ¯Ø§ Ú©Ù†
       const questionSlide = slides.find(
         (s) => s.slide_type === 1 && s.order === questionOrder
       );
 
       if (!questionSlide) return;
 
-      // ساختار لیدربرد
+      // Ø³Ø§Ø®ØªØ§Ø± Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯
       const leaderboardSlideData = {
         slide_type: 3,
         order: questionSlide.order,
@@ -201,13 +189,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
         content_image_url: "",
       };
 
-      // ارسال به سرور
-      // const createdLeaderboardSlide = await quizService.createSlide(
-      //   quiz.quiz_id,
-      //   leaderboardSlideData
-      // );
+      // Ø§Ø±Ø³Ø§Ù„ Ø¨Ù‡ Ø³Ø±ÙˆØ±
+      const createdLeaderboardSlide = await quizService.createSlide(
+        quiz.quiz_id,
+        leaderboardSlideData
+      );
 
-      // به‌روزرسانی order اسلایدهای بعدی
+      // Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ order Ø§Ø³Ù„Ø§ÛŒØ¯Ù‡Ø§ÛŒ Ø¨Ø¹Ø¯ÛŒ
       const updatedSlides = slides.map((slide) => {
         if (slide.order >= questionSlide.order) {
           return {
@@ -218,7 +206,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
         return slide;
       });
 
-      // درج اسلاید لیدربرد
+      // Ø¯Ø±Ø¬ Ø§Ø³Ù„Ø§ÛŒØ¯ Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯
       createdLeaderboardSlide.order = questionSlide.order;
       const questionIndex = updatedSlides.findIndex(
         (s) => s.slide_id === questionSlide.slide_id
@@ -226,34 +214,34 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
 
       updatedSlides.splice(questionIndex + 1, 0, createdLeaderboardSlide);
 
-      // اعمال تغییرات
+      // Ø§Ø¹Ù…Ø§Ù„ ØªØºÛŒÛŒØ±Ø§Øª
       updateQuiz({
         ...quiz,
         slides: updatedSlides,
       });
 
-      // انتخاب اسلاید لیدربرد
+      // Ø§Ù†ØªØ®Ø§Ø¨ Ø§Ø³Ù„Ø§ÛŒØ¯ Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯
       setActiveSlideIndex(questionIndex + 1);
     } catch (error) {
       console.error("Failed to create leaderboard slide:", error);
-      alert("❌ Failed to create leaderboard slide");
+      alert("âŒ Failed to create leaderboard slide");
     }
   };
 
-  // حذف اسلاید لیدربرد
+  // Ø­Ø°Ù Ø§Ø³Ù„Ø§ÛŒØ¯ Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯
   const deleteLeaderboardSlide = async (questionOrder) => {
     try {
-      // اسلاید لیدربرد مرتبط را پیدا کن
+      // Ø§Ø³Ù„Ø§ÛŒØ¯ Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯ Ù…Ø±ØªØ¨Ø· Ø±Ø§ Ù¾ÛŒØ¯Ø§ Ú©Ù†
       const leaderboardSlide = slides.find(
         (s) => s.slide_type === 3 && s.order === questionOrder
       );
 
       if (!leaderboardSlide) return;
 
-      // حذف از سرور
+      // Ø­Ø°Ù Ø§Ø² Ø³Ø±ÙˆØ±
       await quizService.deleteSlide(quiz.quiz_id, leaderboardSlide.slide_id);
 
-      // حذف از state و به‌روزرسانی order
+      // Ø­Ø°Ù Ø§Ø² state Ùˆ Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ order
       const updatedSlides = slides
         .filter((s) => s.slide_id !== leaderboardSlide.slide_id)
         .map((slide) => {
@@ -271,23 +259,23 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
         slides: updatedSlides,
       });
 
-      // اگر اسلاید فعال حذف شده، به اسلاید قبل برو
+      // Ø§Ú¯Ø± Ø§Ø³Ù„Ø§ÛŒØ¯ ÙØ¹Ø§Ù„ Ø­Ø°Ù Ø´Ø¯Ù‡ØŒ Ø¨Ù‡ Ø§Ø³Ù„Ø§ÛŒØ¯ Ù‚Ø¨Ù„ Ø¨Ø±Ùˆ
       if (activeSlideIndex >= updatedSlides.length) {
         setActiveSlideIndex(Math.max(0, updatedSlides.length - 1));
       }
     } catch (error) {
       console.error("Failed to delete leaderboard slide:", error);
-      alert("❌ Failed to delete leaderboard slide");
+      alert("âŒ Failed to delete leaderboard slide");
     }
   };
 
-  // حذف اسلاید
+  // Ø­Ø°Ù Ø§Ø³Ù„Ø§ÛŒØ¯
   const deleteSlide = async (slideId) => {
     try {
-      // حذف از سرور
+      // Ø­Ø°Ù Ø§Ø² Ø³Ø±ÙˆØ±
       await quizService.deleteSlide(quiz.quiz_id, slideId);
 
-      // به‌روزرسانی state
+      // Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ state
       const slideIndex = slides.findIndex((s) => s.slide_id === slideId);
       const updatedSlides = slides.filter((s) => s.slide_id !== slideId);
 
@@ -296,7 +284,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
         slides: updatedSlides,
       });
 
-      // تنظیم اسلاید فعال
+      // ØªÙ†Ø¸ÛŒÙ… Ø§Ø³Ù„Ø§ÛŒØ¯ ÙØ¹Ø§Ù„
       if (updatedSlides.length > 0) {
         if (slideIndex >= updatedSlides.length) {
           setActiveSlideIndex(updatedSlides.length - 1);
@@ -308,21 +296,21 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
       }
     } catch (error) {
       console.error("Failed to delete slide:", error);
-      alert("❌ Failed to delete slide");
+      alert("âŒ Failed to delete slide");
     }
   };
 
-  // به‌روزرسانی اسلاید فعال
+  // Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ Ø§Ø³Ù„Ø§ÛŒØ¯ ÙØ¹Ø§Ù„
   const updateActiveSlide = async (updatedSlide) => {
     try {
-      // ارسال به سرور
+      // Ø§Ø±Ø³Ø§Ù„ Ø¨Ù‡ Ø³Ø±ÙˆØ±
       const savedSlide = await quizService.updateSlide(
         quiz.quiz_id,
         updatedSlide.slide_id,
         updatedSlide
       );
 
-      // به‌روزرسانی state
+      // Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ state
       const updatedSlides = slides.map((s) =>
         s.slide_id === updatedSlide.slide_id ? savedSlide : s
       );
@@ -333,11 +321,11 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
       });
     } catch (error) {
       console.error("Failed to update slide:", error);
-      alert("❌ Failed to update slide");
+      alert("âŒ Failed to update slide");
     }
   };
 
-  // تغییر نوع سوال
+  // ØªØºÛŒÛŒØ± Ù†ÙˆØ¹ Ø³ÙˆØ§Ù„
   const handleTypeChangeClick = () => {
     setShowTypeBox(true);
   };
@@ -354,7 +342,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
       let updatedQuestion;
 
       if (!currentQuestion || !currentQuestion.question_id) {
-        // حالت 1: ایجاد سوال جدید
+        // Ø­Ø§Ù„Øª 1: Ø§ÛŒØ¬Ø§Ø¯ Ø³ÙˆØ§Ù„ Ø¬Ø¯ÛŒØ¯
         const questionData = {
           title: "",
           text: "New Question",
@@ -373,7 +361,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
           questionData
         );
       } else {
-        // حالت 2: به‌روزرسانی سوال موجود
+        // Ø­Ø§Ù„Øª 2: Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ Ø³ÙˆØ§Ù„ Ù…ÙˆØ¬ÙˆØ¯
         const updateData = {
           ...currentQuestion,
           question_type: questionType,
@@ -386,13 +374,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
         );
       }
 
-      // به‌روزرسانی state
+      // Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ state
       const updatedSlide = {
         ...activeSlide,
         question: updatedQuestion,
       };
 
-      // به‌روزرسانی در state اصلی
+      // Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ Ø¯Ø± state Ø§ØµÙ„ÛŒ
       const updatedSlides = slides.map((s) =>
         s.slide_id === slideId ? updatedSlide : s
       );
@@ -415,9 +403,9 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
     }
   };
 
-  // تابع برای به‌روزرسانی اسلاید پس از ذخیره در Sidebar
+  // ØªØ§Ø¨Ø¹ Ø¨Ø±Ø§ÛŒ Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ Ø§Ø³Ù„Ø§ÛŒØ¯ Ù¾Ø³ Ø§Ø² Ø°Ø®ÛŒØ±Ù‡ Ø¯Ø± Sidebar
   const handleSlideUpdated = (updatedSlide) => {
-    // به‌روزرسانی اسلاید در state اصلی
+    // Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ Ø§Ø³Ù„Ø§ÛŒØ¯ Ø¯Ø± state Ø§ØµÙ„ÛŒ
     const updatedSlides = slides.map((s) =>
       s.slide_id === updatedSlide.slide_id ? updatedSlide : s
     );
@@ -427,7 +415,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
       slides: updatedSlides,
     });
 
-    // به‌روزرسانی اسلاید فعال
+    // Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ Ø§Ø³Ù„Ø§ÛŒØ¯ ÙØ¹Ø§Ù„
     setActiveSlideIndex(
       updatedSlides.findIndex((s) => s.slide_id === updatedSlide.slide_id)
     );
@@ -522,13 +510,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
               const [removed] = reordered.splice(result.source.index, 1);
               reordered.splice(result.destination.index, 0, removed);
 
-              // به‌روزرسانی order اسلایدها
+              // Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ order Ø§Ø³Ù„Ø§ÛŒØ¯Ù‡Ø§
               const updatedSlides = reordered.map((slide, index) => ({
                 ...slide,
                 order: index + 1,
               }));
 
-              // ذخیره در سرور
+              // Ø°Ø®ÛŒØ±Ù‡ Ø¯Ø± Ø³Ø±ÙˆØ±
               try {
                 await quizService.reorderSlides(quiz.quiz_id, updatedSlides);
                 updateQuiz({
@@ -537,7 +525,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
                 });
               } catch (error) {
                 console.error("Failed to reorder slides:", error);
-                alert("❌ Failed to reorder slides");
+                alert("âŒ Failed to reorder slides");
               }
             }}
             idKey="slide_id"
@@ -685,7 +673,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
         {/* {showSidebar && activeSlide?.slide_type === 1 && (
           <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/4">
             {(() => {
-                // بررسی اینکه آیا activeSlide.question وجود دارد
+                // Ø¨Ø±Ø±Ø³ÛŒ Ø§ÛŒÙ†Ú©Ù‡ Ø¢ÛŒØ§ activeSlide.question ÙˆØ¬ÙˆØ¯ Ø¯Ø§Ø±Ø¯
                 if (!activeSlide?.question) {
                   return (
                     <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -720,7 +708,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
                   );
                 }
 
-                // اگر همه شرایط برقرار بود، کامپوننت Sidebar را رندر کن
+                // Ø§Ú¯Ø± Ù‡Ù…Ù‡ Ø´Ø±Ø§ÛŒØ· Ø¨Ø±Ù‚Ø±Ø§Ø± Ø¨ÙˆØ¯ØŒ Ú©Ø§Ù…Ù¾ÙˆÙ†Ù†Øª Sidebar Ø±Ø§ Ø±Ù†Ø¯Ø± Ú©Ù†
                 return (
                   <Sidebar 
                     quizId={quiz.quiz_id}
@@ -744,7 +732,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
         {showSidebar && activeSlideType === 1 && (
           <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/4">
             {(() => {
-              // بررسی اینکه آیا activeSlide.question وجود دارد
+              // Ø¨Ø±Ø±Ø³ÛŒ Ø§ÛŒÙ†Ú©Ù‡ Ø¢ÛŒØ§ activeSlide.question ÙˆØ¬ÙˆØ¯ Ø¯Ø§Ø±Ø¯
               if (!activeSlide?.question) {
                 return (
                   <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -808,7 +796,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
                 );
               }
 
-              // اگر همه شرایط برقرار بود، کامپوننت Sidebar را رندر کن
+              // Ø§Ú¯Ø± Ù‡Ù…Ù‡ Ø´Ø±Ø§ÛŒØ· Ø¨Ø±Ù‚Ø±Ø§Ø± Ø¨ÙˆØ¯ØŒ Ú©Ø§Ù…Ù¾ÙˆÙ†Ù†Øª Sidebar Ø±Ø§ Ø±Ù†Ø¯Ø± Ú©Ù†
               return (
                 <Sidebar
                   quizId={quiz.quiz_id}
@@ -866,3 +854,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
     </div>
   );
 }
+
+
+

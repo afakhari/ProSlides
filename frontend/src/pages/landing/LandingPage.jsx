@@ -1,6 +1,7 @@
 ﻿import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SiteHeader from "../../components/SiteHeader";
+import Seo from "../../components/Seo";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -22,6 +23,11 @@ export default function LandingPage() {
           "radial-gradient(circle at 10% 15%, rgba(236, 253, 245, 0.7) 0%, transparent 55%), radial-gradient(circle at 90% 10%, rgba(239, 246, 255, 0.7) 0%, transparent 50%), linear-gradient(180deg, #ffffff 0%, #f7fafc 100%)",
       }}
     >
+      <Seo
+        title="پرو اسلایدز | ارائه‌های تعاملی و حرفه‌ای"
+        description="پرو اسلایدز پلتفرم ایرانی ارائه‌های تعاملی است؛ نظرسنجی زنده، کوییز، و اسلایدهای مشارکتی برای کلاس‌ها و تیم‌ها."
+        canonical="https://proslides.ir/"
+      />
       <div className="border-b border-[#e5e7eb] bg-[#f8fafc]">
         <div className="mx-auto flex max-w-6xl items-center justify-center gap-3 px-4 py-2 text-sm text-[#1f2937]">
           <span className="text-[#374151]">Are you a participant?</span>
