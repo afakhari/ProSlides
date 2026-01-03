@@ -26,29 +26,22 @@ const frontendTheme = {
 
 const backendTeam = [
   {
-    name: "Amirali Fakahri",
-    role: "Backend Engineer - Django",
-    description: "Keeps data and permissions predictable across sessions.",
-    avatar: amiraliFakhari,
-    theme: backendTheme,
-  },
-  {
     name: "Amin Bidad",
     role: "Backend Engineer - Rust",
     description: "Keeps real-time services fast under live room traffic.",
     avatar: aminBidad,
     theme: backendTheme,
   },
+  {
+    name: "Amirali Fakahri",
+    role: "Backend Engineer - Django",
+    description: "Keeps data and permissions predictable across sessions.",
+    avatar: amiraliFakhari,
+    theme: backendTheme,
+  },
 ];
 
 const frontendTeam = [
-  {
-    name: "Kian Janbozorgi",
-    role: "Frontend Engineer - React",
-    description: "Turns complex flows into calm, usable screens.",
-    avatar: kianJanbozorgi,
-    theme: frontendTheme,
-  },
   {
     name: "Alireza Reazaei",
     role: "Frontend Engineer - React",
@@ -64,10 +57,10 @@ const frontendTeam = [
     theme: frontendTheme,
   },
   {
-    name: "Zahra Kefayati",
+    name: "Kian Janbozorgi",
     role: "Frontend Engineer - React",
-    description: "Sweats the details of accessibility and spacing.",
-    avatar: ZahraKefayati,
+    description: "Turns complex flows into calm, usable screens.",
+    avatar: kianJanbozorgi,
     theme: frontendTheme,
   },
   {
@@ -75,6 +68,13 @@ const frontendTeam = [
     role: "Frontend Engineer - React",
     description: "Keeps rendering smooth on large, live decks.",
     avatar: SimaKazemi,
+    theme: frontendTheme,
+  },
+  {
+    name: "Zahra Kefayati",
+    role: "Frontend Engineer - React",
+    description: "Sweats the details of accessibility and spacing.",
+    avatar: ZahraKefayati,
     theme: frontendTheme,
   },
 ];
@@ -198,4 +198,3 @@ export default function TeamPage() {
     </main>
   );
 }
-
