@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../../utils/apiFetch";
+import Seo from "../../components/Seo";
 
 function formatError(payload) {
   if (!payload) return "Something went wrong. Please try again.";
@@ -495,6 +496,14 @@ export default function AuthPage() {
   const isSignup = mode === "signup";
   const isVerify = mode === "verify";
   const submitLabel = isVerify ? "Verify" : isSignup ? "Sign Up" : "Log In";
+  const seoTitle = isVerify
+    ? "تایید ایمیل | پرو اسلایدز"
+    : isSignup
+      ? "ثبت‌نام در پرو اسلایدز | شروع ارائه‌های تعاملی"
+      : "ورود به پرو اسلایدز | مدیریت ارائه‌های تعاملی";
+  const seoDescription =
+    "ورود یا ثبت‌نام در پرو اسلایدز برای ساخت و مدیریت ارائه‌های تعاملی با نظرسنجی زنده و کوییز.";
+  const seoCanonical = `https://proslides.ir/${isSignup ? "signup" : "login"}`;
 
   const trimmedEmail = email.trim();
   const emailFormatError = useMemo(() => {
@@ -1118,6 +1127,11 @@ export default function AuthPage() {
           "radial-gradient(circle at 15% 20%, #ffffff 0%, #f3f8ff 45%, transparent 65%), radial-gradient(circle at 90% 15%, #eef5ff 0%, transparent 55%), radial-gradient(circle at 80% 90%, #e8f2ff 0%, transparent 55%), linear-gradient(180deg, #f8fbff 0%, #f1f6ff 100%)",
       }}
     >
+      <Seo
+        title={seoTitle}
+        description={seoDescription}
+        canonical={seoCanonical}
+      />
       <div
         className="pointer-events-none absolute inset-0 opacity-35"
         style={{

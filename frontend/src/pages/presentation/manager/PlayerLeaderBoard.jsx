@@ -14,7 +14,6 @@ function ManagerPlayerLeaderBoard({
   roomId,
   quiz = null,
   players = [],
-  quiz,
 }) {
   const [hovered, setHovered] = useState(null);
   const [hiddenNames, setHiddenNames] = useState([]);
