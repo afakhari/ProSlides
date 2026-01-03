@@ -4,6 +4,7 @@ import { lazy, Suspense } from "react";
 import LandingPage from "./pages/landing/LandingPage";
 
 const AuthPage = lazy(() => import("./pages/auth/AuthPage"));
+const ResetPasswordPage = lazy(() => import("./pages/auth/ResetPasswordPage"));
 const TeamPage = lazy(() => import("./pages/team/TeamPage"));
 const SessionDetail = lazy(() => import("./pages/report/SessionDetail"));
 const HomePage = lazy(() => import("./pages/quiz/manager/HomePage"));
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/login" element={<AuthPage />} />
           <Route path="/signup" element={<AuthPage />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/:role/presentation/:roomId"
             element={<PresentationEntry mode="presentation" />}
