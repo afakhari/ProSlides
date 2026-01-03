@@ -55,6 +55,9 @@ CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
 CSRF_TRUSTED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
 EXPORT_SERVICE_TOKEN=dev-export-token
 GOOGLE_CLIENT_ID=your-google-client-id
+LOG_LEVEL=INFO
+LOG_DIR=backend/srvs/office/logs
+LOG_REQUEST_THRESHOLD_MS=500
 ```
 
 Email behavior:
@@ -142,3 +145,8 @@ Login with:
 - ModuleNotFoundError: make sure the venv is activated.
 - No email code shown: set `EMAIL_BACKEND` to console backend and restart the server.
 - Port already in use: choose another port, e.g. `127.0.0.1:8001`.
+
+## Logging Notes
+- Logs are written to `LOG_DIR` (defaults to `backend/srvs/office/logs`).
+- `app.log` contains general logs; `errors.log` contains errors only.
+- Use the `X-Request-ID` header to trace a request across logs.

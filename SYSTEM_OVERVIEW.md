@@ -53,6 +53,9 @@ Optional but recommended:
 GOOGLE_OAUTH_CERTS_URL=https://www.googleapis.com/oauth2/v3/certs
 CORS_ALLOWED_ORIGINS=https://proslides.ir,https://www.proslides.ir
 CSRF_TRUSTED_ORIGINS=https://proslides.ir,https://www.proslides.ir
+LOG_LEVEL=INFO
+LOG_DIR=/var/log/proslides
+LOG_REQUEST_THRESHOLD_MS=500
 ```
 
 ### Rust Facade (process environment)
@@ -131,3 +134,10 @@ ws://<host>:8080/ws/{session_id}/manager
 ```
 curl -H "X-Export-Token: <token>" https://api.proslides.ir/api/quizzes/123/export/
 ```
+
+## Logging (Dev + Prod)
+
+- Logs are written to `LOG_DIR` (default: `backend/srvs/office/logs`).
+- `app.log` stores general logs; `errors.log` stores error-level logs.
+- Every request gets a `request_id` and the response includes `X-Request-ID`.
+- Slow requests are logged when they exceed `LOG_REQUEST_THRESHOLD_MS` (default 500ms).
