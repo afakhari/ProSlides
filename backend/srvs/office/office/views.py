@@ -1637,7 +1637,7 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
             )
 
         votes_map = {item['option_id']: item['number_of_submits']
-            for item in options_data}
+                     for item in options_data}
         with transaction.atomic():
             options = list(
                 Option.objects
@@ -2072,29 +2072,8 @@ class PasswordResetRequestView(APIView):
             reset_link = settings.PASSWORD_RESET_URL_TEMPLATE.format(
                 uid=uid, token=token)
             subject = "???????? ??? ???? ProSlides"
-            text_message = (
-                "???? ???????? ??? ????? ?? ???? ??? ??????? ????:
-"
-                f"{reset_link}
-
-"
-                "??? ??? ??? ??????? ?? ??? ?????????? ??? ????? ?? ?????? ??????."
-            )
-            html_message = f"""
-            <div style="font-family:Tahoma, Arial, sans-serif; line-height:1.6; color:#111827;">
-              <h2 style="margin:0 0 12px; font-size:20px;">???????? ??? ???? ProSlides</h2>
-              <p style="margin:0 0 12px;">???? ???????? ??? ????? ??? ???? ??? ???? ????:</p>
-              <a href="{reset_link}"
-                 style="display:inline-block; padding:10px 16px; border-radius:10px; background:#4f46e5; color:#ffffff; text-decoration:none; font-weight:600;">
-                ???????? ??? ????
-              </a>
-              <p style="margin:12px 0 0; word-break:break-all;">
-                ??? ???? ??? ????? ??? ???? ?? ?? ?????? ??? ????:<br />
-                <a href="{reset_link}" style="color:#4f46e5;">{reset_link}</a>
-              </p>
-              <p style="margin:8px 0 0; color:#6b7280;">??? ??? ??? ??????? ?? ??? ?????????? ??? ????? ?? ?????? ??????.</p>
-            </div>
-            """
+            text_message = f"???? ???????? ??? ????? ?? ???? ??? ??????? ????:\n{reset_link}\n\n??? ??? ??? ??????? ?? ??? ?????????? ??? ????? ?? ?????? ??????."
+            html_message = f"""<div dir="rtl" style="font-family:Tahoma, Arial, sans-serif; line-height:1.8; color:#111827; background:#ffffff; text-align:right;">\n  <h2 style="margin:0 0 16px; font-size:20px; font-weight:700;">???????? ??? ???? ProSlides</h2>\n  <p style="margin:0 0 12px;">???? ???????? ??? ????? ??? ???? ??? ???? ????:</p>\n  <a href="{reset_link}" style="display:inline-block; padding:10px 16px; border-radius:10px; background:#4f46e5; color:#ffffff; text-decoration:none; font-weight:600;">???????? ??? ????</a>\n  <p style="margin:12px 0 0; word-break:break-all;">??? ???? ??? ????? ??? ???? ?? ?? ?????? ??? ????:<br />\n    <a href="{reset_link}" style="color:#4f46e5;">{reset_link}</a>\n  </p>\n  <p style="margin:16px 0 0; color:#6b7280; font-size:13px;">??? ??? ??? ??????? ?? ??? ?????????? ??? ????? ?? ?????? ??????.</p>\n</div>"""
             send_mail(
                 subject=subject,
                 message=text_message,
@@ -2103,7 +2082,6 @@ class PasswordResetRequestView(APIView):
                 html_message=html_message,
                 fail_silently=False,
             )
-
 
         return Response({"detail": "If the account exists, a reset link was sent"})
 
@@ -2121,7 +2099,8 @@ class PasswordResetConfirmView(APIView):
                 "Password updated",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
                 examples={"application/json": {"detail": "Password updated"}},
             ),
@@ -2129,7 +2108,8 @@ class PasswordResetConfirmView(APIView):
                 "Invalid token",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
                 examples={"application/json": {"detail": "Invalid token"}},
             ),
@@ -2178,7 +2158,8 @@ class LogoutView(APIView):
                 "Logged out",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
                 examples={"application/json": {"detail": "Logged out"}},
             ),
@@ -2186,7 +2167,8 @@ class LogoutView(APIView):
                 "Invalid token",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
                 examples={"application/json": {"detail": "Invalid token"}},
             ),
@@ -2270,7 +2252,8 @@ class ThrottledTokenRefreshView(TokenRefreshView):
                         "access": openapi.Schema(type=openapi.TYPE_STRING),
                     },
                 ),
-                examples={"application/json": {"access": "new-jwt-access-token"}},
+                examples={
+                    "application/json": {"access": "new-jwt-access-token"}},
             ),
             401: openapi.Response("Invalid token"),
         },
@@ -2278,4 +2261,3 @@ class ThrottledTokenRefreshView(TokenRefreshView):
     )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
-
