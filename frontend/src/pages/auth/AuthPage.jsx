@@ -1424,12 +1424,6 @@ export default function AuthPage() {
               >
                 Forgot password?
               </button>
-              <Link
-                to="/reset-password"
-                className="ml-3 text-xs text-[#9ca3af] transition hover:text-[#6b7280] hover:underline cursor-pointer"
-              >
-                I have a reset link
-              </Link>
             </div>
           )}
           {isSignup && fullNameError && (
