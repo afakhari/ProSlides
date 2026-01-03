@@ -2051,14 +2051,18 @@ class PasswordResetRequestView(APIView):
                 "If the account exists, a reset link was sent",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(
-                        type=openapi.TYPE_STRING)},
+                    properties={
+                        "detail": openapi.Schema(type=openapi.TYPE_STRING)
+                    },
                 ),
                 examples={
-                    "application/json": {"detail": "If the account exists, a reset link was sent"}},
+                    "application/json": {
+                        "detail": "If the account exists, a reset link was sent"
+                    }
+                },
             )
         },
-        tags=["Auth"]
+        tags=["Auth"],
     )
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -2066,14 +2070,65 @@ class PasswordResetRequestView(APIView):
 
         email = serializer.validated_data["email"]
         user = User.objects.filter(email__iexact=email).first()
+
         if user and user.is_active:
             token = default_token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             reset_link = settings.PASSWORD_RESET_URL_TEMPLATE.format(
-                uid=uid, token=token)
-            subject = "???????? ??? ???? ProSlides"
-            text_message = f"???? ???????? ??? ????? ?? ???? ??? ??????? ????:\n{reset_link}\n\n??? ??? ??? ??????? ?? ??? ?????????? ??? ????? ?? ?????? ??????."
-            html_message = f"""<div dir="rtl" style="font-family:Tahoma, Arial, sans-serif; line-height:1.8; color:#111827; background:#ffffff; text-align:right;">\n  <h2 style="margin:0 0 16px; font-size:20px; font-weight:700;">???????? ??? ???? ProSlides</h2>\n  <p style="margin:0 0 12px;">???? ???????? ??? ????? ??? ???? ??? ???? ????:</p>\n  <a href="{reset_link}" style="display:inline-block; padding:10px 16px; border-radius:10px; background:#4f46e5; color:#ffffff; text-decoration:none; font-weight:600;">???????? ??? ????</a>\n  <p style="margin:12px 0 0; word-break:break-all;">??? ???? ??? ????? ??? ???? ?? ?? ?????? ??? ????:<br />\n    <a href="{reset_link}" style="color:#4f46e5;">{reset_link}</a>\n  </p>\n  <p style="margin:16px 0 0; color:#6b7280; font-size:13px;">??? ??? ??? ??????? ?? ??? ?????????? ??? ????? ?? ?????? ??????.</p>\n</div>"""
+                uid=uid, token=token
+            )
+
+            subject = "بازیابی رمز عبور حساب ProSlides"
+
+            text_message = (
+                "کاربر گرامی،\n\n"
+                "درخواستی برای بازیابی رمز عبور حساب شما در ProSlides ثبت شده است.\n\n"
+                "برای تنظیم رمز عبور جدید، از لینک زیر استفاده کنید:\n"
+                f"{reset_link}\n\n"
+                "اگر شما این درخواست را ثبت نکرده‌اید، می‌توانید این ایمیل را نادیده بگیرید."
+            )
+
+            html_message = f"""
+            <div dir="rtl" style="font-family:Tahoma, Arial, sans-serif; line-height:1.8; color:#111827; background:#ffffff; text-align:right;">
+              <h2 style="margin:0 0 16px; font-size:20px; font-weight:700;">
+                بازیابی رمز عبور حساب ProSlides
+              </h2>
+
+              <p style="margin:0 0 12px;">
+                کاربر گرامی،
+              </p>
+
+              <p style="margin:0 0 12px;">
+                درخواستی برای بازیابی رمز عبور حساب شما ثبت شده است.  
+                برای تعیین رمز عبور جدید، روی دکمه زیر کلیک کنید:
+              </p>
+
+              <a href="{reset_link}" style="
+                display:inline-block;
+                padding:12px 20px;
+                border-radius:12px;
+                background:#4f46e5;
+                color:#ffffff;
+                text-decoration:none;
+                font-weight:600;
+                margin:8px 0 16px;
+              ">
+                بازیابی رمز عبور
+              </a>
+
+              <p style="margin:12px 0 0; word-break:break-all;">
+                اگر دکمه بالا برای شما کار نکرد، می‌توانید از لینک زیر استفاده کنید:<br />
+                <a href="{reset_link}" style="color:#4f46e5;">
+                  {reset_link}
+                </a>
+              </p>
+
+              <p style="margin:16px 0 0; color:#6b7280; font-size:13px;">
+                اگر شما این درخواست را ثبت نکرده‌اید، می‌توانید با خیال راحت این ایمیل را نادیده بگیرید.
+              </p>
+            </div>
+            """
+
             send_mail(
                 subject=subject,
                 message=text_message,
