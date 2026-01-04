@@ -309,11 +309,11 @@ export default function ManagerJoinPage({
           </div>
 
           <div className="flex flex-col items-center gap-1.5">
-            <div className="text-xl md:text-2xl lg:text-3xl font-semibold">
+            {/* <div className="text-xl md:text-2xl lg:text-3xl font-semibold">
               {page === "lobby"
                 ? `Quiz question ${questionNumber} of ${totalQuestions}`
                 : "Quiz"}
-            </div>
+            </div> */}
             <div className="text-xs md:text-sm text-white/60">
               {playersReady} players ready
             </div>
