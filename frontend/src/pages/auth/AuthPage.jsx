@@ -4,19 +4,19 @@ import { apiFetch } from "../../utils/apiFetch";
 import Seo from "../../components/Seo";
 
 function formatError(payload) {
-  if (!payload) return "Something went wrong. Please try again.";
+  if (!payload) return "خطایی رخ داد. دوباره تلاش کنید";
   if (payload.email) {
     const message = Array.isArray(payload.email)
       ? payload.email.join(", ")
       : payload.email;
     if (message.toLowerCase().includes("already")) {
-      return "Email already used";
+      return "این ایمیل قبلاً ثبت شده است";
     }
-    return `email: ${message}`;
+    return `ایمیل: ${message}`;
   }
   if (payload.detail) return payload.detail;
   const keys = Object.keys(payload);
-  if (!keys.length) return "Something went wrong. Please try again.";
+  if (!keys.length) return "خطایی رخ داد. دوباره تلاش کنید.";
   const firstKey = keys[0];
   const value = payload[firstKey];
   if (Array.isArray(value)) return `${firstKey}: ${value.join(", ")}`;
@@ -34,10 +34,10 @@ function getGoogleAuthErrorMessage(payload) {
   if (!detail) return "";
   const normalized = detail.toLowerCase();
   if (normalized.includes("not configured")) {
-    return "Google sign-in is not available. Contact support.";
+    return "ورود با گوگل در حال حاضر فعال نیست. لطفاً با پشتیبانی تماس بگیرید.";
   }
   if (normalized.includes("invalid google token")) {
-    return "Google sign-in failed. Please try again.";
+    return "ورود با گوگل ناموفق بود. لطفاً دوباره تلاش کنید.";
   }
   return "";
 }
@@ -80,14 +80,14 @@ function getPasswordStrength(value) {
   if (variety >= 3) score += 1;
 
   const label =
-    score >= 4 ? "Strong" : score === 3 ? "Good" : score === 2 ? "Fair" : "Weak";
+    score >= 4 ? "قوی" : score === 3 ? "خوب" : score === 2 ? "متوسط" : "ضعیف";
   return { score, label };
 }
 
 function getPasswordPolicyError(value) {
-  if (!value) return "Enter a password.";
-  if (value.length < 8) return "Use at least 8 characters.";
-  if (/^\d+$/.test(value)) return "Password cannot be all numbers.";
+  if (!value) return "لطفاً رمز عبور را وارد کنید.";
+  if (value.length < 8) return "رمز عبور باید حداقل ۸ کاراکتر باشد.";
+  if (/^\d+$/.test(value)) return "رمز عبور نمی‌تواند فقط شامل اعداد باشد.";
   return "";
 }
 
@@ -184,20 +184,21 @@ function getGooglePromptFeedback(reason) {
     return {
       type: "google-cookies",
       message:
-        "Google sign-in was blocked by your browser's cookie settings. Enable third-party cookies or allow accounts.google.com, then try again.",
+        "ورود با گوگل به‌دلیل تنظیمات کوکی مرورگر شما مسدود شده است. کوکی‌های شخص ثالث را فعال کنید یا به accounts.google.com اجازه دسترسی بدهید و دوباره تلاش کنید.",
     };
   }
   if (normalized.includes("browser_not_supported")) {
     return {
       type: "error",
       message:
-        "Google sign-in isn't supported in this browser. Try a modern browser like Chrome or Edge.",
+        "ورود با گوگل در این مرورگر پشتیبانی نمی‌شود. از مرورگرهای به‌روز مانند Chrome یا Edge استفاده کنید.",
     };
   }
   if (normalized.includes("secure_http_required")) {
     return {
       type: "error",
-      message: "Google sign-in requires HTTPS. Please use the secure site.",
+      message:
+        "ورود با گوگل نیازمند اتصال امن (HTTPS) است. لطفاً از نسخهٔ امن سایت استفاده کنید.",
     };
   }
   if (
@@ -206,7 +207,8 @@ function getGooglePromptFeedback(reason) {
   ) {
     return {
       type: "error",
-      message: "Google login isn't configured for this site. Contact support.",
+      message:
+        "ورود با گوگل برای این سایت پیکربندی نشده است. لطفاً با پشتیبانی تماس بگیرید.",
     };
   }
   if (
@@ -216,20 +218,21 @@ function getGooglePromptFeedback(reason) {
     return {
       type: "info",
       message:
-        "No active Google session found. Sign in to Google and try again.",
+        "هیچ نشست فعالی از گوگل یافت نشد. ابتدا وارد حساب گوگل خود شوید و سپس دوباره تلاش کنید.",
     };
   }
   if (normalized.includes("suppressed_by_user")) {
     return {
       type: "info",
       message:
-        "Google sign-in was dismissed. You can continue with email or try again later.",
+        "ورود با گوگل توسط شما لغو شد. می‌توانید با ایمیل ادامه دهید یا بعداً دوباره تلاش کنید.",
     };
   }
   if (normalized.includes("issuing_failed")) {
     return {
       type: "error",
-      message: "Google sign-in couldn't be completed. Please try again.",
+      message:
+        "فرآیند ورود با گوگل تکمیل نشد. لطفاً دوباره تلاش کنید.",
     };
   }
   if (
@@ -243,10 +246,10 @@ function getGooglePromptFeedback(reason) {
   }
   return {
     type: "error",
-    message: "Google sign-in is unavailable right now. Please try again.",
+    message:
+      "در حال حاضر امکان ورود با گوگل وجود ندارد. لطفاً کمی بعد دوباره تلاش کنید.",
   };
 }
-
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
@@ -490,12 +493,16 @@ export default function AuthPage() {
   const PASSWORD_PROMPT_FLAG = "auth.promptSetPassword";
   const cookieSettingsUrl = useMemo(() => getCookieSettingsUrl(), []);
   const cookieSettingsLabel = cookieSettingsUrl
-    ? "Open cookie settings"
-    : "Open cookie help";
+    ? "باز کردن تنظیمات کوکی"
+    : "راهنمای کوکی‌ها";
 
   const isSignup = mode === "signup";
   const isVerify = mode === "verify";
-  const submitLabel = isVerify ? "Verify" : isSignup ? "Sign Up" : "Log In";
+  const submitLabel = isVerify
+    ? "تأیید"
+    : isSignup
+      ? "ثبت‌نام"
+      : "ورود";
   const seoTitle = isVerify
     ? "تایید ایمیل | پرو اسلایدز"
     : isSignup
@@ -509,7 +516,7 @@ export default function AuthPage() {
   const emailFormatError = useMemo(() => {
     if (isVerify) return "";
     if (!trimmedEmail) return "";
-    return isEmailValid(trimmedEmail) ? "" : "Enter a valid email.";
+    return isEmailValid(trimmedEmail) ? "" : "لطفاً یک ایمیل معتبر وارد کنید.";
   }, [isVerify, trimmedEmail]);
   const emailError = fieldErrors.email || emailFormatError;
 
@@ -527,7 +534,7 @@ export default function AuthPage() {
     if (!isSignup) return "";
     if (fieldErrors.full_name) return fieldErrors.full_name;
     if (!hasSubmitted) return "";
-    if (!fullName.trim()) return "Enter your full name.";
+    if (!fullName.trim()) return "نام و نام خانوادگی را وارد کنید.";
     return "";
   }, [fieldErrors.full_name, fullName, hasSubmitted, isSignup]);
 
@@ -741,7 +748,7 @@ export default function AuthPage() {
       if (!response?.credential) {
         setStatus({
           type: "error",
-          message: "Google login did not return a credential.",
+          message: "ورود با گوگل توکن معتبری برنگرداند.",
         });
         return;
       }
@@ -763,7 +770,7 @@ export default function AuthPage() {
 
         const { access, refresh } = payload || {};
         if (!access) {
-          throw new Error("Google login succeeded, but no access token returned.");
+          throw new Error("ورود با گوگل انجام شد، اما توکن دسترسی دریافت نشد.");
         }
 
         localStorage.setItem("auth.access", access);
@@ -783,13 +790,13 @@ export default function AuthPage() {
           setStatus({
             type: "network",
             message:
-              "We couldn't reach the server. Check your connection and try again.",
+              "ارتباط با سرور برقرار نشد. اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید.",
           });
           return;
         }
         setStatus({
           type: "error",
-          message: error.message || "Google login failed.",
+          message: error.message || "ورود با گوگل ناموفق بود.",
         });
       } finally {
         setSubmitting(false);
@@ -835,7 +842,7 @@ export default function AuthPage() {
     script.onerror = () => {
       setStatus({
         type: "error",
-        message: "Unable to load Google login right now.",
+        message: "در حال حاضر امکان بارگذاری ورود با گوگل وجود ندارد.",
       });
     };
     document.body.appendChild(script);
@@ -845,14 +852,14 @@ export default function AuthPage() {
     if (!googleClientId) {
       setStatus({
         type: "error",
-        message: "Google login is not configured.",
+        message: "ورود با گوگل برای این سایت پیکربندی نشده است.",
       });
       return;
     }
     if (!googleReady || !window.google?.accounts?.id) {
       setStatus({
         type: "error",
-        message: "Google login is still loading. Please try again.",
+        message: "ورود با گوگل هنوز در حال بارگذاری است. لطفاً دوباره تلاش کنید.",
       });
       return;
     }
@@ -861,7 +868,7 @@ export default function AuthPage() {
       setStatus({
         type: "google-cookies",
         message:
-          "Cookies are disabled in your browser. Enable cookies and try Google sign-in again.",
+          "ورود با گوگل هنوز در حال بارگذاری است. لطفاً دوباره تلاش کنید.",
       });
       return;
     }
@@ -887,7 +894,7 @@ export default function AuthPage() {
         setStatus({
           type: "info",
           message:
-            "Account not verified yet. Check your email for the code or resend it.",
+            "حساب کاربری هنوز تأیید نشده است. کد ارسال‌شده به ایمیل خود را بررسی کنید یا دوباره ارسال نمایید.",
         });
         if (!otpExpiresIn) {
           startOtpExpiry(DEFAULT_OTP_TTL_SECONDS);
@@ -899,7 +906,7 @@ export default function AuthPage() {
 
     const { access, refresh } = payload || {};
     if (!access) {
-      throw new Error("Login succeeded, but no access token was returned.");
+      throw new Error("ورود با موفقیت انجام شد، اما توکن دسترسی دریافت نشد.");
     }
 
     localStorage.setItem("auth.access", access);
@@ -918,7 +925,7 @@ export default function AuthPage() {
     if (!email.trim()) {
       setStatus({
         type: "error",
-        message: "Enter your email first to reset your password.",
+        message: "برای بازیابی رمز عبور، ابتدا ایمیل خود را وارد کنید.",
       });
       return;
     }
@@ -938,7 +945,7 @@ export default function AuthPage() {
           setStatus({
             type: "otp-expired",
             message:
-              "That code has expired. Request a new code to continue.",
+              "کد منقضی شده است. برای ادامه، یک کد جدید درخواست کنید.",
           });
           return;
         }
@@ -947,12 +954,12 @@ export default function AuthPage() {
       }
       setStatus({
         type: "info",
-        message: "Password reset instructions sent. Check your inbox.",
+        message: "راهنمای بازیابی رمز عبور به ایمیل شما ارسال شد.",
       });
     } catch (error) {
       setStatus({
         type: "error",
-        message: error.message || "Unable to send reset instructions.",
+        message: error.message || "امکان ارسال راهنمای بازیابی وجود ندارد.",
       });
     } finally {
       setSubmitting(false);
@@ -982,7 +989,7 @@ export default function AuthPage() {
         setStatus({
           type: "email-exists",
           message:
-            "This email is already registered. Use Google sign-in or set a password to log in.",
+            "این ایمیل قبلاً ثبت شده است. می‌توانید با گوگل وارد شوید یا رمز عبور تنظیم کنید.",
         });
         return;
       }
@@ -1001,7 +1008,7 @@ export default function AuthPage() {
 
     setStatus({
       type: "info",
-      message: `We sent a 6-digit code to ${maskEmail(email)}. Enter it to verify your account.`,
+      message: `کد 6 رقمی به ${maskEmail(email)} ارسال شد. برای تایید حساب آن را وارد کنید.`,
     });
     setMode("verify");
     startResendCooldown(getResendSeconds(responsePayload, 60));
@@ -1031,13 +1038,13 @@ export default function AuthPage() {
 
       setStatus({
         type: "info",
-        message: "Email verified. You can log in now.",
+        message: "ایمیل با موفقیت تأیید شد. اکنون می‌توانید وارد شوید.",
       });
       setMode("login");
     } catch (error) {
       setStatus({
         type: "error",
-        message: error.message || "Unable to verify email.",
+        message: error.message || "امکان تأیید ایمیل وجود ندارد.",
       });
     } finally {
       setSubmitting(false);
@@ -1048,7 +1055,7 @@ export default function AuthPage() {
     if (!email.trim()) {
       setStatus({
         type: "error",
-        message: "Enter your email to resend the code.",
+        message: "برای ارسال مجدد کد، ایمیل خود را وارد کنید.",
       });
       return;
     }
@@ -1070,7 +1077,7 @@ export default function AuthPage() {
       }
       setStatus({
         type: "info",
-        message: payload?.detail || "Verification code sent.",
+        message: payload?.detail || "کد تأیید ارسال شد.",
       });
       startResendCooldown(getResendSeconds(payload, 60));
       startOtpExpiry(getOtpExpirySeconds(payload, DEFAULT_OTP_TTL_SECONDS));
@@ -1078,7 +1085,7 @@ export default function AuthPage() {
     } catch (error) {
       setStatus({
         type: "error",
-        message: error.message || "Unable to resend verification code.",
+        message: error.message || "امکان ارسال مجدد کد وجود ندارد.",
       });
     } finally {
       setSubmitting(false);
@@ -1104,12 +1111,12 @@ export default function AuthPage() {
         setStatus({
           type: "network",
           message:
-            "We couldn't reach the server. Check your connection and try again.",
+            "ارتباط با سرور برقرار نشد. اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید.",
         });
       } else {
         setStatus({
           type: "error",
-          message: error.message || "Something went wrong. Please try again.",
+          message: error.message || "خطایی رخ داد. لطفاً دوباره تلاش کنید.",
         });
       }
     } finally {
@@ -1185,15 +1192,15 @@ export default function AuthPage() {
 
       <div className="relative z-[2] w-[min(92vw,430px)] max-h-[78vh] overflow-y-auto animate-[auth-card-in_0.6s_ease-out_both] rounded-[28px] bg-white px-6 pb-7 pt-8 text-center shadow-[0_28px_60px_rgba(15,23,42,0.14)] sm:max-h-none sm:overflow-visible sm:px-8 sm:pb-8 sm:pt-9 md:px-6 md:pt-8">
         <h1 className="text-[28px] font-semibold leading-tight text-[#1f2937]">
-          {isVerify ? "Verify email" : isSignup ? "Sign up" : "Log in"}
+          {isVerify ? "تأیید ایمیل" : isSignup ? "ثبت‌نام" : "ورود"}
         </h1>
         {isVerify && trimmedEmail && (
           <div className="mt-2 rounded-xl bg-[#f8fafc] px-3 py-2 text-left text-xs text-[#475569]">
-            <div>Code sent to {maskEmail(trimmedEmail)}.</div>
+            <div>کد به {maskEmail(trimmedEmail)} ارسال شد.</div>
             <div className="mt-1">
               {otpExpired
-                ? "Code expired. Request a new code or try the current one."
-                : `Expires in ${formatCountdown(otpExpiresIn)}.`}
+                ? "کد منقضی شده است. یک کد جدید درخواست کنید یا همین کد را امتحان کنید."
+                : `انقضا تا ${formatCountdown(otpExpiresIn)}`}
             </div>
             {otpExpired && (
               <button
@@ -1203,14 +1210,14 @@ export default function AuthPage() {
                 className="mt-2 inline-flex items-center rounded-md border border-[#c4b5fd] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#4c1d95] hover:bg-[#f5f3ff] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {resendCooldown > 0
-                  ? `Resend in 0:${String(resendCooldown).padStart(2, "0")}`
-                  : "Resend code"}
+                  ? `ارسال مجدد تا 0:${String(resendCooldown).padStart(2, "0")}`
+                  : "ارسال مجدد کد"}
               </button>
             )}
           </div>
         )}
         <p className="mt-1 text-sm text-[#6b7280]">
-          {isVerify ? "Need a new code? " : isSignup ? "Or " : "No account? "}
+          {isVerify ? "کد جدید می‌خواهید؟ " : isSignup ? "یا " : "حساب کاربری ندارید؟ "}
           <button
             type="button"
             onClick={isVerify ? handleResendVerification : handleModeSwitch}
@@ -1219,11 +1226,11 @@ export default function AuthPage() {
           >
             {isVerify
               ? resendCooldown > 0
-                ? `Resend in 0:${String(resendCooldown).padStart(2, "0")}`
-                : "Resend code"
+                ? `ارسال مجدد تا 0:${String(resendCooldown).padStart(2, "0")}`
+                : "ارسال مجدد کد"
               : isSignup
-                ? "Log in to your account"
-                : "Sign up now"}
+                ? "ورود به حساب کاربری"
+                : "همین حالا ثبت‌نام کنید"}
           </button>
           {isVerify && (
             <button
@@ -1231,7 +1238,7 @@ export default function AuthPage() {
               onClick={handleEditEmail}
               className="ml-2 font-semibold text-[#6c4cf5] transition hover:text-[#4f32e6] hover:underline cursor-pointer"
             >
-              Edit email
+              ویرایش ایمیل
             </button>
           )}
         </p>
@@ -1245,7 +1252,7 @@ export default function AuthPage() {
               className="flex items-center justify-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-semibold text-[#111827] transition hover:border-[#d1d5db] hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <GoogleIcon />
-              {isSignup ? "Sign up with Google" : "Log in with Google"}
+              {isSignup ? "ثبت‌نام با گوگل" : "ورود با گوگل"}
             </button>
           </div>
         )}
@@ -1253,7 +1260,7 @@ export default function AuthPage() {
         {!isVerify && (
           <div className="my-4 flex items-center gap-3 text-xs tracking-[0.2em] text-[#9ca3af] sm:my-3">
             <span className="h-px flex-1 bg-[#e5e7eb]" />
-            OR
+            یا
             <span className="h-px flex-1 bg-[#e5e7eb]" />
           </div>
         )}
@@ -1272,7 +1279,7 @@ export default function AuthPage() {
               type="email"
               name="email"
               autoComplete="email"
-              placeholder="Your email"
+              placeholder="ایمیل شما"
               value={email}
               onChange={(event) => {
                 setEmail(event.target.value);
@@ -1305,7 +1312,7 @@ export default function AuthPage() {
                 type={showPassword ? "text" : "password"}
                 name="password"
                 autoComplete={isSignup ? "new-password" : "current-password"}
-                placeholder="Your password"
+                placeholder="رمز عبور"
                 value={password}
                 onChange={(event) => {
                   setPassword(event.target.value);
@@ -1321,7 +1328,7 @@ export default function AuthPage() {
                 type="button"
                 className="flex h-12 w-12 items-center justify-center text-[#6b7280]"
                 onClick={() => setShowPassword((prev) => !prev)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? "مخفی کردن رمز عبور" : "نمایش رمز عبور"}
               >
                 <EyeIcon open={showPassword} />
               </button>
@@ -1340,7 +1347,7 @@ export default function AuthPage() {
           {!isVerify && isSignup && password.trim() && (
             <div className="mb-3 text-left text-xs text-[#6b7280] sm:mb-2">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-[#374151]">Strength:</span>
+                <span className="font-semibold text-[#374151]">قدرت رمز عبور:</span>
                 <span className="text-[#6b7280]">{passwordStrength.label}</span>
               </div>
               <div className="mt-2 flex gap-1">
@@ -1348,15 +1355,14 @@ export default function AuthPage() {
                   <span
                     key={index}
                     className={`h-1.5 flex-1 rounded-full ${passwordStrength.score > index
-                        ? "bg-[#6c4cf5]"
-                        : "bg-[#e5e7eb]"
+                      ? "bg-[#6c4cf5]"
+                      : "bg-[#e5e7eb]"
                       }`}
                   />
                 ))}
               </div>
               <div className="mt-2">
-                Use at least 8 characters. Avoid passwords made of numbers
-                only.
+                حداقل ۸ کاراکتر استفاده کنید. از رمز عبوری که فقط عدد باشد خودداری کنید.
               </div>
             </div>
           )}
@@ -1374,7 +1380,7 @@ export default function AuthPage() {
                 type="text"
                 inputMode="numeric"
                 name="verification-code"
-                placeholder="Verification code"
+                placeholder="کد تأیید"
                 maxLength={6}
                 value={verificationCode}
                 onChange={(event) =>
@@ -1407,7 +1413,7 @@ export default function AuthPage() {
                 type="text"
                 name="full-name"
                 autoComplete="name"
-                placeholder="Your full name"
+                placeholder="نام و نام خانوادگی"
                 value={fullName}
                 onChange={(event) => {
                   setFullName(event.target.value);
@@ -1426,7 +1432,7 @@ export default function AuthPage() {
                 onClick={handleForgotPassword}
                 className="text-xs text-[#9ca3af] transition hover:text-[#6b7280] hover:underline cursor-pointer"
               >
-                Forgot password?
+                رمز عبور را فراموش کرده اید؟
               </button>
             </div>
           )}
@@ -1439,12 +1445,12 @@ export default function AuthPage() {
           {status && (
             <div
               className={`mb-3 rounded-xl px-3 py-2 text-left text-xs sm:mb-2 ${status.type === "error"
-                  ? "bg-[#fee2e2] text-[#991b1b]"
-                  : status.type === "network" || status.type === "google-cookies"
-                    ? "bg-[#fef9c3] text-[#92400e]"
-                    : status.type === "email-exists"
-                      ? "bg-[#ede9fe] text-[#4c1d95]"
-                      : "bg-[#e0f2fe] text-[#0c4a6e]"
+                ? "bg-[#fee2e2] text-[#991b1b]"
+                : status.type === "network" || status.type === "google-cookies"
+                  ? "bg-[#fef9c3] text-[#92400e]"
+                  : status.type === "email-exists"
+                    ? "bg-[#ede9fe] text-[#4c1d95]"
+                    : "bg-[#e0f2fe] text-[#0c4a6e]"
                 }`}
               role={status.type === "error" ? "alert" : "status"}
               aria-live={status.type === "error" ? "assertive" : "polite"}
@@ -1457,7 +1463,7 @@ export default function AuthPage() {
                   disabled={submitting}
                   className="ml-2 inline-flex items-center rounded-md border border-[#facc15] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#92400e] hover:bg-[#fef08a] disabled:cursor-not-allowed"
                 >
-                  Try again
+                  تلاش مجدد
                 </button>
               )}
               {status.type === "google-cookies" && (
@@ -1474,7 +1480,7 @@ export default function AuthPage() {
                     onClick={handleGoogleSignIn}
                     className="inline-flex items-center rounded-md border border-[#fcd34d] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#92400e] hover:bg-[#fef08a]"
                   >
-                    Try Google again
+                    تلاش مجدد با گوگل
                   </button>
                   {cookieSettingsUrl && (
                     <button
@@ -1482,7 +1488,7 @@ export default function AuthPage() {
                       onClick={handleOpenCookieHelp}
                       className="inline-flex items-center rounded-md border border-[#fcd34d] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#92400e] hover:bg-[#fef08a]"
                     >
-                      Learn how
+                      راهنمای فعال‌سازی
                     </button>
                   )}
                 </div>
@@ -1494,14 +1500,14 @@ export default function AuthPage() {
                     onClick={handleGoogleSignIn}
                     className="inline-flex items-center rounded-md border border-[#c4b5fd] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#4c1d95] hover:bg-[#f5f3ff]"
                   >
-                    Use Google
+                    استفاده از گوگل
                   </button>
                   <button
                     type="button"
                     onClick={handleForgotPassword}
                     className="inline-flex items-center rounded-md border border-[#c4b5fd] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#4c1d95] hover:bg-[#f5f3ff]"
                   >
-                    Set password
+                    تنظیم رمز عبور
                   </button>
                 </div>
               )}
@@ -1514,8 +1520,8 @@ export default function AuthPage() {
                     className="inline-flex items-center rounded-md border border-[#fcd34d] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#92400e] hover:bg-[#fef08a] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {resendCooldown > 0
-                      ? `Resend in 0:${String(resendCooldown).padStart(2, "0")}`
-                      : "Resend code"}
+                      ? `ارسال مجدد تا 0:${String(resendCooldown).padStart(2, "0")}`
+                      : "ارسال مجدد کد"}
                   </button>
                 </div>
               )}
@@ -1527,7 +1533,7 @@ export default function AuthPage() {
             className="rounded-xl bg-[#6c4cf5] py-2.5 text-sm font-semibold text-white transition enabled:hover:bg-[#5b3fe7] disabled:cursor-not-allowed disabled:bg-[#eceef2] disabled:text-[#b5bbc7]"
             disabled={!isReady || submitting}
           >
-            {submitting ? "Working..." : submitLabel}
+            {submitting ? "در حال پردازش..." : submitLabel}
           </button>
         </form>
 
