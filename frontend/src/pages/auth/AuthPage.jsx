@@ -563,10 +563,6 @@ export default function AuthPage() {
     setMode(initialMode);
   }, [initialMode]);
 
-  useEffect(() => {
-    setMode(initialMode);
-  }, [initialMode]);
-
   const handleModeSwitch = () => {
     if (mode === "verify") {
       setMode("login");
@@ -1133,7 +1129,7 @@ export default function AuthPage() {
     <div
       className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 pb-8 pt-8 sm:px-5 sm:pb-10 sm:pt-14 md:pb-[70px] md:pt-[120px]"
       style={{
-        fontFamily: '"Outfit", "Segoe UI", sans-serif',
+        fontFamily: '"Vazirmatn", "Outfit", "Segoe UI", sans-serif',
         background:
           "radial-gradient(circle at 15% 20%, #ffffff 0%, #f3f8ff 45%, transparent 65%), radial-gradient(circle at 90% 15%, #eef5ff 0%, transparent 55%), radial-gradient(circle at 80% 90%, #e8f2ff 0%, transparent 55%), linear-gradient(180deg, #f8fbff 0%, #f1f6ff 100%)",
       }}
@@ -1160,15 +1156,7 @@ export default function AuthPage() {
           >
             ProSlides
           </Link>
-          <div className="flex justify-end">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-semibold text-[#394152] shadow-[0_6px_16px_rgba(15,23,42,0.08)]"
-            >
-              <GlobeIcon />
-              <span>EN</span>
-            </button>
-          </div>
+          <div className="flex justify-end" />
         </div>
       </div>
 
@@ -1216,8 +1204,16 @@ export default function AuthPage() {
             )}
           </div>
         )}
-        <p className="mt-1 text-sm text-[#6b7280]">
-          {isVerify ? "کد جدید می‌خواهید؟ " : isSignup ? "یا " : "حساب کاربری ندارید؟ "}
+        <p
+          className={`mt-1 flex items-center justify-center gap-1.5 text-sm text-[#6b7280] ${
+            !isVerify && !isSignup ? "flex-row-reverse" : ""
+          }`}
+        >
+          {isVerify
+            ? "کد جدید می‌خواهید؟"
+            : isSignup
+              ? "یا"
+              : "حساب کاربری ندارید؟"}
           <button
             type="button"
             onClick={isVerify ? handleResendVerification : handleModeSwitch}
