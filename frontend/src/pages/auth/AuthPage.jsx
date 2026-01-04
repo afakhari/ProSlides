@@ -556,6 +556,10 @@ export default function AuthPage() {
     setMode(initialMode);
   }, [initialMode]);
 
+  useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
+
   const handleModeSwitch = () => {
     if (mode === "verify") {
       setMode("login");
