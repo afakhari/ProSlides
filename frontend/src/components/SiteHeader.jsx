@@ -29,7 +29,7 @@ export default function SiteHeader({ className = "" }) {
             aria-controls="site-nav"
             onClick={() => setIsMenuOpen((prev) => !prev)}
           >
-            <span className="sr-only">Toggle navigation</span>
+            <span className="sr-only">باز و بسته کردن منو</span>
             <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
               <path
                 d="M4 7h16M4 12h16M4 17h16"
@@ -44,25 +44,25 @@ export default function SiteHeader({ className = "" }) {
         </div>
         <nav className="hidden items-center gap-6 text-sm font-semibold text-[#6b7280] md:flex">
           <span className="flex items-center gap-2 text-[#94a3b8]">
-            Features
+            ویژگی‌ها
             <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-              Soon
+              به‌زودی
             </span>
           </span>
           <span className="flex items-center gap-2 text-[#94a3b8]">
-            Use cases
+            کاربردها
             <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-              Soon
+              به‌زودی
             </span>
           </span>
           <span className="flex items-center gap-2 text-[#94a3b8]">
-            Pricing
+            قیمت‌گذاری
             <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-              Soon
+              به‌زودی
             </span>
           </span>
           <Link to="/team" className="transition hover:text-[#111827]">
-            Meet the team
+            تیم ما
           </Link>
         </nav>
         <div className="flex items-center gap-2 text-xs font-semibold sm:gap-3 sm:text-sm">
@@ -70,13 +70,13 @@ export default function SiteHeader({ className = "" }) {
             to="/login"
             className="rounded-xl border border-[#e5e7eb] bg-white px-3 py-1.5 text-[#111827] transition hover:border-[#cbd5f5] sm:px-4 sm:py-2"
           >
-            Log in
+            ورود
           </Link>
           <Link
             to="/signup"
             className="rounded-xl bg-[#5b2ecf] px-3 py-1.5 text-white shadow-[0_12px_28px_rgba(91,46,207,0.25)] transition hover:bg-[#4b25b1] sm:px-4 sm:py-2"
           >
-            Free sign up
+            ثبت‌نام رایگان
           </Link>
         </div>
       </div>
@@ -87,21 +87,21 @@ export default function SiteHeader({ className = "" }) {
         >
           <div className="flex flex-col gap-4 text-sm font-semibold text-[#6b7280]">
             <span className="flex items-center gap-2 text-[#94a3b8]">
-              Features
+              ویژگی‌ها
               <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-                Soon
+                به‌زودی
               </span>
             </span>
             <span className="flex items-center gap-2 text-[#94a3b8]">
-              Use cases
+              کاربردها
               <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-                Soon
+                به‌زودی
               </span>
             </span>
             <span className="flex items-center gap-2 text-[#94a3b8]">
-              Pricing
+              قیمت‌گذاری
               <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-                Soon
+                به‌زودی
               </span>
             </span>
             <Link
@@ -109,7 +109,7 @@ export default function SiteHeader({ className = "" }) {
               className="text-[#111827]"
               onClick={() => setIsMenuOpen(false)}
             >
-              Meet the team
+              تیم ما
             </Link>
           </div>
         </div>

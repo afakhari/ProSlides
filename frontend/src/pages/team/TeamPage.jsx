@@ -1,9 +1,9 @@
-﻿import SiteHeader from "../../components/SiteHeader";
+import SiteHeader from "../../components/SiteHeader";
 import Seo from "../../components/Seo";
 import dotGrid from "../../assets/patterns/dot-grid.svg";
 import amiraliFakhari from "../../assets/avatars/AmiraliFakhari.jpg";
 import aminBidad from "../../assets/avatars/AminBidad.jpg";
-import alirezaReazaei from "../../assets/avatars/AlirezaRezaei.jpg";
+import alirezaRezaei from "../../assets/avatars/AlirezaRezaei.jpg";
 import kianJanbozorgi from "../../assets/avatars/KianJanbozorgi.jpg";
 import ZahraKefayati from "../../assets/avatars/ZahraKefayati.jpg";
 import HesamAzmoun from "../../assets/avatars/HesamAzmoun.jpg";
@@ -28,15 +28,15 @@ const frontendTheme = {
 const backendTeam = [
   {
     name: "Amin Bidad",
-    role: "Backend Engineer - Rust",
-    description: "Keeps real-time services fast under live room traffic.",
+    role: "مهندس بک‌اند — Rust",
+    description: "روی پایداری و سرعت سرویس‌های بلادرنگ تمرکز دارد تا تجربه زنده بدون وقفه بماند.",
     avatar: aminBidad,
     theme: backendTheme,
   },
   {
     name: "Amirali Fakahri",
-    role: "Backend Engineer - Django",
-    description: "Keeps data and permissions predictable across sessions.",
+    role: "مهندس بک‌اند — Django",
+    description: "ساختار داده و کنترل دسترسی را طوری نگه می‌دارد که تجربه کاربر قابل اتکا باشد.",
     avatar: amiraliFakhari,
     theme: backendTheme,
   },
@@ -45,36 +45,36 @@ const backendTeam = [
 const frontendTeam = [
   {
     name: "Alireza Reazaei",
-    role: "Frontend Engineer - React",
-    description: "Keeps the design system consistent as features grow.",
-    avatar: alirezaReazaei,
+    role: "مهندس فرانت‌اند — React",
+    description: "یکپارچگی طراحی را حفظ می‌کند و رشد محصول را بی‌نقص جلو می‌برد.",
+    avatar: alirezaRezaei,
     theme: frontendTheme,
   },
   {
     name: "Hesam Azmoun",
-    role: "Frontend Engineer - React",
-    description: "Translates product intent into crisp interactions.",
+    role: "مهندس فرانت‌اند — React",
+    description: "هدف محصول را به تعامل‌های ساده و روان تبدیل می‌کند.",
     avatar: HesamAzmoun,
     theme: frontendTheme,
   },
   {
     name: "Kian Janbozorgi",
-    role: "Frontend Engineer - React",
-    description: "Turns complex flows into calm, usable screens.",
+    role: "مهندس فرانت‌اند — React",
+    description: "مسیرهای پیچیده را به تجربه‌ای واضح و قابل استفاده تبدیل می‌کند.",
     avatar: kianJanbozorgi,
     theme: frontendTheme,
   },
   {
     name: "Sima Kazemi",
-    role: "Frontend Engineer - React",
-    description: "Keeps rendering smooth on large, live decks.",
+    role: "مهندس فرانت‌اند — React",
+    description: "روی عملکرد و رندر روان در ارائه‌های سنگین کار می‌کند.",
     avatar: SimaKazemi,
     theme: frontendTheme,
   },
   {
     name: "Zahra Kefayati",
-    role: "Frontend Engineer - React",
-    description: "Sweats the details of accessibility and spacing.",
+    role: "مهندس فرانت‌اند — React",
+    description: "به جزئیات دسترس‌پذیری و نظم بصری توجه ویژه دارد.",
     avatar: ZahraKefayati,
     theme: frontendTheme,
   },
@@ -117,7 +117,7 @@ function TeamSection({ id, title, description, members, gridClassName }) {
                       <div className="rounded-full bg-white p-[3px]">
                         <img
                           src={member.avatar}
-                          alt={`Avatar of ${member.name}`}
+                          alt={`تصویر ${member.name}`}
                           width="96"
                           height="96"
                           loading="lazy"
@@ -157,16 +157,17 @@ export default function TeamPage() {
   return (
     <main
       className="relative min-h-screen overflow-x-hidden text-slate-900"
+      dir="rtl"
       style={{
-        fontFamily: '"Outfit", "Segoe UI", sans-serif',
+        fontFamily: '"Vazirmatn", "Outfit", "Segoe UI", sans-serif',
         backgroundColor: "#f8fafc",
         backgroundImage: `url(${dotGrid})`,
         backgroundSize: "56px 56px",
       }}
     >
       <Seo
-        title="تیم پرو اسلایدز | آشنایی با مهندسان ما"
-        description="با تیم مهندسی پرو اسلایدز آشنا شوید؛ سازندگان تجربه‌های ارائه تعاملی برای کلاس‌ها و تیم‌ها."
+        title="تیم ما | پرو اسلایدز"
+        description="با تیم کوچکی از مهندسان که تجربه ارائه‌های تعاملی را با دقت و نگاه انسانی می‌سازند آشنا شوید."
         canonical="https://proslides.ir/team"
       />
       <div className="pointer-events-none absolute inset-0">
@@ -178,26 +179,26 @@ export default function TeamPage() {
       <div className="relative mx-auto flex max-w-6xl flex-col gap-16 px-6 py-16 sm:py-20">
         <header className="mx-auto max-w-3xl space-y-4 pb-4 text-center">
           <h1 className="text-4xl font-semibold leading-tight text-slate-900 sm:text-5xl">
-            Meet our team
+            تیم ما
           </h1>
           <p className="text-base text-slate-600 sm:text-lg">
-            A small team of engineers building interactive presentation
-            experiences with care, precision, and a focus on people.
+            ما یک تیم کوچک هستیم که با تمرکز بر کیفیت، تجربه‌های تعاملی برای
+            ارائه‌ها می‌سازیم.
           </p>
         </header>
 
         <TeamSection
           id="backend-team"
-          title="Backend Engineering"
-          description="Reliability, performance, and systems that stay steady under live load."
+          title="مهندسی بک‌اند"
+          description="زیرساخت‌هایی پایدار و سریع که زیر بار زنده هم مطمئن عمل می‌کنند."
           members={backendTeam}
           gridClassName="grid gap-8 md:grid-cols-2"
         />
 
         <TeamSection
           id="frontend-team"
-          title="Frontend Engineering"
-          description="Interface flow, clarity, and usability presenters can trust."
+          title="مهندسی فرانت‌اند"
+          description="رابط کاربری شفاف و روان برای تجربه‌ای که ارائه‌دهنده به آن اعتماد می‌کند."
           members={frontendTeam}
           gridClassName="grid gap-8 md:grid-cols-2 lg:grid-cols-3"
         />

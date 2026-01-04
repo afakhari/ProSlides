@@ -181,7 +181,7 @@ export default function ResetPasswordPage() {
     <div
       className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 pb-8 pt-8 sm:px-5 sm:pb-10 sm:pt-14 md:pb-[70px] md:pt-[120px]"
       style={{
-        fontFamily: '"Outfit", "Segoe UI", sans-serif',
+        fontFamily: '"Vazirmatn", "Outfit", "Segoe UI", sans-serif',
         background:
           "radial-gradient(circle at 15% 20%, #ffffff 0%, #f3f8ff 45%, transparent 65%), radial-gradient(circle at 90% 15%, #eef5ff 0%, transparent 55%), radial-gradient(circle at 80% 90%, #e8f2ff 0%, transparent 55%), linear-gradient(180deg, #f8fbff 0%, #f1f6ff 100%)",
       }}
