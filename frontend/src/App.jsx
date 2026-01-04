@@ -10,7 +10,9 @@ import { lazy, Suspense, useState, useEffect } from "react";
 import LandingPage from "./pages/landing/LandingPage";
 import { apiFetch } from "./utils/apiFetch";
 import { AudioProvider, useAudio } from "./contexts/AudioContext";
-import { WebSocketProvider, useWebSocket } from "./contexts/WebSocketContext";
+import { WebSocketProvider } from "./contexts/WebSocketContext";
+import { useWebSocket } from "./hooks/useWebSocket";
+import { ServerDataProvider } from "./contexts/ServerDataContext";
 import { useServerData } from "./hooks/useServerData";
 import notFoundIllustration from "./assets/404.svg";
 import { QuizSetup } from "./data/mockData";
@@ -123,10 +125,12 @@ export default function App() {
     if (status === "success" && resolvedQuizId) {
       return (
         <AudioProvider>
-          <WebSocketProvider role="player">
-            <AppPresentation roomId={String(resolvedQuizId)} role="player" />
-            <WSMessageHandler />
-          </WebSocketProvider>
+          <ServerDataProvider>
+            <WebSocketProvider role="player">
+              <AppPresentation roomId={String(resolvedQuizId)} role="player" />
+              <WSMessageHandler />
+            </WebSocketProvider>
+          </ServerDataProvider>
         </AudioProvider>
       );
     }
@@ -247,10 +251,12 @@ export default function App() {
 
     return (
       <AudioProvider>
-        <WebSocketProvider role={wsRole}>
-          <AppPresentation roomId={roomId} role={role} />
-          <WSMessageHandler />
-        </WebSocketProvider>
+        <ServerDataProvider>
+          <WebSocketProvider role={wsRole}>
+            <AppPresentation roomId={roomId} role={role} />
+            <WSMessageHandler />
+          </WebSocketProvider>
+        </ServerDataProvider>
       </AudioProvider>
     );
   }
