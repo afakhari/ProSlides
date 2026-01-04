@@ -1,7 +1,27 @@
-import { BrowserRouter as Router, Routes, Route, useParams } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  useParams,
+  useNavigate,
+} from "react-router-dom";
 import { lazy, Suspense, useState, useEffect } from "react";
 
 import LandingPage from "./pages/landing/LandingPage";
+import { apiFetch } from "./utils/apiFetch";
+import { AudioProvider, useAudio } from "./contexts/AudioContext";
+import { WebSocketProvider, useWebSocket } from "./contexts/WebSocketContext";
+import { useServerData } from "./hooks/useServerData";
+import notFoundIllustration from "./assets/404.svg";
+import { QuizSetup } from "./data/mockData";
+
+import ManagerJoinPage from "./pages/presentation/manager/JoinPage";
+import ManagerPickAnswerQuestion from "./pages/presentation/manager/PickAnswerQuestion";
+import ManagerLeaderBoard from "./pages/presentation/manager/LeaderBoard";
+
+import PlayerLeaderBoard from "./pages/presentation/player/LeaderBoard";
+import PlayerPickAnswerQuestion from "./pages/presentation/player/PickAnswerQuestion";
+import PlayerJoinPage from "./pages/presentation/player/JoinPage";
 
 const AuthPage = lazy(() => import("./pages/auth/AuthPage"));
 const ResetPasswordPage = lazy(() => import("./pages/auth/ResetPasswordPage"));
@@ -91,12 +111,12 @@ export default function App() {
 
     // Loading state
     if (status === "loading") {
-      return <Waiting message="Joining..." />;
+      return <WaitingPage message="Joining..." />;
     }
 
     // Error state
     if (status === "error") {
-      return <Waiting message="Invalid access code" />;
+      return <WaitingPage message="Invalid access code" />;
     }
 
     // Success - render player presentation directly (URL stays the same)
@@ -111,7 +131,7 @@ export default function App() {
       );
     }
 
-    return <Waiting />;
+    return <WaitingPage />;
   }
 
   /* ------------------------ Not Found Page ------------------------ */
@@ -165,15 +185,12 @@ export default function App() {
 
         <header className="border-b border-[#e5e7eb] bg-white">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-3 py-4">
-
-
-          <a
-            href="/"
-            className="inline-flex items-center gap-1.5 text-[#111827] font-semibold text-lg before:content-['✱'] before:text-xl"
-          >
-            ProSlides
-          </a>
-
+            <a
+              href="/"
+              className="inline-flex items-center gap-1.5 text-[#111827] font-semibold text-lg before:content-['✱'] before:text-xl"
+            >
+              ProSlides
+            </a>
 
             <div className="flex items-center gap-3 text-sm font-semibold">
               <button
@@ -415,7 +432,7 @@ export default function App() {
             />
           );
         default:
-          return <Waiting />;
+          return <WaitingPage />;
       }
     };
 
@@ -467,7 +484,7 @@ export default function App() {
 
     if (role === "player") return renderPlayer();
 
-    return <Waiting />;
+    return <WaitingPage />;
   }
 
   /* ---------------- WebSocket Handler ---------------- */
