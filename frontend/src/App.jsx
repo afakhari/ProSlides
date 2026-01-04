@@ -1,5 +1,5 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { lazy, Suspense } from "react";
+import { BrowserRouter as Router, Routes, Route, useParams } from "react-router-dom";
+import { lazy, Suspense, useState, useEffect } from "react";
 
 import LandingPage from "./pages/landing/LandingPage";
 
