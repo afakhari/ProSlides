@@ -1,25 +1,31 @@
 import React from "react";
 
+
 export default function MiniResultsResultsOnly({
   slide,
   quizBackground,
   quizBackgroundImage,
   isFullSize = true,
 }) {
-  // اگر slide یا question موجود نباشد، کامپوننت چیزی رندر نکند
+
   if (!slide || !slide.question || !slide.question.options) {
     return null;
   }
 
+
   const question = slide.question;
   const options = question.options;
+
 
   // Calculate votes for preview
   const totalVotes = options.reduce(
     (sum, opt) => sum + (opt.votes || opt.number_of_submits || 0),
     0
   );
+
+
   const hasVotes = totalVotes > 0;
+
 
   const dynamicStyle = {
     backgroundColor: quizBackground || "#1e1e2e",
@@ -31,7 +37,8 @@ export default function MiniResultsResultsOnly({
     backgroundRepeat: "no-repeat",
   };
 
-  // Scaling classes
+
+  // Considering two types of displays depending on whether the page is full size or not
   const containerClasses = isFullSize
     ? "aspect-[3/2] w-full max-w-[80%] h-auto max-h-[80%] rounded-xl shadow-lg overflow-hidden"
     : "aspect-[3/2] w-full max-w-[95%] h-auto max-h-[95%] rounded-xl shadow-md overflow-hidden";
@@ -42,21 +49,23 @@ export default function MiniResultsResultsOnly({
   const imageWidth = isFullSize ? "w-1/4" : "w-1/5";
   const optionImageHeight = isFullSize ? "max-h-32" : "max-h-20";
 
+
   return (
     <div
       className={`flex flex-col items-center font-sans ${containerClasses}`}
       style={dynamicStyle}
     >
-      {/* Title */}
+      {/* --------------- Title Section --------------- */}
       <h2
-        className={`${titleSize} font-bold text-white mb-4 mt-6 text-center px-4 shrink-0`}
+        className={`${titleSize} font-bold text-white mb-4 mt-15 text-center px-4 shrink-0`}
       >
         {question.question_text || question.text || question.title}
       </h2>
 
-      {/* Main Content */}
+
+      {/* --------------- Content --------------- */}
       <div className="flex flex-1 w-full min-h-0 px-4 gap-4 pb-4">
-        {/* Image (Left) */}
+        {/* --------------- Image (Left) --------------- */}
         {question.image_url && (
           <div
             className={`flex items-center justify-center ${imageWidth} shrink-0`}
@@ -69,7 +78,7 @@ export default function MiniResultsResultsOnly({
           </div>
         )}
 
-        {/* Options (Right) */}
+        {/* --------------- Question (Right) --------------- */}
         <div
           className={`flex justify-around items-end flex-1 min-h-0 ${
             !question.image_url ? "w-full" : ""
@@ -86,7 +95,7 @@ export default function MiniResultsResultsOnly({
                 key={index}
                 className="flex flex-col items-center justify-end w-1/5 h-full"
               >
-                {/* Vote Count */}
+                {/* --------------- Vote Count --------------- */}
                 {hasVotes && (
                   <div
                     className={`mb-1 text-center text-white font-semibold ${voteTextSize}`}
@@ -95,7 +104,7 @@ export default function MiniResultsResultsOnly({
                   </div>
                 )}
 
-                {/* Option Image */}
+                {/* --------------- Image Option --------------- */}
                 {hasImage && (
                   <img
                     src={opt.image_url}
@@ -104,7 +113,7 @@ export default function MiniResultsResultsOnly({
                   />
                 )}
 
-                {/* Bar */}
+                {/* --------------- Bar --------------- */}
                 <div
                   className={`w-3/4 transition-all duration-1000 
                     ${hasImage ? "rounded-b-lg" : "rounded-t-lg"}
@@ -121,7 +130,7 @@ export default function MiniResultsResultsOnly({
                   }}
                 ></div>
 
-                {/* Option Text */}
+                {/* --------------- Option Text --------------- */}
                 <p
                   className={`mt-2 text-white font-semibold text-center ${optionTextSize}`}
                 >

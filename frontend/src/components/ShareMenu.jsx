@@ -3,7 +3,9 @@ import QRCode from "qrcode";
 import { X, Check, Loader2 } from "lucide-react";
 import { apiFetch } from "../utils/apiFetch";
 
+
 export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
+
   const [section, setSection] = useState("invite");
   const [code, setCode] = useState(accessCode || "");
   const [qr, setQr] = useState("");
@@ -14,7 +16,8 @@ export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
 
   const BASE = "https://proslides.ir/";
 
-  // اعتبارسنجی کد
+
+  // Checking the validity of the code
   const validateCode = (input) => {
     if (input.length > 12) {
       return "The code must be a maximum of 12 characters.";
@@ -26,7 +29,7 @@ export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
   };
 
 
-  // تابع ارسال کد به بک‌اند
+  // Save code in the backend
   const saveAccessCode = async () => {
     if (!code || inputError || code.length < 5) return;
     
@@ -42,15 +45,23 @@ export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
         },
       });
       
-      
       if (!response.ok) {
-        throw new Error("Failed to save");
+        const errorData = await response.json();
+        const errorMessage = Object.values(errorData)[0] || 'Unknown error';
+        
+        setSaveError(`${errorMessage}`);
+        
+        setTimeout(() => {
+          setSaveError("");
+        }, 3000);
+        
+        return;
       }
 
-      await response.json();
+      const data = await response.json();
       setSaveSuccess(true);
       
-      // پیام موفقیت بعد از 3 ثانیه پاک می‌شود
+      // Delete success message after 3 seconds
       setTimeout(() => {
         setSaveSuccess(false);
       }, 3000);
@@ -58,10 +69,17 @@ export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
     } catch (error) {
       console.error('Error saving access code:', error);
       setSaveError(error.message || 'Failed to save access code');
+
+      // Delete error message after 3 seconds
+      setTimeout(() => {
+        setSaveError("");
+      }, 3000);
+
     } finally {
       setIsSaving(false);
     }
   };
+
 
   // Update code when accessCode prop changes
   useEffect(() => {
@@ -71,7 +89,8 @@ export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
     }
   }, [accessCode]);
 
-  // --- Generate QR Code ---
+
+  // Generate QR Code 
   useEffect(() => {
     if (!code || inputError || code.length < 5) {
       setQr("");
@@ -84,7 +103,9 @@ export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
       .catch((err) => console.error(err));
   }, [code, inputError]);
 
+
   if (!isOpen) return null;
+
 
   return (
     <>
@@ -124,18 +145,13 @@ export default function ShareMenu({ quizId, isOpen, onClose, accessCode }) {
                 saveSuccess={saveSuccess}
               />
             )}
-            {section === "collab" && <Placeholder title="Add collaborators" />}
-            {section === "slides" && <Placeholder title="Share slides" />}
-            {section === "publish" && (
-              <Placeholder title="Publish your presentation" />
-            )}
-            {section === "integration" && <Placeholder title="Integrations" />}
           </div>
         </div>
       </div>
     </>
   );
 }
+
 
 function MenuItem({ label, active, onClick }) {
   return (
@@ -152,6 +168,7 @@ function MenuItem({ label, active, onClick }) {
     </button>
   );
 }
+
 
 function InviteAudienceUI({ 
   BASE, 
@@ -173,8 +190,10 @@ function InviteAudienceUI({
     setInputError(validateCode(newCode));
   };
 
-  // بررسی معتبر بودن کد برای فعال/غیرفعال کردن دکمه
+
+  // Checking the validity of the code to enable/disable the save button
   const isCodeValid = code.length >= 5 && !inputError;
+
 
   return (
     <div>
@@ -184,6 +203,7 @@ function InviteAudienceUI({
 
       <p className="text-gray-600 text-sm">Audience can join at :</p>
 
+      {/* --------------- Code Entry Section --------------- */}
       <div className="mt-2 flex items-center gap-2">
         <span className="text-gray-500">{BASE}</span>
         <div className="relative">
@@ -197,7 +217,7 @@ function InviteAudienceUI({
             maxLength={12}
           />
           
-          {/* آیکون تیک */}
+          {/* --------------- Tick ​​icon --------------- */}
           <button
             onClick={onSave}
             disabled={!isCodeValid || isSaving}
@@ -215,19 +235,20 @@ function InviteAudienceUI({
         </div>
       </div>
 
-      {/* نمایش پیام خطای اعتبارسنجی */}
+
+      {/* --------------- Display Validation Error Message --------------- */}
       {inputError && (
         <p className="text-red-500 text-sm mt-3">{inputError}</p>
       )}
 
-      {/* نمایش پیام خطا برای طول کم */}
+      {/* --------------- Show Error Message For Short Length --------------- */}
       {code.length > 0 && code.length < 5 && !inputError && (
         <p className="text-red-500 text-sm mt-3">
           The code must be at least 5 and at most 12 characters long.
         </p>
       )}
 
-      {/* پیام موفقیت یا خطای ذخیره‌سازی */}
+      {/* --------------- Display A Success Or Error Message When Saving --------------- */}
       {saveSuccess && (
         <p className="text-green-600 text-sm mt-3">✓ Access code saved successfully!</p>
       )}
@@ -236,7 +257,7 @@ function InviteAudienceUI({
         <p className="text-red-500 text-sm mt-3">Error: {saveError}</p>
       )}
 
-      {/* نمایش QR فقط اگر کد معتبر باشد و خطایی وجود نداشته باشد */}
+      {/* --------------- Display QR Code Only If The Code Is Valid And There Are No Errors --------------- */}
       {qr && !inputError && code.length >= 5 && (
         <div className="mt-6 flex flex-col items-center">
           <p className="text-sm text-gray-600 mb-2">scan QR or</p>
@@ -255,15 +276,6 @@ function InviteAudienceUI({
           </a>
         </div>
       )}
-    </div>
-  );
-}
-
-function Placeholder({ title }) {
-  return (
-    <div className="text-center text-gray-400 pt-20">
-      <p className="text-xl font-semibold">{title}</p>
-      <p className="text-sm mt-2">This section is not implemented yet.</p>
     </div>
   );
 }

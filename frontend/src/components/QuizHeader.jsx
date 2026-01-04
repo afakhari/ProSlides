@@ -5,35 +5,35 @@ import { buildApiUrl } from "../utils/api";
 import { getAuthHeaders } from "../utils/auth";
 import ShareMenu from "./ShareMenu";
 
+
 export default function QuizHeader({
   accessCode = "ABC123",
-  quizTitle = "", // مقدار پیش‌فرض برای quizTitle
+  quizTitle = "", 
   quizId,
 }) {
+
   const navigate = useNavigate();
   const [showShareModal, setShowShareModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [newQuizTitle, setNewQuizTitle] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // وقتی quizTitle تغییر می‌کند، newQuizTitle را هم آپدیت کن
+
+  // 
   useEffect(() => {
     setNewQuizTitle(quizTitle || "");
   }, [quizTitle]);
 
+
   const handleUpdateQuizName = async () => {
-    // بررسی وجود quizId
     if (!quizId) {
-      console.error("quizId is required for updating quiz name");
-      alert("خطا: شناسه کوئیز نامعتبر است");
+      alert("Error: Quiz ID is invalid.");
       setIsEditing(false);
       return;
     }
 
-    // بررسی وجود newQuizTitle و حذف فاصله‌های اضافی
     if (!newQuizTitle || typeof newQuizTitle !== "string") {
-      console.error("newQuizTitle is invalid:", newQuizTitle);
-      alert("لطفا یک نام معتبر وارد کنید");
+      alert("Please enter a valid name.");
       return;
     }
 
@@ -57,30 +57,23 @@ export default function QuizHeader({
       );
 
       if (response.status === 200) {
-        // بروزرسانی موفقیت‌آمیز
-        console.log("نام کوئیز با موفقیت تغییر کرد:", response.data);
-        alert("نام کوئیز با موفقیت تغییر کرد");
-
-        // اگر نیاز به بروزرسانی state والد دارید
-        // onQuizNameUpdated?.(trimmedTitle);
+        alert("Quiz name changed successfully.");
       }
     } catch (error) {
-      console.error("Error updating quiz name:", error);
-
-      // بازگرداندن به نام قبلی
+      // Return to previous name
       setNewQuizTitle(quizTitle || "");
 
-      // نمایش پیام خطا به کاربر
+      // Display an error message to the user
       if (error.response) {
         alert(
-          `خطا در بروزرسانی: ${
+          `Update error: ${
             error.response.data?.message || error.response.statusText
           }`
         );
       } else if (error.request) {
-        alert("خطا در ارتباط با سرور");
+        alert("Error connecting to server.");
       } else {
-        alert("خطای ناشناخته");
+        alert("Unknown error.");
       }
     } finally {
       setIsUpdating(false);
@@ -88,10 +81,12 @@ export default function QuizHeader({
     }
   };
 
+
   const handleCancelEdit = () => {
     setNewQuizTitle(quizTitle || "");
     setIsEditing(false);
   };
+
 
   // تابع handleInputChange برای اطمینان از مقدار معتبر
   const handleInputChange = (e) => {
@@ -99,9 +94,10 @@ export default function QuizHeader({
     setNewQuizTitle(value);
   };
 
+
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 w-full h-14 bg-pink-200 flex items-center justify-between px-5 z-50">
+      <header className="fixed top-0 left-0 right-0 w-full h-14 bg-pink-300 flex items-center justify-between px-5 z-50">
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate("/manager/panel")}
@@ -141,11 +137,11 @@ export default function QuizHeader({
               Change Quiz Name
             </button>
           ) : (
-            // فضای ویرایش نام کوئیز
+            // Quiz name editing space
             <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg shadow-gray-300/40 px-3 py-1">
               <input
                 type="text"
-                value={newQuizTitle || ""} // تضمین می‌کند که value همیشه string باشد
+                value={newQuizTitle || ""} 
                 onChange={handleInputChange}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleUpdateQuizName();
@@ -154,8 +150,8 @@ export default function QuizHeader({
                 autoFocus
                 disabled={isUpdating}
                 className="px-3 py-1 mb-1 mt-1 rounded-lg border border-gray-300 
-                         focus:outline-none focus:ring-2 focus:ring-pink-500 
-                         focus:border-transparent bg-white text-gray-800 min-w-[200px]"
+                        focus:outline-none focus:ring-2 focus:ring-pink-500 
+                        focus:border-transparent bg-white text-gray-800 min-w-[200px]"
                 placeholder="new name"
               />
 
@@ -163,8 +159,8 @@ export default function QuizHeader({
                 onClick={handleUpdateQuizName}
                 disabled={isUpdating || !newQuizTitle || !newQuizTitle.trim()}
                 className="flex items-center justify-center w-8 h-8 
-                         bg-green-500 hover:bg-green-600 text-white 
-                         rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        bg-green-500 hover:bg-green-600 text-white 
+                        rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="save"
               >
                 {isUpdating ? (
@@ -178,8 +174,8 @@ export default function QuizHeader({
                 onClick={handleCancelEdit}
                 disabled={isUpdating}
                 className="flex items-center justify-center w-8 h-8 
-                         bg-gray-300 hover:bg-gray-400 text-gray-700 
-                         rounded-lg transition disabled:opacity-50"
+                        bg-gray-300 hover:bg-gray-400 text-gray-700 
+                        rounded-lg transition disabled:opacity-50"
                 title="cancel"
               >
                 <span className="text-lg">✕</span>
@@ -187,26 +183,21 @@ export default function QuizHeader({
             </div>
           )}
 
-          {/* نمایش نام فعلی کوئیز وقتی در حالت ویرایش نیستیم */}
-          {/* {!isEditing && quizTitle && (
-            <span className="text-gray-800 font-semibold text-lg mr-2">
-              current quiz name: {quizTitle}
-            </span>
-          )} */}
 
-          {/* دکمه Share */}
+          {/* --------------- Share Button --------------- */}
           <button
             onClick={() => setShowShareModal(true)}
             className="flex items-center gap-2 px-5 py-2.5 
-                     bg-gradient-to-r from-pink-600 to-purple-700 
-                     hover:from-pink-650 hover:to-purple-800
-                     text-white font-semibold rounded-xl shadow-lg shadow-pink-300/40
-                     transition active:scale-95"
+                    bg-gradient-to-r from-pink-600 to-purple-700 
+                    hover:from-pink-650 hover:to-purple-800
+                    text-white font-semibold rounded-xl shadow-lg shadow-pink-300/40
+                    transition active:scale-95"
           >
             Share
           </button>
         </div>
       </header>
+
 
       <ShareMenu
         quizId={quizId}
