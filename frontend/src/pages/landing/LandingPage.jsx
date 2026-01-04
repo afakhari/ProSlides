@@ -1,7 +1,18 @@
-﻿import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import SiteHeader from "../../components/SiteHeader";
 import Seo from "../../components/Seo";
+function LogoMark() {
+  return (
+    <Link
+      to="/"
+      className="inline-flex items-center gap-1.5 text-[#111827] font-semibold text-lg before:content-['✱'] before:text-xl"
+    >
+      ProSlides
+    </Link>
+  );
+}
+
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -58,7 +69,27 @@ export default function LandingPage() {
         </div>
       </div>
 
-      <SiteHeader />
+      <header className="border-b border-[#e5e7eb] bg-white">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-3 py-4">
+          <LogoMark />
+          <div className="flex items-center gap-3 text-sm font-semibold">
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="rounded-xl border border-[#e5e7eb] bg-white px-4 py-2 text-[#111827] transition hover:border-[#cbd5f5]"
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/signup")}
+              className="rounded-xl bg-[#5b2ecf] px-4 py-2 text-white shadow-[0_12px_28px_rgba(91,46,207,0.25)] transition hover:bg-[#4b25b1]"
+            >
+              Free sign up
+            </button>
+          </div>
+        </div>
+      </header>
 
       <main className="mx-auto flex max-w-5xl flex-col items-center px-6 pb-28 pt-20 text-center">
         <h1 className="text-4xl font-semibold leading-tight text-[#111827] md:text-6xl">
