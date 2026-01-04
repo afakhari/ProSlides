@@ -1,7 +1,10 @@
+//This component belongs to the toolbar on the right side of the Edit Quiz section(Panel)
+
 import { 
     Sparkles, LayoutTemplate, 
     FileText, Paintbrush, Volume2, Settings 
 } from "lucide-react";
+
 
 const items = [
     { id: "ai", label: "AI", icon: Sparkles },
@@ -13,6 +16,7 @@ const items = [
     "divider",
     { id: "settings", label: "Settings", icon: Settings },
 ];
+
 
 export default function RightToolbar({ activeTab, setActiveTab }) {
     return (

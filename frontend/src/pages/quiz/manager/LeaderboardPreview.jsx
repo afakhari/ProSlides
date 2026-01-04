@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import { getColorForUser } from "../../../lib/colorUtils";
 
+
 export default function LeaderboardPreview({
   slide,
   quizBackground,
@@ -9,7 +10,10 @@ export default function LeaderboardPreview({
   isFullSize = true,
   customLeaderboard = null,
 }) {
+
   const [animateBars, setAnimateBars] = useState(false);
+  const [hovered, setHovered] = useState(null);
+
 
   // Prepare players data
   const players = useMemo(() => {
@@ -30,14 +34,17 @@ export default function LeaderboardPreview({
       }));
   }, [slide?.leaderboard, customLeaderboard]);
 
+
   const maxScore = Math.max(...players.map((p) => p.total_points), 0);
   const minScore = 0;
+
 
   const calcPercent = (score) => {
     if (maxScore <= minScore) return 100;
     const percent = ((score - minScore) / (maxScore - minScore)) * 99 + 1;
     return Math.max(percent, 1);
   };
+
 
   useEffect(() => {
     setAnimateBars(false);
@@ -46,6 +53,7 @@ export default function LeaderboardPreview({
     }, 500);
     return () => clearTimeout(t);
   }, [players]);
+
 
   const dynamicStyle = {
     backgroundColor: quizBackground || "#1e1e2e",
@@ -57,6 +65,8 @@ export default function LeaderboardPreview({
     backgroundRepeat: "no-repeat",
   };
 
+
+  // Considering two types of displays depending on whether the page is full size or not
   const containerClasses = isFullSize
     ? "aspect-[3/2] w-full max-w-[80%] h-auto max-h-[80%] rounded-xl shadow-lg overflow-hidden"
     : "aspect-[3/2] w-full max-w-[95%] h-auto max-h-[95%] rounded-xl shadow-md overflow-hidden";
@@ -70,14 +80,15 @@ export default function LeaderboardPreview({
   const scoreSize = isFullSize ? "text-base" : "text-sm";
   const scoreWidth = isFullSize ? "w-16" : "w-12";
 
+
   return (
     <div
       className={`flex flex-col items-center font-sans ${containerClasses}`}
       style={dynamicStyle}
     >
       <div className="flex flex-col items-center justify-center w-full h-full px-4 py-6 overflow-y-auto no-scrollbar">
-        {/* Title Section */}
-        <div className="text-center w-full mb-6">
+        {/* --------------- Title Section --------------- */}
+        <div className="text-center w-full mb-6 mt-15">
           <h2 className={`${titleSize} text-white font-bold mb-2`}>
             {slide?.leaderboard_title || "Leaderboard"}
           </h2>
@@ -86,7 +97,7 @@ export default function LeaderboardPreview({
           </p>
         </div>
 
-        {/* Players List */}
+        {/* --------------- Players List --------------- */}
         <div className="w-full max-w-3xl flex-1">
           {players.length === 0 ? (
             <div className="text-white/80 text-center py-6">No results yet</div>
@@ -112,8 +123,10 @@ export default function LeaderboardPreview({
                         damping: 18,
                       }}
                       className="flex justify-start items-center relative w-full mx-auto"
+                      onMouseEnter={() => setHovered(p.rank)}
+                      onMouseLeave={() => setHovered(null)}
                     >
-                      {/* Rank */}
+                      {/* --------------- Rank --------------- */}
                       <div
                         className={`${rankSize} font-bold flex items-center justify-center rounded-full mr-3 shrink-0`}
                         style={{
@@ -124,12 +137,11 @@ export default function LeaderboardPreview({
                       >
                         {p.rank}
                       </div>
-
-                      {/* Fixed-width translucent track */}
+                      {/* --------------- Fixed-width translucent track --------------- */}
                       <div
                         className={`relative overlay-hidden bg-white/10 w-full ${rowHeight} mr-3 rounded-lg flex-1`}
                       >
-                        {/* Colored fill */}
+                        {/* --------------- Colored Fill --------------- */}
                         {hasScore && (
                           <Motion.div
                             className={`absolute left-0 top-0 h-full z-10 rounded-lg`}
@@ -148,7 +160,7 @@ export default function LeaderboardPreview({
                           />
                         )}
 
-                        {/* Content on top */}
+                        {/* --------------- Content On Top --------------- */}
                         <div className="relative z-20 flex items-center px-4 gap-4 h-full">
                           <div className={`${avatarSize} shrink-0`}>
                             {p.character}
@@ -161,7 +173,7 @@ export default function LeaderboardPreview({
                         </div>
                       </div>
 
-                      {/* Score */}
+                      {/* --------------- Score --------------- */}
                       <div
                         className={`${scoreWidth} font-semibold text-white text-right shrink-0 ${scoreSize}`}
                       >

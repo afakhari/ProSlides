@@ -19,11 +19,13 @@ export default function Sidebar({
   quizId,
   slide, 
   setSlide, 
+  onSaveAndRefresh,
+  slides, 
   activeSlideType,
   onClose,
   onSlideUpdated
 }) {
-  // StateÙ‡Ø§ÛŒ Ù…Ø¯ÛŒØ±ÛŒØª ØªØºÛŒÛŒØ±Ø§Øª
+  // Stateهای مدیریت تغییرات
   const [localSlide, setLocalSlide] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [originalSlide, setOriginalSlide] = useState(null);
@@ -35,15 +37,16 @@ export default function Sidebar({
     id: null,
   });
 
-  // ØªÙ†Ø¸ÛŒÙ… Ù…Ù‚Ø§Ø¯ÛŒØ± Ø§ÙˆÙ„ÛŒÙ‡ Ù‡Ù†Ú¯Ø§Ù… Ø¨Ø§Ø±Ú¯Ø°Ø§Ø±ÛŒ
+  // تنظیم مقادیر اولیه هنگام بارگذاری
   useEffect(() => {
     if (slide) {
-      // Ø³Ø§Ø®Øª Ø¯Ø§Ø¯Ù‡ Ù…Ø­Ù„ÛŒ Ø§Ø² slide
+      // ساخت داده محلی از slide
       const slideData = {
         ...slide,
+        
         question: slide.question ? {
           ...slide.question,
-          // Ù†Ú¯Ø§Ø´Øª ÙÛŒÙ„Ø¯Ù‡Ø§ Ø¨Ù‡ Ù†Ø§Ù…â€ŒÙ‡Ø§ÛŒ Ù…ÙˆØ±Ø¯ Ø§Ø³ØªÙØ§Ø¯Ù‡ Ø¯Ø± Ú©Ø§Ù…Ù¾ÙˆÙ†Ù†Øª
+          // نگاشت فیلدها به نام‌های مورد استفاده در کامپوننت
           question_text: slide.question.text || "",
           question_image: slide.question.image_url || "",
           question_type: slide.question.question_type || "single",
@@ -62,16 +65,23 @@ export default function Sidebar({
     }
   }, [slide]);
 
-  // Ø¬Ø§Ø¨Ù‡â€ŒØ¬Ø§ÛŒÛŒ Ú¯Ø²ÛŒÙ†Ù‡â€ŒÙ‡Ø§ (ÙÙ‚Ø· Ø¯Ø± ÙØ±Ø§Ù†Øª)
+
   const onDragEnd = useCallback(
-    (result) => {
+    async (result) => {
       if (!result.destination || !localSlide || !localSlide.question) return;
+      
+      const sourceIndex = result.source.index;
+      const destinationIndex = result.destination.index;
+      
+      // اگر جایگاه تغییر نکرده باشد، کاری نکن
+      if (sourceIndex === destinationIndex) return;
       
       const options = localSlide.question.options || [];
       const newOptions = Array.from(options);
-      const [moved] = newOptions.splice(result.source.index, 1);
-      newOptions.splice(result.destination.index, 0, moved);
+      const [movedOption] = newOptions.splice(sourceIndex, 1);
+      newOptions.splice(destinationIndex, 0, movedOption);
       
+      // آپدیت استیت لوکال
       setLocalSlide({ 
         ...localSlide,
         question: {
@@ -79,16 +89,53 @@ export default function Sidebar({
           options: newOptions
         }
       });
+      
+      // محاسبه order جدید (ایندکس + 1)
+      const newOrder = destinationIndex + 1;
+      
+      try {
+        // ارسال به بک‌اند
+        await quizService.updateOption(
+          quizId,
+          localSlide.slide_id,
+          movedOption.option_id,
+          { 
+            order: newOrder,
+            text:  movedOption.text
+          }
+        );
+        
+        // در صورت نیاز می‌توانید داده‌ها را رفرش کنید
+        // refreshSlideData();
+        
+      } catch (error) {
+        console.error('Failed to update option order:', error);
+        
+        // برگرداندن به حالت قبلی در صورت خطا
+        const revertedOptions = Array.from(options);
+        revertedOptions.splice(destinationIndex, 1);
+        revertedOptions.splice(sourceIndex, 0, movedOption);
+        
+        setLocalSlide({ 
+          ...localSlide,
+          question: {
+            ...localSlide.question,
+            options: revertedOptions
+          }
+        });
+        
+        alert('❌ Failed to reorder option');
+      }
     },
-    [localSlide]
+    [localSlide, quizId]
   );
 
-  // ØªØ´Ø®ÛŒØµ ØªØºÛŒÛŒØ±Ø§Øª
+  // تشخیص تغییرات
   useEffect(() => {
     if (!localSlide || !originalSlide) return;
 
     const hasChanged = () => {
-      // Ù…Ù‚Ø§ÛŒØ³Ù‡ ÙÛŒÙ„Ø¯Ù‡Ø§ÛŒ Ø§ØµÙ„ÛŒ slide
+      // مقایسه فیلدهای اصلی slide
       const slideFields = ['show_leaderboard_after'];
       
       for (const field of slideFields) {
@@ -97,7 +144,7 @@ export default function Sidebar({
         }
       }
 
-      // Ù…Ù‚Ø§ÛŒØ³Ù‡ ÙÛŒÙ„Ø¯Ù‡Ø§ÛŒ question
+      // مقایسه فیلدهای question
       if (localSlide.question && originalSlide.question) {
         const questionFields = [
           'question_text',
@@ -116,7 +163,7 @@ export default function Sidebar({
           }
         }
 
-        // Ù…Ù‚Ø§ÛŒØ³Ù‡ options
+        // مقایسه options
         const currentOptions = localSlide.question.options || [];
         const originalOpts = originalOptions;
 
@@ -143,7 +190,8 @@ export default function Sidebar({
     setHasChanges(hasChanged());
   }, [localSlide, originalSlide, originalOptions]);
 
-  // Effect Ø¨Ø±Ø§ÛŒ Ø§Ø·Ù…ÛŒÙ†Ø§Ù† Ø§Ø² Ø­Ø¯Ø§Ù‚Ù„ ÛŒÚ© Ú¯Ø²ÛŒÙ†Ù‡ ØµØ­ÛŒØ­ Ø¯Ø± Ø³ÙˆØ§Ù„Ø§Øª multiple
+
+  // Effect برای اطمینان از حداقل یک گزینه صحیح در سوالات multiple
   useEffect(() => {
     if (!localSlide || !localSlide.question) return;
     
@@ -168,7 +216,51 @@ export default function Sidebar({
     }
   }, [localSlide?.question?.question_type, localSlide?.question?.options?.length, localSlide]);
 
-  // Ø§Ú¯Ø± slide ÙˆØ¬ÙˆØ¯ Ù†Ø¯Ø§Ø±Ø¯ØŒ Ú©Ø§Ù…Ù¾ÙˆÙ†Ù†Øª Ø±Ø§ Ø±Ù†Ø¯Ø± Ù†Ú©Ù†
+
+
+////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+  useEffect(() => {
+    if (!slide || slide.slide_type !== 1) return;
+
+    const hasLeaderboard = slides.some(
+      s => s.slide_type === 3 && s.order === slide.order
+    );
+
+    // اگر لیدربرد حذف شده، تیک را خاموش کن
+    if (!hasLeaderboard && localSlide?.show_leaderboard_after) {
+      setLocalSlide(prev => ({
+        ...prev,
+        show_leaderboard_after: false
+      }));
+    }
+  }, [slides, slide]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+  // اگر slide وجود ندارد، کامپوننت را رندر نکن
   if (!slide || !localSlide) {
     return <div className="h-full overflow-y-auto p-4">No Slide Selected</div>;
   }
@@ -178,7 +270,7 @@ export default function Sidebar({
   const options = question?.options || [];
   const questionType = question?.question_type || "";
 
-  // ØªØºÛŒÛŒØ± Ù…ØªÙ† Ø³ÙˆØ§Ù„
+  // تغییر متن سوال
   const handleQuestionChange = (value) => {
     setLocalSlide({
       ...safeSlide,
@@ -189,7 +281,7 @@ export default function Sidebar({
     });
   };
 
-  // Ø§Ø¶Ø§ÙÙ‡ Ú©Ø±Ø¯Ù† Ú¯Ø²ÛŒÙ†Ù‡ Ø¬Ø¯ÛŒØ¯
+  // اضافه کردن گزینه جدید
   const handleAddOption = async () => {
     const newId = options.length > 0
       ? Math.max(...options.map(o => o.option_id || 0)) + 1
@@ -212,14 +304,14 @@ export default function Sidebar({
     });
   };
 
-  // Ø­Ø°Ù Ú¯Ø²ÛŒÙ†Ù‡
+  // حذف گزینه
   const handleDeleteOption = async (id) => {
     if (!quizId || !slide.slide_id) return;
 
     const remainingOptions = options.filter((opt) => opt.option_id !== id);
     const hasCorrectAnswer = remainingOptions.some(opt => opt.is_correct);
     
-    // Ø§Ú¯Ø± Ù‡ÛŒÚ† Ú¯Ø²ÛŒÙ†Ù‡ ØµØ­ÛŒØ­ÛŒ Ø¨Ø§Ù‚ÛŒ Ù†Ù…Ø§Ù†Ø¯Ù‡ Ùˆ Ø³ÙˆØ§Ù„ multiple Ø§Ø³ØªØŒ Ø§ÙˆÙ„ÛŒÙ† Ú¯Ø²ÛŒÙ†Ù‡ Ø±Ø§ ØµØ­ÛŒØ­ Ù…ÛŒâ€ŒÚ©Ù†ÛŒÙ…
+    // اگر هیچ گزینه صحیحی باقی نمانده و سوال multiple است، اولین گزینه را صحیح می‌کنیم
     let updatedOptions = remainingOptions;
     if (!hasCorrectAnswer && questionType === "multiple" && remainingOptions.length > 0) {
       updatedOptions = remainingOptions.map((opt, index) => 
@@ -236,7 +328,7 @@ export default function Sidebar({
     });
   };
 
-  // ØªØºÛŒÛŒØ± Ù…Ù‚Ø¯Ø§Ø± Ú¯Ø²ÛŒÙ†Ù‡
+  // تغییر مقدار گزینه
   const handleOptionChange = (id, field, value) => {
     setLocalSlide({
       ...safeSlide,
@@ -249,10 +341,10 @@ export default function Sidebar({
     });
   };
 
-  // Ø§Ù†ØªØ®Ø§Ø¨ Ú¯Ø²ÛŒÙ†Ù‡ Ø¯Ø±Ø³Øª
+  // انتخاب گزینه درست
   const handleSelectCorrect = (id) => {
     if (questionType === "single") {
-      // Ø¨Ø±Ø§ÛŒ Single Choice: ÙÙ‚Ø· ÛŒÚ© Ú¯Ø²ÛŒÙ†Ù‡ Ù…ÛŒâ€ŒØªÙˆØ§Ù†Ø¯ Ø¯Ø±Ø³Øª Ø¨Ø§Ø´Ø¯
+      // برای Single Choice: فقط یک گزینه می‌تواند درست باشد
       setLocalSlide({
         ...safeSlide,
         question: {
@@ -264,12 +356,12 @@ export default function Sidebar({
         }
       });
     } else if (questionType === "multiple") {
-      // Ø¨Ø±Ø§ÛŒ Multiple Choice: Ù…ÛŒâ€ŒØªÙˆØ§Ù† Ú†Ù†Ø¯ Ú¯Ø²ÛŒÙ†Ù‡ Ø±Ø§ Ø§Ù†ØªØ®Ø§Ø¨ Ú©Ø±Ø¯
+      // برای Multiple Choice: می‌توان چند گزینه را انتخاب کرد
       const clickedOption = options.find(opt => opt.option_id === id);
       const isCurrentlyCorrect = clickedOption?.is_correct;
       const correctOptionsCount = options.filter(opt => opt.is_correct).length;
       
-      // Ø§Ú¯Ø± Ú©Ø§Ø±Ø¨Ø± Ù…ÛŒâ€ŒØ®ÙˆØ§Ù‡Ø¯ Ø¢Ø®Ø±ÛŒÙ† Ú¯Ø²ÛŒÙ†Ù‡ ØµØ­ÛŒØ­ Ø±Ø§ ØºÛŒØ±ÙØ¹Ø§Ù„ Ú©Ù†Ø¯ØŒ Ø§Ø¬Ø§Ø²Ù‡ Ù†Ù…ÛŒâ€ŒØ¯Ù‡ÛŒÙ…
+      // اگر کاربر می‌خواهد آخرین گزینه صحیح را غیرفعال کند، اجازه نمی‌دهیم
       if (isCurrentlyCorrect && correctOptionsCount === 1) {
         return;
       }
@@ -286,7 +378,7 @@ export default function Sidebar({
     }
   };
 
-  // ØªØ§Ø¨Ø¹ Ø¨Ø±Ø§ÛŒ handle Ù„ÛŒÙ†Ú© ØªØµÙˆÛŒØ±
+  // تابع برای handle لینک تصویر
   const handleImageLink = (link, type, id = null) => {
     if (type === "question") {
       setLocalSlide({
@@ -301,7 +393,7 @@ export default function Sidebar({
     }
   };
 
-  // Ø¨Ø§Ø² Ú©Ø±Ø¯Ù† Modal
+  // باز کردن Modal
   const openImageLinkModal = (type, id = null) => {
     setModalState({
       isOpen: true,
@@ -310,7 +402,7 @@ export default function Sidebar({
     });
   };
 
-  // Ø¨Ø³ØªÙ† Modal
+  // بستن Modal
   const closeImageLinkModal = () => {
     setModalState({
       isOpen: false,
@@ -319,7 +411,7 @@ export default function Sidebar({
     });
   };
 
-  // Ø­Ø°Ù ØªØµÙˆÛŒØ±
+  // حذف تصویر
   const handleRemoveImage = (type, id = null) => {
     if (type === "question") {
       setLocalSlide({
@@ -334,8 +426,12 @@ export default function Sidebar({
     }
   };
 
-  // Ø¨Ø±Ø±Ø³ÛŒ ÙˆØ¬ÙˆØ¯ Ø§Ø³Ù„Ø§ÛŒØ¯ Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯ Ù…Ø±ØªØ¨Ø·
-  // Ù…Ø¯ÛŒØ±ÛŒØª ØªØºÛŒÛŒØ±Ø§Øª ÙÛŒÙ„Ø¯Ù‡Ø§
+  // بررسی وجود اسلاید لیدربرد مرتبط
+  const hasLinkedLeaderboard = slides.some(
+    s => s.slide_type === 3 && s.order === safeSlide.order
+  );
+
+  // مدیریت تغییرات فیلدها
   const handleFieldChange = (field, value) => {
     setLocalSlide({
       ...safeSlide,
@@ -346,7 +442,7 @@ export default function Sidebar({
     });
   };
 
-  // Ù…Ø¯ÛŒØ±ÛŒØª ØªØºÛŒÛŒØ±Ø§Øª slide fields
+  // مدیریت تغییرات slide fields
   const handleSlideFieldChange = (field, value) => {
     setLocalSlide({
       ...safeSlide,
@@ -354,16 +450,16 @@ export default function Sidebar({
     });
   };
 
-  // Ø°Ø®ÛŒØ±Ù‡ ØªØºÛŒÛŒØ±Ø§Øª Ø¨Ù‡ Ø¨Ú©â€ŒØ§Ù†Ø¯
+  // ذخیره تغییرات به بک‌اند
   const handleSubmit = async () => {
     if (!hasChanges || !slide || !quizId || isSaving) return;
 
     setIsSaving(true);
     try {
-      // 1. Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ Ø³ÙˆØ§Ù„
+      // 1. به‌روزرسانی سوال
       if (safeSlide.question) {
         const questionData = {
-          title: "", // Ù‡Ù…ÛŒØ´Ù‡ Ø®Ø§Ù„ÛŒ
+          title: "", // همیشه خالی
           text: safeSlide.question.question_text || "",
           question_type: safeSlide.question.question_type,
           min_point: safeSlide.question.min_point || 0,
@@ -376,14 +472,14 @@ export default function Sidebar({
 
         let updatedQuestion;
         if (originalSlide.question) {
-          // Ø³ÙˆØ§Ù„ Ø§Ø² Ù‚Ø¨Ù„ ÙˆØ¬ÙˆØ¯ Ø¯Ø§Ø±Ø¯ - update
+          // سوال از قبل وجود دارد - update
           updatedQuestion = await quizService.updateQuestion(
             quizId,
             slide.slide_id,
             questionData
           );
         } else {
-          // Ø³ÙˆØ§Ù„ Ø¬Ø¯ÛŒØ¯ - create
+          // سوال جدید - create
           updatedQuestion = await quizService.createQuestion(
             quizId,
             slide.slide_id,
@@ -391,10 +487,10 @@ export default function Sidebar({
           );
         }
 
-        // 2. Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ Ú¯Ø²ÛŒÙ†Ù‡â€ŒÙ‡Ø§
+        // 2. به‌روزرسانی گزینه‌ها
         const currentOptions = safeSlide.question.options || [];
         
-        // Ø­Ø°Ù Ú¯Ø²ÛŒÙ†Ù‡â€ŒÙ‡Ø§ÛŒÛŒ Ú©Ù‡ Ø¯Ø± original Ø¨ÙˆØ¯Ù†Ø¯ Ø§Ù…Ø§ Ø¯Ø± current Ù†ÛŒØ³ØªÙ†Ø¯
+        // حذف گزینه‌هایی که در original بودند اما در current نیستند
         for (const originalOption of originalOptions) {
           if (!currentOptions.find(opt => opt.option_id === originalOption.option_id)) {
             await quizService.deleteOption(
@@ -405,7 +501,7 @@ export default function Sidebar({
           }
         }
 
-        // Ø§ÛŒØ¬Ø§Ø¯ ÛŒØ§ Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ Ú¯Ø²ÛŒÙ†Ù‡â€ŒÙ‡Ø§
+        // ایجاد یا به‌روزرسانی گزینه‌ها
         for (const option of currentOptions) {
           const optionData = {
             text: option.text,
@@ -413,7 +509,7 @@ export default function Sidebar({
             image_url: option.image_url || ""
           };
 
-          // Ø§Ú¯Ø± Ú¯Ø²ÛŒÙ†Ù‡ Ø¯Ø± original ÙˆØ¬ÙˆØ¯ Ø¯Ø§Ø´ØªØŒ update Ú©Ù†
+          // اگر گزینه در original وجود داشت، update کن
           const originalOption = originalOptions.find(opt => opt.option_id === option.option_id);
           if (originalOption) {
             await quizService.updateOption(
@@ -423,7 +519,7 @@ export default function Sidebar({
               optionData
             );
           } else {
-            // Ú¯Ø²ÛŒÙ†Ù‡ Ø¬Ø¯ÛŒØ¯
+            // گزینه جدید
             await quizService.createOption(
               quizId,
               slide.slide_id,
@@ -432,13 +528,13 @@ export default function Sidebar({
           }
         }
 
-        // 3. Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ show_leaderboard_after Ø¯Ø± Ø§Ø³Ù„Ø§ÛŒØ¯
+        // 3. به‌روزرسانی show_leaderboard_after در اسلاید
         await quizService.updateSlide(quizId, slide.slide_id, {
           show_leaderboard_after: safeSlide.show_leaderboard_after || false,
           slide_type: 1
         });
 
-        // Ø¨Ù‡â€ŒØ±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ state Ø§ØµÙ„ÛŒ
+        // به‌روزرسانی state اصلی
         const updatedSlide = {
           ...slide,
           show_leaderboard_after: safeSlide.show_leaderboard_after,
@@ -452,15 +548,20 @@ export default function Sidebar({
         setOriginalSlide(safeSlide);
         setOriginalOptions([...currentOptions]);
 
-        // Ø§Ø·Ù„Ø§Ø¹ Ø¨Ù‡ parent component
+        // اطلاع به parent component
         if (onSlideUpdated) {
           onSlideUpdated(updatedSlide);
+        }
+
+
+        if (onSaveAndRefresh) {
+          await onSaveAndRefresh();
         }
 
         console.log("Changes saved successfully");
       }
 
-      // Ø¨Ø³ØªÙ† Ù¾Ù†Ù„
+      // بستن پنل
       onClose();
     } catch (error) {
       console.error("Error saving changes:", error);
@@ -470,7 +571,7 @@ export default function Sidebar({
     }
   };
 
-  // Ù„ØºÙˆ ØªØºÛŒÛŒØ±Ø§Øª
+  // لغو تغییرات
   const handleCancel = () => {
     if (hasChanges) {
       const confirmCancel = window.confirm(
@@ -479,12 +580,13 @@ export default function Sidebar({
       if (!confirmCancel) return;
     }
     
-    // Ø¨Ø±Ú¯Ø±Ø¯Ø§Ù†Ø¯Ù† Ø¨Ù‡ Ø­Ø§Ù„Øª Ø§ÙˆÙ„ÛŒÙ‡
+    // برگرداندن به حالت اولیه
     setLocalSlide(originalSlide);
     onClose();
   };
 
-  // Modal Ø¨Ø±Ø§ÛŒ ÙˆØ±ÙˆØ¯ Ù„ÛŒÙ†Ú© ØªØµÙˆÛŒØ±
+
+  // Modal برای ورود لینک تصویر
   const ImageLinkModal = ({ isOpen, onClose, onConfirm, type, id = null }) => {
     const [link, setLink] = useState("");
     const [preview, setPreview] = useState(null);
@@ -493,7 +595,7 @@ export default function Sidebar({
 
     const handlePreview = async () => {
       if (!link.trim()) {
-        setError("Ù„Ø·ÙØ§ Ù„ÛŒÙ†Ú© Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†ÛŒØ¯");
+        setError("لطفا لینک را وارد کنید");
         return;
       }
 
@@ -512,7 +614,7 @@ export default function Sidebar({
           setLoading(false);
         };
         img.onerror = () => {
-          setError("Ù„ÛŒÙ†Ú© ØªØµÙˆÛŒØ± Ù†Ø§Ù…Ø¹ØªØ¨Ø± Ø§Ø³Øª ÛŒØ§ Ù‚Ø§Ø¨Ù„ Ø¨Ø§Ø±Ú¯ÛŒØ±ÛŒ Ù†ÛŒØ³Øª");
+          setError("لینک تصویر نامعتبر است یا قابل بارگیری نیست");
           setPreview(null);
           setLoading(false);
         };
@@ -520,12 +622,12 @@ export default function Sidebar({
 
         setTimeout(() => {
           if (!img.complete) {
-            setError("Ø¨Ø§Ø±Ú¯ÛŒØ±ÛŒ ØªØµÙˆÛŒØ± Ø²Ù…Ø§Ù†â€ŒØ¨Ø± Ø´Ø¯. Ù„Ø·ÙØ§ Ù„ÛŒÙ†Ú© Ø¯ÛŒÚ¯Ø±ÛŒ Ø±Ø§ Ø§Ù…ØªØ­Ø§Ù† Ú©Ù†ÛŒØ¯");
+            setError("بارگیری تصویر زمان‌بر شد. لطفا لینک دیگری را امتحان کنید");
             setLoading(false);
           }
         }, 5000);
-      } catch {
-        setError("Ø®Ø·Ø§ Ø¯Ø± Ø¨Ø±Ø±Ø³ÛŒ Ù„ÛŒÙ†Ú©");
+      } catch (err) {
+        setError("خطا در بررسی لینک");
         setLoading(false);
       }
     };
@@ -593,7 +695,7 @@ export default function Sidebar({
                     src={preview}
                     alt="Preview"
                     className="w-full h-48 object-contain rounded-lg bg-gray-50"
-                    onError={() => setError("Ø®Ø·Ø§ Ø¯Ø± Ù†Ù…Ø§ÛŒØ´ ØªØµÙˆÛŒØ±")}
+                    onError={() => setError("خطا در نمایش تصویر")}
                   />
                 </div>
               </div>
@@ -622,7 +724,7 @@ export default function Sidebar({
 
   return (
     <div className="h-full overflow-y-auto p-4">
-      {/* Ù‡Ø¯Ø± */}
+      {/* هدر */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div>
@@ -648,7 +750,7 @@ export default function Sidebar({
         <div className="space-y-6">
           {/* Question Text */}
           <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Question Text:</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Question Text :</h3>
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -662,7 +764,7 @@ export default function Sidebar({
                 <button
                   onClick={() => openImageLinkModal("question")}
                   className="p-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors border border-gray-200 flex items-center justify-center"
-                  title="Ø§ÙØ²ÙˆØ¯Ù† Ù„ÛŒÙ†Ú© ØªØµÙˆÛŒØ±"
+                  title="افزودن لینک تصویر"
                   disabled={isSaving}
                 >
                   <ImageIcon className="w-4 h-4 text-gray-600" />
@@ -696,7 +798,7 @@ export default function Sidebar({
           {/* Options */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-gray-700">Options:</h3>
+              <h3 className="text-sm font-medium text-gray-700">Options :</h3>
               {questionType && (
                 <div className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-medium">
                   {questionType === "single"
@@ -801,7 +903,7 @@ export default function Sidebar({
                             <button
                               onClick={() => openImageLinkModal("option", opt.option_id)}
                               className="p-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors border border-gray-200"
-                              title="Ø§ÙØ²ÙˆØ¯Ù† Ù„ÛŒÙ†Ú© ØªØµÙˆÛŒØ±"
+                              title="افزودن لینک تصویر"
                               disabled={isSaving}
                             >
                               <ImageIcon className="w-4 h-4 text-gray-600" />
@@ -856,7 +958,7 @@ export default function Sidebar({
 
           {/* Question Time */}
           <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Question Time:</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Question Time :</h3>
             <div className="flex items-center gap-3">
               <input
                 type="number"
@@ -877,7 +979,7 @@ export default function Sidebar({
 
           {/* Points */}
           <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Scoring:</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Scoring :</h3>
             
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
@@ -965,13 +1067,10 @@ export default function Sidebar({
                 onChange={(e) => {
                   const isChecked = e.target.checked;
                   handleSlideFieldChange("show_leaderboard_after", isChecked);
+
                   
-                  // Ø§ÛŒØ¬Ø§Ø¯ ÛŒØ§ Ø­Ø°Ù Ø§Ø³Ù„Ø§ÛŒØ¯ Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯
-                  // if (isChecked && onCreateLeaderboardSlide) {
-                  //   onCreateLeaderboardSlide(slide.order);
-                  // } else if (!isChecked && onDeleteLeaderboardSlide) {
-                  //   onDeleteLeaderboardSlide(slide.order);
-                  // }
+                  
+                
                 }}
                 className="w-4 h-4 mt-0.5 rounded border-gray-300 cursor-pointer text-blue-600 focus:ring-blue-500"
                 disabled={isSaving}
@@ -985,39 +1084,8 @@ export default function Sidebar({
         </div>
       )}
 
-      {/* Leaderboard Title (only for leaderboard slides) */}
-      {/* {safeSlide.slide_type === 3 && (
-        <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Leaderboard Title</h3>
-          <input
-            type="text"
-            placeholder="Leaderboard"
-            value={safeSlide.title || ""}
-            onChange={(e) =>
-              handleSlideFieldChange("title", e.target.value)
-            }
-            className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            disabled={isSaving}
-          />
-        </div>
-      )} */}
 
-
-      {activeSlideType === 3 && (
-        <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Leaderboard Title</h3>
-          
-        </div>
-      )}
-
-
-
-
-
-
-
-
-      {/* Ø¯Ú©Ù…Ù‡â€ŒÙ‡Ø§ÛŒ Cancel Ùˆ Save Changes */}
+      {/* دکمه‌های Cancel و Save Changes */}
       <div className="mt-8 pt-6 border-t border-gray-200">
         <div className="flex gap-3">
           <button
@@ -1061,4 +1129,3 @@ export default function Sidebar({
     </div>
   );
 }
-
