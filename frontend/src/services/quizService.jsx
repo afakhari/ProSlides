@@ -1,16 +1,67 @@
 // This component manages the connection to the back-end components of the pages/quiz/manger folder
 
-import axios from 'axios';
-import { getApiBase } from "../utils/api";
-import { getAuthHeaders } from "../utils/auth";
+import axios from "axios";
+import { buildApiUrl, getApiBase } from "../utils/api";
+import {
+  clearAuthStorage,
+  getAuthHeaders,
+  getRefreshToken,
+} from "../utils/auth";
 
 
 const api = axios.create({ baseURL: getApiBase() });
+
+const refreshAccessToken = async () => {
+  const refresh = getRefreshToken();
+  if (!refresh) return null;
+
+  const response = await fetch(buildApiUrl("/auth/token/refresh/"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh }),
+  });
+
+  if (!response.ok) {
+    clearAuthStorage();
+    return null;
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (payload?.access) {
+    localStorage.setItem("auth.access", payload.access);
+    return payload.access;
+  }
+
+  clearAuthStorage();
+  return null;
+};
 
 api.interceptors.request.use((config) => {
   config.headers = { ...config.headers, ...getAuthHeaders() };
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error?.response?.status;
+    const originalRequest = error?.config;
+
+    if (status === 401 && originalRequest && !originalRequest._retry) {
+      originalRequest._retry = true;
+      const newAccess = await refreshAccessToken();
+      if (newAccess) {
+        originalRequest.headers = {
+          ...originalRequest.headers,
+          Authorization: `Bearer ${newAccess}`,
+        };
+        return api(originalRequest);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 
 export const quizService = {
