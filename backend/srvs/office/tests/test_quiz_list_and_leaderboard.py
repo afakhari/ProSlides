@@ -134,6 +134,8 @@ def test_final_leaderboard_tie_ranking(api_client):
     api_client.force_authenticate(user=owner)
     resp = api_client.get(f"/api/quizzes/{quiz.id}/final-leaderboard/")
     assert resp.status_code == 200
+    assert resp.data["quiz_title"] == quiz.title
+    assert "updated_at" in resp.data
 
     leaderboard = {entry["rust_session_id"]: entry for entry in resp.data["leaderboard"]}
     assert leaderboard[p1.rust_session_id]["rank"] == 1
@@ -160,6 +162,8 @@ def test_final_leaderboard_falls_back_to_leaderboard_names(api_client):
     api_client.force_authenticate(user=owner)
     resp = api_client.get(f"/api/quizzes/{quiz.id}/final-leaderboard/")
     assert resp.status_code == 200
+    assert resp.data["quiz_title"] == quiz.title
+    assert "updated_at" in resp.data
     entry = resp.data["leaderboard"][0]
     assert entry["rust_session_id"] == "orphan"
     assert entry["player_name"] == "Fallback"

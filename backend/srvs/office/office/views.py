@@ -448,6 +448,8 @@ class QuizViewSet(viewsets.ModelViewSet):
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
                     properties={
+                        "quiz_title": openapi.Schema(type=openapi.TYPE_STRING),
+                        "updated_at": openapi.Schema(type=openapi.TYPE_STRING),
                         "leaderboard": openapi.Schema(
                             type=openapi.TYPE_ARRAY,
                             items=openapi.Schema(
@@ -511,7 +513,11 @@ class QuizViewSet(viewsets.ModelViewSet):
             entry['rank'] = current_rank
             ranked.append(entry)
 
-        return Response({'leaderboard': ranked})
+        return Response({
+            'quiz_title': quiz.title,
+            'updated_at': quiz.updated_at.isoformat(),
+            'leaderboard': ranked,
+        })
 
     @swagger_auto_schema(
         operation_description="Reset quiz results and participants.",
