@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { LogOut, Home } from "lucide-react";
+import { Home, LogOut, Search, Trophy } from "lucide-react";
 import { apiFetch } from "../../utils/apiFetch";
 import { clearAuthStorage, getRefreshToken } from "../../utils/auth";
 
@@ -9,16 +9,39 @@ export default function SessionDetail() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("participants");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [loggedInUser] = useState("HesamAzmoun");
+  const [loggedInUser] = useState(
+    () => localStorage.getItem("auth.name") || "You"
+  );
   const [leaderboardData, setLeaderboardData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [participantSearchQuery, setParticipantSearchQuery] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [quizTitle, setQuizTitle] = useState("");
 
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
+  const fetchQuizTitle = useCallback(async () => {
+    if (!quizId) return;
+    try {
+      const response = await apiFetch(`/quizzes/${quizId}/`);
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data?.title) {
+        setQuizTitle(data.title);
+      }
+    } catch (err) {
+      console.warn("Error fetching quiz title:", err);
+    }
+  }, [quizId]);
+
+  const fetchLeaderboard = useCallback(
+    async (isManualRefresh = false) => {
       try {
-        setLoading(true);
+        if (isManualRefresh) {
+          setIsRefreshing(true);
+        } else {
+          setLoading(true);
+        }
         const response = await apiFetch(
           `/quizzes/${quizId}/final-leaderboard/`
         );
@@ -28,30 +51,57 @@ export default function SessionDetail() {
         }
 
         const data = await response.json();
+        if (data?.quiz_title) {
+          setQuizTitle(data.quiz_title);
+        } else {
+          fetchQuizTitle();
+        }
         setLeaderboardData(data.leaderboard || []);
         setError(null);
+
+        const updatedAt = data?.updated_at ? new Date(data.updated_at) : null;
+        setLastUpdated(
+          updatedAt && !Number.isNaN(updatedAt.valueOf())
+            ? updatedAt
+            : new Date()
+        );
       } catch (err) {
         console.error("Error fetching leaderboard:", err);
         setError(err.message);
       } finally {
-        setLoading(false);
+        if (isManualRefresh) {
+          setIsRefreshing(false);
+        } else {
+          setLoading(false);
+        }
       }
-    };
+    },
+    [fetchQuizTitle, quizId]
+  );
 
-    if (quizId) {
+  useEffect(() => {
+    if (!quizId) return;
+    fetchQuizTitle();
+    fetchLeaderboard();
+    const intervalId = setInterval(() => {
       fetchLeaderboard();
-    }
-  }, [quizId]);
+    }, 15 * 60 * 1000);
+    return () => clearInterval(intervalId);
+  }, [fetchLeaderboard, fetchQuizTitle, quizId]);
 
   const filteredParticipants = leaderboardData.filter((participant) =>
-    participant.player_name
+    String(participant.player_name || "")
       .toLowerCase()
       .includes(participantSearchQuery.toLowerCase())
   );
+  const totalParticipants = leaderboardData.length;
+  const filteredCount = filteredParticipants.length;
 
   const calculateScorePercentage = (score) => {
     if (leaderboardData.length === 0) return 0;
-    const maxScore = Math.max(...leaderboardData.map((p) => p.score));
+    const maxScore = Math.max(
+      ...leaderboardData.map((p) => Number(p.score) || 0)
+    );
     return maxScore > 0 ? (score / maxScore) * 100 : 0;
   };
 
@@ -76,6 +126,9 @@ export default function SessionDetail() {
     }
   };
 
+  const quizLabel =
+    quizTitle?.trim() || (quizId ? `Quiz ${quizId}` : "Quiz");
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-gray-800">
       {/* Top Navigation Bar with Search */}
@@ -84,6 +137,8 @@ export default function SessionDetail() {
           <button
             onClick={() => navigate("/manager/panel")}
             className="p-2 hover:bg-gray-100 rounded-lg transition"
+            aria-label="Back to manager panel"
+            title="Back to panel"
           >
             <Home className="w-5 h-5" />
           </button>
@@ -104,14 +159,26 @@ export default function SessionDetail() {
         </div>
 
         <div className="flex items-center gap-4">
-          <button className="p-2 hover:bg-gray-100 rounded-lg transition">
+          <button
+            className="p-2 hover:bg-gray-100 rounded-lg transition"
+            aria-label="Language"
+            title="Language"
+          >
             <span className="text-xl">🌐</span>
           </button>
-          <button className="p-2 hover:bg-gray-100 rounded-lg transition relative">
+          <button
+            className="p-2 hover:bg-gray-100 rounded-lg transition relative"
+            aria-label="Notifications"
+            title="Notifications"
+          >
             <span className="text-xl">🔔</span>
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
           </button>
-          <button className="p-2 hover:bg-gray-100 rounded-lg transition">
+          <button
+            className="p-2 hover:bg-gray-100 rounded-lg transition"
+            aria-label="Help"
+            title="Help"
+          >
             <span className="text-xl">❓</span>
           </button>
           <button className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition font-medium">
@@ -123,6 +190,8 @@ export default function SessionDetail() {
             <button
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="w-10 h-10 bg-teal-500 rounded-full flex items-center justify-center text-white font-semibold cursor-pointer hover:bg-teal-600 transition"
+              aria-label="Open profile menu"
+              title="Profile"
             >
               {loggedInUser.charAt(0).toUpperCase()}
             </button>
@@ -145,18 +214,35 @@ export default function SessionDetail() {
       </div>
 
       {/* Content with top padding to account for fixed header */}
-      <div className="pt-24 px-6 bg-blue-50 min-h-screen">
-        <div className="max-w-8xl mx-auto py-8 ">
-          <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">
-            Report / Session Detail
+      <div className="pt-24 px-6 bg-slate-100 min-h-screen">
+        <div className="max-w-6xl mx-auto py-8">
+          <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">
+            Report / {quizLabel}
           </div>
-          <h1 className="text-3xl font-bold mb-2">My Quiz</h1>
-          <p className="text-sm text-gray-500 mb-6">
-            Report updated in a few seconds · Refreshes every 15 minutes
-          </p>
+          <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-semibold text-slate-900">
+                  {quizLabel}
+                </h1>
+                <p className="mt-2 text-sm text-slate-500">
+                  {lastUpdated
+                    ? `Updated at ${lastUpdated.toLocaleTimeString()} - Refreshes every 15 minutes`
+                    : "Updates automatically every 15 minutes"}
+                </p>
+              </div>
+              <button
+                onClick={() => fetchLeaderboard(true)}
+                disabled={isRefreshing}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isRefreshing ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+          </div>
 
           {/* Tabs */}
-          <div className="full-border rounded-xl bg-white shadow-sm">
+            <div className="rounded-2xl bg-white shadow-sm border border-slate-200">
             <div className="px-6 pt-4">
               <div className="flex gap-6">
                 <button
@@ -167,7 +253,10 @@ export default function SessionDetail() {
                   }`}
                   onClick={() => setActiveTab("participants")}
                 >
-                  Participants ({filteredParticipants.length})
+                  Participants
+                  {participantSearchQuery
+                    ? ` (${filteredCount} / ${totalParticipants})`
+                    : ` (${totalParticipants})`}
                 </button>
                 {/* <button
                 className={`pb-3 text-sm font-semibold ${
@@ -185,11 +274,9 @@ export default function SessionDetail() {
             {activeTab === "participants" && (
               <div className="px-6 pb-6">
                 {/* Search */}
-                <div className="my-4">
+                <div className="my-4 md:sticky md:top-24 md:z-10 md:bg-white md:py-4">
                   <div className="relative max-w-md">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      🔍
-                    </span>
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <input
                       placeholder="Search participants..."
                       value={participantSearchQuery}
@@ -198,6 +285,16 @@ export default function SessionDetail() {
                       }
                       className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
+                    {participantSearchQuery && (
+                      <button
+                        onClick={() => setParticipantSearchQuery("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600"
+                        aria-label="Clear search"
+                        title="Clear search"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -218,10 +315,10 @@ export default function SessionDetail() {
                 {/* Table */}
                 {!loading && !error && (
                   <>
-                    <div className="flex overflow-x-auto">
-                      <table className="w-[80%] text-sm border-collapse table-fixed">
+                    <div className="hidden md:flex overflow-x-auto">
+                      <table className="min-w-[640px] w-full text-sm border-collapse table-fixed">
                         <thead>
-                          <tr className="text-gray-500">
+                          <tr className="text-slate-500">
                             <th className="text-left font-semibold py-3 w-[10%]">
                               Rank
                             </th>
@@ -236,18 +333,16 @@ export default function SessionDetail() {
                         <tbody className="bg-white">
                           {filteredParticipants.length > 0 ? (
                             filteredParticipants.map((participant, index) => {
-                              const scorePercentage = calculateScorePercentage(
-                                participant.score
-                              );
+                              const scoreValue = Number(participant.score) || 0;
+                              const scorePercentage =
+                                calculateScorePercentage(scoreValue);
                               // Clean up player name and avatar (remove quotes if present)
-                              const cleanName = participant.player_name.replace(
-                                /^"|"$/g,
-                                ""
-                              );
-                              const cleanAvatar = participant.avatar.replace(
-                                /^"|"$/g,
-                                ""
-                              );
+                              const cleanName = String(
+                                participant.player_name || "Player"
+                              ).replace(/^"|"$/g, "");
+                              const cleanAvatar = String(
+                                participant.avatar || ""
+                              ).replace(/^"|"$/g, "");
                               // Define distinct colors for progress bars
                               const progressColors = [
                                 "bg-blue-500", // 1st place
@@ -264,38 +359,78 @@ export default function SessionDetail() {
                               const progressColor =
                                 progressColors[index % progressColors.length];
 
-                              // Check if player is in top 3 for green background
-                              const isTopThree = participant.rank <= 3;
+                              // Check if player is in top 3 for accent background
+                              const rankValue =
+                                Number(participant.rank) || index + 1;
+                              const isTopThree = rankValue <= 3;
+                              const rankBadge =
+                                rankValue === 1
+                                  ? {
+                                      label: "Gold",
+                                      className: "bg-amber-100 text-amber-700",
+                                    }
+                                  : rankValue === 2
+                                    ? {
+                                        label: "Silver",
+                                        className: "bg-slate-100 text-slate-600",
+                                      }
+                                    : rankValue === 3
+                                      ? {
+                                          label: "Bronze",
+                                          className: "bg-orange-100 text-orange-700",
+                                        }
+                                      : null;
 
                               return (
                                 <tr
-                                  key={participant.rust_session_id || index}
+                                  key={
+                                    participant.rust_session_id ||
+                                    participant.player_id ||
+                                    index
+                                  }
                                   className={`border-t ${
-                                    isTopThree ? "bg-green-100" : ""
+                                    isTopThree ? "bg-emerald-50/70" : ""
                                   }`}
                                 >
                                   <td className="py-4 pl-3">
-                                    {participant.rank}
-                                  </td>
-                                  <td className="py-4">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xl">
-                                        {cleanAvatar}
+                                      <span
+                                        className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold ${
+                                          isTopThree
+                                            ? "border-amber-200 bg-white text-slate-800"
+                                            : "border-slate-200 text-slate-600"
+                                        }`}
+                                      >
+                                        {rankValue}
                                       </span>
-                                      <span>{cleanName}</span>
-                                      {participant.rank === 1 && (
-                                        <span className="text-yellow-500 text-lg">
-                                          🏆
+                                      {rankBadge && (
+                                        <span
+                                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${rankBadge.className}`}
+                                        >
+                                          <Trophy className="h-3.5 w-3.5" />
+                                          {rankBadge.label}
                                         </span>
                                       )}
                                     </div>
                                   </td>
                                   <td className="py-4">
-                                    <div className="flex items-center gap-3 w-full">
-                                      <span className="shrink-0">
-                                        {participant.score}
+                                    <div className="flex items-center gap-2">
+                                      {cleanAvatar && (
+                                        <span className="text-xl">
+                                          {cleanAvatar}
+                                        </span>
+                                      )}
+                                      <span className="font-semibold text-slate-900">
+                                        {cleanName}
                                       </span>
-                                      <div className="flex h-6 rounded-md overflow-hidden border border-gray-200 w-full">
+                                    </div>
+                                  </td>
+                                  <td className="py-4">
+                                    <div className="flex items-center gap-3 w-full">
+                                      <span className="shrink-0 font-semibold text-slate-900">
+                                        {scoreValue}
+                                      </span>
+                                      <div className="flex h-6 rounded-md overflow-hidden border border-slate-200 bg-slate-50 w-full">
                                         <div
                                           className={`${progressColor} transition-all duration-300`}
                                           style={{
@@ -312,9 +447,16 @@ export default function SessionDetail() {
                             <tr className="border-t">
                               <td
                                 colSpan="3"
-                                className="py-4 text-center text-gray-500"
+                                className="py-6 text-center text-slate-500"
                               >
-                                No participants found
+                                <div className="flex flex-col items-center gap-2 py-10">
+                                  <Trophy className="h-8 w-8 text-slate-300" />
+                                  <span className="text-sm font-medium text-slate-600">
+                                    {participantSearchQuery
+                                      ? "No participants match your search."
+                                      : "No participants yet."}
+                                  </span>
+                                </div>
                               </td>
                             </tr>
                           )}
@@ -322,9 +464,89 @@ export default function SessionDetail() {
                       </table>
                     </div>
 
+                    <div className="md:hidden space-y-3">
+                      {filteredParticipants.length > 0 ? (
+                        filteredParticipants.map((participant, index) => {
+                          const scoreValue = Number(participant.score) || 0;
+                          const scorePercentage =
+                            calculateScorePercentage(scoreValue);
+                          const cleanName = String(
+                            participant.player_name || "Player"
+                          ).replace(/^"|"$/g, "");
+                          const cleanAvatar = String(
+                            participant.avatar || ""
+                          ).replace(/^"|"$/g, "");
+                          const progressColors = [
+                            "bg-blue-500",
+                            "bg-yellow-500",
+                            "bg-red-500",
+                            "bg-green-500",
+                            "bg-indigo-500",
+                            "bg-pink-500",
+                            "bg-teal-500",
+                            "bg-orange-500",
+                            "bg-cyan-500",
+                            "bg-lime-500",
+                          ];
+                          const progressColor =
+                            progressColors[index % progressColors.length];
+                          const rankValue =
+                            Number(participant.rank) || index + 1;
+                          const isTopThree = rankValue <= 3;
+
+                          return (
+                            <div
+                              key={
+                                participant.rust_session_id ||
+                                participant.player_id ||
+                                index
+                              }
+                              className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${
+                                isTopThree ? "ring-1 ring-emerald-200" : ""
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs uppercase tracking-wide text-slate-500">
+                                    Rank
+                                  </span>
+                                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-xs font-semibold text-slate-700">
+                                    {rankValue}
+                                  </span>
+                                </div>
+                                <span className="text-sm font-semibold text-slate-900">
+                                  {scoreValue} pts
+                                </span>
+                              </div>
+                              <div className="mt-3 flex items-center gap-2">
+                                {cleanAvatar && (
+                                  <span className="text-lg">{cleanAvatar}</span>
+                                )}
+                                <span className="text-sm font-semibold text-slate-900">
+                                  {cleanName}
+                                </span>
+                              </div>
+                              <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className={progressColor}
+                                  style={{ width: `${scorePercentage}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+                          {participantSearchQuery
+                            ? "No participants match your search."
+                            : "No participants yet."}
+                        </div>
+                      )}
+                    </div>
+
                     {/* Footer */}
-                    <div className="text-sm text-gray-600 mt-6">
-                      Total {filteredParticipants.length} participant(s)
+                    <div className="text-sm text-slate-600 mt-6">
+                      Total {totalParticipants} participant(s)
                     </div>
                   </>
                 )}
