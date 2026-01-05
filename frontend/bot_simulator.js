@@ -59,7 +59,6 @@ function startBot(id, quizId) {
   const botChar = ["🤖", "👾", "👽", "👻", "🤡"][Math.floor(Math.random() * 5)];
 
   let userId = null;
-  let currentQuestion = null;
 
   ws.on("open", () => {
     console.log(`[${botName}] Connected.`);

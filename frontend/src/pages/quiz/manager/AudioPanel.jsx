@@ -138,7 +138,7 @@ export default function AudioPanel({ onClose, quiz, updateQuiz }) {
       setSaving(false);
       onClose();
       
-    } catch (error) {
+    } catch {
       alert("Failed to save changes to the server.");
       setSaving(false);
     }

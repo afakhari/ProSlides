@@ -12,7 +12,6 @@ export default function LeaderboardPreview({
 }) {
 
   const [animateBars, setAnimateBars] = useState(false);
-  const [hovered, setHovered] = useState(null);
 
 
   // Prepare players data
@@ -123,8 +122,6 @@ export default function LeaderboardPreview({
                         damping: 18,
                       }}
                       className="flex justify-start items-center relative w-full mx-auto"
-                      onMouseEnter={() => setHovered(p.rank)}
-                      onMouseLeave={() => setHovered(null)}
                     >
                       {/* --------------- Rank --------------- */}
                       <div

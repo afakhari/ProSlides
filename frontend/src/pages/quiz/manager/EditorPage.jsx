@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from "react";
-import { useLocation, useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import MiniResultsResultsOnly from "./MiniResultsResultsOnly";
 import LeaderboardPreview from "./LeaderboardPreview";
 import QuizHeader from "../../../components/QuizHeader";
@@ -14,7 +14,7 @@ import { X } from "lucide-react";
 
 export default function EditorPage() {
   const navigate = useNavigate();
-  const { roomId, role } = useParams();
+  const { roomId } = useParams();
   const quizId = parseInt(roomId, 10);
 
   const [quiz, setQuiz] = useState(null);
@@ -825,20 +825,14 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
 
                 // اگر همه شرایط برقرار بود، کامپوننت Sidebar را رندر کن
                 return (
-                  <Sidebar
-                    quizId={quiz.quiz_id}
-                    slide={activeSlide}
-                    setSlide={setActiveSlideIndex}
-                    onCreateLeaderboardSlide={() =>
-                      createLeaderboardSlide(activeSlide.order)
-                    }
-                    onDeleteLeaderboardSlide={() =>
-                      deleteLeaderboardSlide(activeSlide.order)
-                    }
-                    onSaveAndRefresh={handleSaveAndRefresh}
-                    slides={slides}
-                    activeSlideType={activeSlideType}
-                    onClose={handleCloseSidebarPanel}
+                    <Sidebar
+                      quizId={quiz.quiz_id}
+                      slide={activeSlide}
+                      setSlide={setActiveSlideIndex}
+                      onSaveAndRefresh={handleSaveAndRefresh}
+                      slides={slides}
+                      activeSlideType={activeSlideType}
+                      onClose={handleCloseSidebarPanel}
                     onSlideUpdated={handleSlideUpdated}
                   />
                 );

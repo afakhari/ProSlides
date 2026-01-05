@@ -7,7 +7,6 @@ import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 import {
   User_adding,
-  QuizSetup,
   createNextPrevious,
   UserColorList,
   DefaultFooterStats,
@@ -53,11 +52,7 @@ export default function ManagerJoinPage({
   // استفاده از بازیکنان از سرور یا mock data
   const displayUsers = users.length > 0 ? users : User_adding.Users;
   const playersReady = users.length || calculatePlayersReady(User_adding);
-
-  // Calculate current question number and details from currentSlide
   const currentQuestionIndex = Math.floor(currentSlide / 2);
-  const questionNumber = currentQuestionIndex + 1;
-  const totalQuestions = QuizSetup.slides.length;
 
   // List of 10 vibrant colors for user names
   const colorList = UserColorList;
