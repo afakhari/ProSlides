@@ -93,6 +93,7 @@ export default function QuizManager({ onNewPresentation }) {
   const [menuPosition, setMenuPosition] = useState("bottom"); // 'top' or 'bottom'
   const [showShareModal, setShowShareModal] = useState(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [renamingQuiz, setRenamingQuiz] = useState(null);
   const [newQuizName, setNewQuizName] = useState("");
   const [selectedQuizzes, setSelectedQuizzes] = useState([]);
@@ -623,65 +624,142 @@ export default function QuizManager({ onNewPresentation }) {
       {/* Header */}
       <div className="min-h-screen mx-auto mb-8">
         {/* Top Navigation Bar with Search */}
-        <div className="bg-white fixed top-0 left-0 right-0 w-full h-auto min-h-16 flex flex-col md:flex-row items-center justify-between px-4 md:px-6 py-3 md:py-0 z-50 shadow-sm gap-2 md:gap-0">
-          <div className="text-black font-semibold text-lg flex items-center gap-1.5 before:content-['✱'] before:text-xl w-full md:w-auto justify-center md:justify-start">
-            ProSlides
+        <div className="bg-white fixed top-0 left-0 right-0 w-full z-50 shadow-sm">
+          {/* Mobile Header */}
+          <div className="md:hidden">
+            {/* Single Row: Logo + Icons */}
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <div className="text-black font-semibold text-lg flex items-center gap-1.5 before:content-['✱'] before:text-xl">
+                ProSlides
+              </div>
+              <div className="flex items-center gap-1">
+                {/* Search Icon */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMobileSearch(!showMobileSearch);
+                  }}
+                  className={`p-1.5 rounded-lg transition ${
+                    showMobileSearch
+                      ? "bg-purple-100 text-purple-600"
+                      : "hover:bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  <Search className="w-5 h-5" />
+                </button>
+                <button className="p-1.5 hover:bg-gray-100 rounded-lg transition">
+                  <span className="text-lg">🔔</span>
+                </button>
+                <button className="px-3 py-1.5 bg-teal-500 text-white text-sm rounded-lg hover:bg-teal-600 transition font-medium">
+                  Upgrade
+                </button>
+                {/* Profile Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowProfileMenu(!showProfileMenu)}
+                    className="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center text-white text-sm font-semibold cursor-pointer hover:bg-teal-600 transition ml-1"
+                  >
+                    {loggedInUser.charAt(0).toUpperCase()}
+                  </button>
+                  {showProfileMenu && (
+                    <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg w-48 z-50">
+                      <button
+                        onClick={() => handleLogout()}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Logout
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            {/* Mobile Search Bar - Expandable */}
+            {showMobileSearch && (
+              <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 animate-in slide-in-from-top duration-200">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search presentations.."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    autoFocus
+                    className="w-full pl-10 pr-10 py-2 text-sm border border-gray-200 text-gray-700 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="relative w-full md:flex-1 md:max-w-md md:mx-8">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search presentations.."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-2.5 border border-gray-300 text-gray-700 bg-gray-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-            />
-          </div>
+          {/* Desktop Header */}
+          <div className="hidden md:flex items-center justify-between px-6 py-3">
+            <div className="text-black font-semibold text-lg flex items-center gap-1.5 before:content-['✱'] before:text-xl">
+              ProSlides
+            </div>
 
-          <div className="flex items-center justify-between w-full md:w-auto md:justify-end gap-3 md:gap-4">
-            <button className="p-2 hover:bg-gray-100 rounded-lg transition">
-              <span className="text-xl">🌐</span>
-            </button>
-            <button className="p-2 hover:bg-gray-100 rounded-lg transition relative">
-              <span className="text-xl">🔔</span>
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
-            <button className="p-2 hover:bg-gray-100 rounded-lg transition">
-              <span className="text-xl">❓</span>
-            </button>
-            <button className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition font-medium">
-              Upgrade
-            </button>
+            <div className="relative flex-1 max-w-md mx-8">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search presentations.."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-2.5 border border-gray-300 text-gray-700 bg-gray-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+              />
+            </div>
 
-            {/* Profile Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="w-10 h-10 bg-teal-500 rounded-full flex items-center justify-center text-white font-semibold cursor-pointer hover:bg-teal-600 transition"
-              >
-                {loggedInUser.charAt(0).toUpperCase()}
+            <div className="flex items-center gap-4">
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition">
+                <span className="text-xl">🌐</span>
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition relative">
+                <span className="text-xl">🔔</span>
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition">
+                <span className="text-xl">❓</span>
+              </button>
+              <button className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition font-medium">
+                Upgrade
               </button>
 
-              {showProfileMenu && (
-                <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg w-48 z-50">
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Logout
-                  </button>
-                </div>
-              )}
+              {/* Profile Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowProfileMenu(!showProfileMenu)}
+                  className="w-10 h-10 bg-teal-500 rounded-full flex items-center justify-center text-white font-semibold cursor-pointer hover:bg-teal-600 transition"
+                >
+                  {loggedInUser.charAt(0).toUpperCase()}
+                </button>
+
+                {showProfileMenu && (
+                  <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg w-48 z-50">
+                    <button
+                      onClick={() => handleLogout()}
+                      className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Content with top padding to account for fixed header */}
-        <div className="pt-40 md:pt-24 px-6">
+        <div className="pt-16 md:pt-20 px-4 md:px-6">
           {passwordPromptVisible && (
             <div className="mb-6 rounded-xl border border-purple-200 bg-white px-4 py-3 text-sm text-purple-900 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1322,12 +1400,13 @@ export default function QuizManager({ onNewPresentation }) {
       )}
 
       {/* Close menu when clicking outside */}
-      {(showMenu || showProfileMenu) && (
+      {(showMenu || showProfileMenu || showMobileSearch) && (
         <div
           className="fixed inset-0 z-40"
           onClick={() => {
             setShowMenu(null);
             setShowProfileMenu(false);
+            setShowMobileSearch(false);
           }}
         ></div>
       )}
