@@ -21,8 +21,8 @@ import { clearAuthStorage, getRefreshToken } from "../utils/auth";
 
 export default function QuizManager({ onNewPresentation }) {
   const navigate = useNavigate();
-  const [loggedInUser] = useState(() =>
-    localStorage.getItem("auth.name") || "You"
+  const [loggedInUser] = useState(
+    () => localStorage.getItem("auth.name") || "You"
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -623,12 +623,12 @@ export default function QuizManager({ onNewPresentation }) {
       {/* Header */}
       <div className="min-h-screen mx-auto mb-8">
         {/* Top Navigation Bar with Search */}
-        <div className="bg-white fixed top-0 left-0 right-0 w-full h-auto min-h-16 flex flex-col md:flex-row items-center justify-between px-4 md:px-6 py-2 md:py-0 z-50 shadow-sm gap-3 md:gap-0">
-          <div className="text-black font-semibold text-lg flex items-center gap-1.5 before:content-['✱'] before:text-xl">
+        <div className="bg-white fixed top-0 left-0 right-0 w-full h-auto min-h-16 flex flex-col md:flex-row items-center justify-between px-4 md:px-6 py-3 md:py-0 z-50 shadow-sm gap-2 md:gap-0">
+          <div className="text-black font-semibold text-lg flex items-center gap-1.5 before:content-['✱'] before:text-xl w-full md:w-auto justify-center md:justify-start">
             ProSlides
           </div>
 
-          <div className="relative w-full md:flex-1 md:max-w-md md:mx-8 mb-2 md:mb-0">
+          <div className="relative w-full md:flex-1 md:max-w-md md:mx-8">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
             <input
               type="text"
@@ -667,10 +667,10 @@ export default function QuizManager({ onNewPresentation }) {
                 <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg w-48 z-50">
                   <button
                     onClick={() => {
-                    handleLogout();
-                  }}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
-                >
+                      handleLogout();
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                  >
                     <LogOut className="w-4 h-4" />
                     Logout
                   </button>
@@ -681,14 +681,17 @@ export default function QuizManager({ onNewPresentation }) {
         </div>
 
         {/* Content with top padding to account for fixed header */}
-        <div className="pt-24 px-6">
+        <div className="pt-40 md:pt-24 px-6">
           {passwordPromptVisible && (
             <div className="mb-6 rounded-xl border border-purple-200 bg-white px-4 py-3 text-sm text-purple-900 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="font-semibold">Set a password for your account</div>
+                  <div className="font-semibold">
+                    Set a password for your account
+                  </div>
                   <div className="text-xs text-purple-700">
-                    You signed up with Google. Set a password to log in without Google.
+                    You signed up with Google. Set a password to log in without
+                    Google.
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1072,9 +1075,13 @@ export default function QuizManager({ onNewPresentation }) {
             {/* Mobile Card View */}
             <div className="md:hidden space-y-4">
               {filteredQuizzes.map((quiz) => (
-                <div 
-                  key={quiz.id} 
-                  className={`bg-white rounded-lg p-5 shadow-sm border border-gray-200 relative transition-all ${selectedQuizzes.includes(quiz.id) ? "ring-2 ring-purple-500 bg-purple-50/30" : ""}`}
+                <div
+                  key={quiz.id}
+                  className={`bg-white rounded-lg p-5 shadow-sm border border-gray-200 relative transition-all ${
+                    selectedQuizzes.includes(quiz.id)
+                      ? "ring-2 ring-purple-500 bg-purple-50/30"
+                      : ""
+                  }`}
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3.5 overflow-hidden">
@@ -1089,30 +1096,45 @@ export default function QuizManager({ onNewPresentation }) {
                       </div>
                       <div className="truncate min-w-0 flex-1">
                         {renamingQuiz === quiz.id ? (
-                           <input
-                              type="text"
-                              value={newQuizName}
-                              onChange={(e) => setNewQuizName(e.target.value)}
-                              onBlur={async () => {
-                                if (newQuizName.trim() && newQuizName.trim() !== quiz.name) {
-                                  const success = await renameQuiz(quiz.id, newQuizName);
-                                  if (!success) setNewQuizName(quiz.name);
-                                }
-                                setRenamingQuiz(null);
-                              }}
-                              autoFocus
-                              className="w-full font-semibold text-gray-800 border border-purple-500 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-purple-200"
-                           />
+                          <input
+                            type="text"
+                            value={newQuizName}
+                            onChange={(e) => setNewQuizName(e.target.value)}
+                            onBlur={async () => {
+                              if (
+                                newQuizName.trim() &&
+                                newQuizName.trim() !== quiz.name
+                              ) {
+                                const success = await renameQuiz(
+                                  quiz.id,
+                                  newQuizName
+                                );
+                                if (!success) setNewQuizName(quiz.name);
+                              }
+                              setRenamingQuiz(null);
+                            }}
+                            autoFocus
+                            className="w-full font-semibold text-gray-800 border border-purple-500 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-purple-200"
+                          />
                         ) : (
-                           <h3 className="font-semibold text-gray-900 truncate text-lg leading-tight" onClick={() => handleEdit(quiz.id)}>{quiz.name}</h3>
+                          <h3
+                            className="font-semibold text-gray-900 truncate text-lg leading-tight"
+                            onClick={() => handleEdit(quiz.id)}
+                          >
+                            {quiz.name}
+                          </h3>
                         )}
-                         <div className="text-xs text-gray-500 flex items-center gap-3 mt-1">
-                            <span className="flex items-center gap-1">📄 {quiz.slides}</span>
-                            <span className="flex items-center gap-1">👥 {quiz.participants}</span>
-                         </div>
+                        <div className="text-xs text-gray-500 flex items-center gap-3 mt-1">
+                          <span className="flex items-center gap-1">
+                            📄 {quiz.slides}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            👥 {quiz.participants}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    
+
                     <div className="relative ml-2">
                       <button
                         onClick={(e) => {
@@ -1123,37 +1145,73 @@ export default function QuizManager({ onNewPresentation }) {
                       >
                         <MoreVertical className="w-5 h-5 text-gray-500" />
                       </button>
-                      
+
                       {showMenu === quiz.id && (
                         <div className="absolute right-0 top-10 bg-white border border-gray-100 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] w-56 z-50 overflow-hidden flex flex-col py-1 animate-in fade-in zoom-in-95 duration-100 origin-top-right text-sm">
-                             <button onClick={() => { handlePresent(quiz.accessCode); setShowMenu(null); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-purple-600 font-medium">
-                               <Play className="w-4 h-4" /> Present
-                             </button>
-                             <button onClick={() => { setRenamingQuiz(quiz.id); setNewQuizName(quiz.name); setShowMenu(null); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700">
-                               <Pencil className="w-4 h-4" /> Rename
-                             </button>
-                             <button onClick={() => { setShowShareModal(quiz.id); setShowMenu(null); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700">
-                               <span className="w-4 h-4 flex items-center justify-center">🔗</span> Share
-                             </button>
-                             <button onClick={() => handleDuplicate(quiz)} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700">
-                               <Copy className="w-4 h-4" /> Duplicate
-                             </button>
-                             <div className="h-px bg-gray-100 my-1"></div>
-                             <button onClick={() => { 
-                                setShowMenu(null);
-                                showConfirmDialog({
-                                  title: "Reset Quiz Results",
-                                  description: "Are you sure you want to reset all results for this quiz? This action cannot be undone.",
-                                  confirmText: "Reset Results",
-                                  confirmVariant: "destructive",
-                                  onConfirm: async () => await resetQuizResults(quiz.id),
-                                });
-                             }} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700">
-                               <Copy className="w-4 h-4" /> Reset results
-                             </button>
-                             <button onClick={() => { setShowMenu(null); handleDeleteQuiz(quiz.id); }} className="w-full text-left px-4 py-3 text-red-500 hover:bg-red-50 flex items-center gap-3">
-                               <Trash2 className="w-4 h-4" /> Delete
-                             </button>
+                          <button
+                            onClick={() => {
+                              handlePresent(quiz.accessCode);
+                              setShowMenu(null);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-purple-600 font-medium"
+                          >
+                            <Play className="w-4 h-4" /> Present
+                          </button>
+                          <button
+                            onClick={() => {
+                              setRenamingQuiz(quiz.id);
+                              setNewQuizName(quiz.name);
+                              setShowMenu(null);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                          >
+                            <Pencil className="w-4 h-4" /> Rename
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowShareModal(quiz.id);
+                              setShowMenu(null);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                          >
+                            <span className="w-4 h-4 flex items-center justify-center">
+                              🔗
+                            </span>{" "}
+                            Share
+                          </button>
+                          <button
+                            onClick={() => handleDuplicate(quiz)}
+                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                          >
+                            <Copy className="w-4 h-4" /> Duplicate
+                          </button>
+                          <div className="h-px bg-gray-100 my-1"></div>
+                          <button
+                            onClick={() => {
+                              setShowMenu(null);
+                              showConfirmDialog({
+                                title: "Reset Quiz Results",
+                                description:
+                                  "Are you sure you want to reset all results for this quiz? This action cannot be undone.",
+                                confirmText: "Reset Results",
+                                confirmVariant: "destructive",
+                                onConfirm: async () =>
+                                  await resetQuizResults(quiz.id),
+                              });
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                          >
+                            <Copy className="w-4 h-4" /> Reset results
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowMenu(null);
+                              handleDeleteQuiz(quiz.id);
+                            }}
+                            className="w-full text-left px-4 py-3 text-red-500 hover:bg-red-50 flex items-center gap-3"
+                          >
+                            <Trash2 className="w-4 h-4" /> Delete
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1161,18 +1219,40 @@ export default function QuizManager({ onNewPresentation }) {
 
                   <div className="grid grid-cols-2 gap-4 text-sm mb-5 bg-gray-50/50 p-3 rounded-lg border border-gray-100">
                     <div>
-                        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium block mb-1">Access Code</span>
-                        <div onClick={() => setShowShareModal(quiz.id)} className="font-mono font-bold text-purple-600 bg-purple-100/50 px-2 py-1 rounded inline-block cursor-pointer border border-purple-100">{quiz.accessCode}</div>
+                      <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium block mb-1">
+                        Access Code
+                      </span>
+                      <div
+                        onClick={() => setShowShareModal(quiz.id)}
+                        className="font-mono font-bold text-purple-600 bg-purple-100/50 px-2 py-1 rounded inline-block cursor-pointer border border-purple-100"
+                      >
+                        {quiz.accessCode}
+                      </div>
                     </div>
                     <div className="text-right">
-                        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium block mb-1">Last Updated</span>
-                        <span className="text-xs font-medium text-gray-600">{quiz.lastUpdated}</span>
+                      <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium block mb-1">
+                        Last Updated
+                      </span>
+                      <span className="text-xs font-medium text-gray-600">
+                        {quiz.lastUpdated}
+                      </span>
                     </div>
                   </div>
 
                   <div className="flex gap-3">
-                     <Button onClick={() => handleEdit(quiz.id)} variant="outline" className="flex-1 h-10 text-sm border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium tracking-wide">Edit</Button>
-                     <Button onClick={() => handlePresent(quiz.accessCode)} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white h-10 text-sm shadow-sm shadow-purple-200 font-medium tracking-wide">Present</Button>
+                    <Button
+                      onClick={() => handleEdit(quiz.id)}
+                      variant="outline"
+                      className="flex-1 h-10 text-sm border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium tracking-wide"
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      onClick={() => handlePresent(quiz.accessCode)}
+                      className="flex-1 bg-purple-600 hover:bg-purple-700 text-white h-10 text-sm shadow-sm shadow-purple-200 font-medium tracking-wide"
+                    >
+                      Present
+                    </Button>
                   </div>
                 </div>
               ))}
