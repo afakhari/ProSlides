@@ -26,6 +26,7 @@ export default function QuizManager({ onNewPresentation }) {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [statusMessage, setStatusMessage] = useState(null);
   const [passwordPromptVisible, setPasswordPromptVisible] = useState(false);
   const [passwordPromptStatus, setPasswordPromptStatus] = useState(null);
   const [passwordPromptLoading, setPasswordPromptLoading] = useState(false);
@@ -78,6 +79,12 @@ export default function QuizManager({ onNewPresentation }) {
   useEffect(() => {
     fetchQuizzes();
   }, [fetchQuizzes]);
+
+  useEffect(() => {
+    if (!statusMessage) return;
+    const timeoutId = setTimeout(() => setStatusMessage(null), 3000);
+    return () => clearTimeout(timeoutId);
+  }, [statusMessage]);
 
   useEffect(() => {
     const promptFlag = localStorage.getItem("auth.promptSetPassword");
@@ -213,14 +220,18 @@ export default function QuizManager({ onNewPresentation }) {
     });
 
   // Check if all quizzes are selected
+  const selectedInFilterCount = filteredQuizzes.filter((quiz) =>
+    selectedQuizzes.includes(quiz.id)
+  ).length;
+
+  // Check if all quizzes are selected within the current filter
   const allSelected =
     filteredQuizzes.length > 0 &&
-    selectedQuizzes.length === filteredQuizzes.length;
+    selectedInFilterCount === filteredQuizzes.length;
 
-  // Check if some quizzes are selected
-  const someSelected =
-    selectedQuizzes.length > 0 &&
-    selectedQuizzes.length < filteredQuizzes.length;
+  // Check if some quizzes are selected within the current filter
+  const someSelected = selectedInFilterCount > 0 && !allSelected;
+  const showEmptyState = !loading && !error && filteredQuizzes.length === 0;
 
   // Handle select all checkbox
   const handleSelectAll = () => {
@@ -315,8 +326,10 @@ export default function QuizManager({ onNewPresentation }) {
         throw new Error(`Failed to reset quiz results: ${response.statusText}`);
       }
 
-      // Show success message
-      alert("Quiz results have been reset successfully!");
+      setStatusMessage({
+        type: "success",
+        message: "Quiz results have been reset successfully.",
+      });
       return true;
     } catch (err) {
       console.error("Error resetting quiz results:", err);
@@ -428,7 +441,7 @@ export default function QuizManager({ onNewPresentation }) {
     try {
       // Find how many copies already exist to generate appropriate name
       const copyRegex = new RegExp(
-        `^${quiz.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\copy (\\d+)\\$`
+        `^${quiz.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\(copy (\\d+)\\)$`
       );
       let maxCopyNumber = 0;
 
@@ -485,7 +498,10 @@ export default function QuizManager({ onNewPresentation }) {
       };
 
       setQuizzes([...quizzes, newQuiz]);
-      alert("Quiz duplicated successfully!");
+      setStatusMessage({
+        type: "success",
+        message: "Quiz duplicated successfully.",
+      });
     } catch (err) {
       console.error("Error duplicating quiz:", err);
       setError(err.message);
@@ -620,7 +636,7 @@ export default function QuizManager({ onNewPresentation }) {
   }, [showMenu]);
 
   return (
-    <div className="min-h-screen bg-blue-50 pb-30">
+    <div className="min-h-screen bg-blue-50 pb-24 md:pb-28">
       {/* Header */}
       <div className="min-h-screen mx-auto mb-8">
         {/* Top Navigation Bar with Search */}
@@ -644,10 +660,16 @@ export default function QuizManager({ onNewPresentation }) {
                       ? "bg-purple-100 text-purple-600"
                       : "hover:bg-gray-100 text-gray-600"
                   }`}
+                  aria-label="Toggle search"
+                  title="Search"
                 >
                   <Search className="w-5 h-5" />
                 </button>
-                <button className="p-1.5 hover:bg-gray-100 rounded-lg transition">
+                <button
+                  className="p-1.5 hover:bg-gray-100 rounded-lg transition"
+                  aria-label="Notifications"
+                  title="Notifications"
+                >
                   <span className="text-lg">🔔</span>
                 </button>
                 <button className="px-3 py-1.5 bg-teal-500 text-white text-sm rounded-lg hover:bg-teal-600 transition font-medium">
@@ -688,14 +710,16 @@ export default function QuizManager({ onNewPresentation }) {
                     autoFocus
                     className="w-full pl-10 pr-10 py-2 text-sm border border-gray-200 text-gray-700 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                   />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        aria-label="Clear search"
+                        title="Clear search"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
                 </div>
               </div>
             )}
@@ -719,14 +743,26 @@ export default function QuizManager({ onNewPresentation }) {
             </div>
 
             <div className="flex items-center gap-4">
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition">
+              <button
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+                aria-label="Language"
+                title="Language"
+              >
                 <span className="text-xl">🌐</span>
               </button>
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition relative">
+              <button
+                className="p-2 hover:bg-gray-100 rounded-lg transition relative"
+                aria-label="Notifications"
+                title="Notifications"
+              >
                 <span className="text-xl">🔔</span>
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
               </button>
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition">
+              <button
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+                aria-label="Help"
+                title="Help"
+              >
                 <span className="text-xl">❓</span>
               </button>
               <button className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition font-medium">
@@ -735,10 +771,12 @@ export default function QuizManager({ onNewPresentation }) {
 
               {/* Profile Dropdown */}
               <div className="relative">
-                <button
-                  onClick={() => setShowProfileMenu(!showProfileMenu)}
-                  className="w-10 h-10 bg-teal-500 rounded-full flex items-center justify-center text-white font-semibold cursor-pointer hover:bg-teal-600 transition"
-                >
+                  <button
+                    onClick={() => setShowProfileMenu(!showProfileMenu)}
+                    className="w-10 h-10 bg-teal-500 rounded-full flex items-center justify-center text-white font-semibold cursor-pointer hover:bg-teal-600 transition"
+                    aria-label="Open profile menu"
+                    title="Profile"
+                  >
                   {loggedInUser.charAt(0).toUpperCase()}
                 </button>
 
@@ -801,6 +839,18 @@ export default function QuizManager({ onNewPresentation }) {
               )}
             </div>
           )}
+          {statusMessage && (
+            <div
+              className={`mb-6 rounded-xl border px-4 py-3 text-sm shadow-sm ${
+                statusMessage.type === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-red-200 bg-red-50 text-red-700"
+              }`}
+              role="status"
+            >
+              {statusMessage.message}
+            </div>
+          )}
 
           {/* My Presentations Section */}
           <div className="mb-6">
@@ -860,10 +910,43 @@ export default function QuizManager({ onNewPresentation }) {
               </div>
             </div>
 
+            {showEmptyState && (
+              <div className="mb-6 rounded-lg border border-dashed border-gray-200 bg-white px-6 py-10 text-center shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {searchQuery ? "No results found" : "No presentations yet"}
+                </h3>
+                <p className="mt-2 text-sm text-gray-500">
+                  {searchQuery
+                    ? "Try a different search or clear the filter."
+                    : "Create your first presentation to get started."}
+                </p>
+                <div className="mt-4 flex flex-wrap justify-center gap-3">
+                  {searchQuery ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setSearchQuery("")}
+                      className="border-gray-300 bg-white text-gray-700"
+                    >
+                      Clear search
+                    </Button>
+                  ) : null}
+                  <Button
+                    onClick={handleNewPresentation}
+                    disabled={creatingQuiz}
+                    className="bg-purple-800 hover:bg-purple-700 text-white px-6 py-2.5 rounded-lg"
+                  >
+                    {creatingQuiz ? "Creating..." : "New presentation"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Quiz Table */}
-            {/* Desktop Table View */}
-            <div className="hidden md:block bg-white rounded-lg shadow-sm border border-gray-200 overflow-visible">
-              <table className="w-full ">
+            {!showEmptyState && (
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden md:block bg-white rounded-lg shadow-sm border border-gray-200 overflow-visible">
+                  <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="text-left px-6 py-3 text-sm font-medium text-gray-600">
@@ -968,7 +1051,7 @@ export default function QuizManager({ onNewPresentation }) {
                                 onClick={() =>
                                   navigate(`/manager/panel/${quiz.id}/report`)
                                 }
-                                className="mt-2 mb-1 inline-flex items-center bg-purple-100 hover:bg-purple-600 text-[#6D28D9] hover:text-white px-2 py-1 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-colors"
+                                className="mt-2 mb-1 inline-flex items-center bg-purple-100 hover:bg-purple-600 text-[#6D28D9] hover:text-white px-2 py-1 rounded text-xs font-medium transition-colors"
                               >
                                 <svg
                                   className="w-4 h-4 mr-0.5 flex-shrink-0"
@@ -1046,13 +1129,13 @@ export default function QuizManager({ onNewPresentation }) {
                         <div className="flex items-center gap-2 justify-end">
                           <Button
                             onClick={() => handleEdit(quiz.id)}
-                            className="bg-blue-800 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="bg-blue-800 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
                           >
                             Edit
                           </Button>
                           <Button
                             onClick={() => handlePresent(quiz.id)}
-                            className="bg-purple-800 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="bg-purple-800 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm"
                           >
                             Present
                           </Button>
@@ -1075,7 +1158,7 @@ export default function QuizManager({ onNewPresentation }) {
                                 } bg-white border border-gray-200 rounded-lg shadow-lg w-48 z-[60] max-h-[80vh] overflow-y-auto`}
                               >
                                 <button
-                                  onClick={() => handlePresent(quiz.accessCode)}
+                                  onClick={() => handlePresent(quiz.id)}
                                   className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-purple-600 font-medium"
                                 >
                                   <Play className="w-4 h-4" />
@@ -1147,11 +1230,11 @@ export default function QuizManager({ onNewPresentation }) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+                  </table>
+                </div>
 
-            {/* Mobile Card View */}
-            <div className="md:hidden space-y-4">
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
               {filteredQuizzes.map((quiz) => (
                 <div
                   key={quiz.id}
@@ -1228,7 +1311,7 @@ export default function QuizManager({ onNewPresentation }) {
                         <div className="absolute right-0 top-10 bg-white border border-gray-100 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] w-56 z-50 overflow-hidden flex flex-col py-1 animate-in fade-in zoom-in-95 duration-100 origin-top-right text-sm">
                           <button
                             onClick={() => {
-                              handlePresent(quiz.accessCode);
+                              handlePresent(quiz.id);
                               setShowMenu(null);
                             }}
                             className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-purple-600 font-medium"
@@ -1317,7 +1400,14 @@ export default function QuizManager({ onNewPresentation }) {
                     </div>
                   </div>
 
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      onClick={() => navigate(`/manager/panel/${quiz.id}/report`)}
+                      variant="outline"
+                      className="flex-1 h-10 text-sm border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium tracking-wide"
+                    >
+                      Report
+                    </Button>
                     <Button
                       onClick={() => handleEdit(quiz.id)}
                       variant="outline"
@@ -1326,7 +1416,7 @@ export default function QuizManager({ onNewPresentation }) {
                       Edit
                     </Button>
                     <Button
-                      onClick={() => handlePresent(quiz.accessCode)}
+                      onClick={() => handlePresent(quiz.id)}
                       className="flex-1 bg-purple-600 hover:bg-purple-700 text-white h-10 text-sm shadow-sm shadow-purple-200 font-medium tracking-wide"
                     >
                       Present
@@ -1334,7 +1424,9 @@ export default function QuizManager({ onNewPresentation }) {
                   </div>
                 </div>
               ))}
-            </div>
+                </div>
+              </>
+            )}
             {loading && (
               <div className="flex justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 mt-15 border-b-2 border-purple-600"></div>
@@ -1357,6 +1449,15 @@ export default function QuizManager({ onNewPresentation }) {
           onClose={() => setShowShareModal(null)}
           quizId={showShareModal}
           accessCode={quizzes.find((q) => q.id === showShareModal)?.accessCode}
+          onAccessCodeSaved={(updatedCode) => {
+            setQuizzes((prevQuizzes) =>
+              prevQuizzes.map((quiz) =>
+                quiz.id === showShareModal
+                  ? { ...quiz, accessCode: updatedCode }
+                  : quiz
+              )
+            );
+          }}
         />
       )}
 

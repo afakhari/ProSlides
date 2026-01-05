@@ -201,7 +201,7 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
       setSaving(false);
       onClose();
       
-    } catch (error) {
+    } catch {
       setSaving(false);
       alert("Failed to save changes. Please try again.");
     }

@@ -1,18 +1,46 @@
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { GripVertical, Trash2, Trophy } from "lucide-react";
 import { quizService } from "../../../services/quizService";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+
+
+const processSlides = (slidesData) => {
+  const result = [];
+  let i = 0;
+
+  while (i < slidesData.length) {
+    const currentSlide = slidesData[i];
+
+    if (currentSlide.slide_type === 3) {
+      const prevSlide = i > 0 ? slidesData[i - 1] : null;
+
+      if (
+        prevSlide &&
+        prevSlide.slide_type === 1 &&
+        currentSlide.order === prevSlide.order
+      ) {
+        result.push(currentSlide);
+        i++;
+      } else {
+        result.push(currentSlide);
+        i++;
+      }
+    } else {
+      result.push(currentSlide);
+      i++;
+    }
+  }
+
+  return result;
+};
 
 export default function SlidesPanel({
-  slides,
   activeSlideId,
   setActiveSlideId,
   setActiveSlideTypeParent,
   addNewSlide,
   deleteSlide,
-  reorderSlides,
   idKey = "slide_id",
-  titleKey = "title",
   getSlideTitle,
   quizId,
   quizBackground = "#ffffff",
@@ -27,35 +55,10 @@ export default function SlidesPanel({
   const [activeSlideType, setActiveSlideType] = useState(null); // حالت جدید برای ذخیره slide_type اسلاید فعال
 
   // تابع برای پردازش اسلایدها
-  const processSlides = (slidesData) => {
-    const result = [];
-    let i = 0;
-
-    while (i < slidesData.length) {
-      const currentSlide = slidesData[i];
-      
-      if (currentSlide.slide_type === 3) { // لیدربرد
-        const prevSlide = i > 0 ? slidesData[i - 1] : null;
-        
-        if (prevSlide && prevSlide.slide_type === 1 && 
-          currentSlide.order === prevSlide.order) {
-          result.push(currentSlide);
-          i++;
-        } else {
-          result.push(currentSlide);
-          i++;
-        }
-      } else {
-        result.push(currentSlide);
-        i++;
-      }
-    }
-
-    return result;
-  };
 
   // تابع برای دریافت اسلایدها از API
-  const fetchSlides = async () => {
+  const fetchSlides = useCallback(async () => {
+    if (!quizId) return;
     try {
       const quizData = await quizService.getSlidesFromAPI(quizId);
       const slidesData = quizData.slides;
@@ -65,7 +68,7 @@ export default function SlidesPanel({
     } catch (error) {
       console.error("Error fetching slides:", error);
     }
-  };
+  }, [quizId]);
 
 
   useEffect(() => {
@@ -73,7 +76,7 @@ export default function SlidesPanel({
       console.log("Refreshing slides after save");
       fetchSlides();
     }
-  }, [refreshTrigger, quizId]);
+  }, [fetchSlides, quizId, refreshTrigger]);
 
 
 
@@ -83,7 +86,7 @@ export default function SlidesPanel({
     if (quizId) {
       fetchSlides();
     }
-  }, [quizId]);
+  }, [fetchSlides, quizId]);
 
 
   // به‌روزرسانی localSlides وقتی processedSlides تغییر کرد
@@ -235,7 +238,7 @@ export default function SlidesPanel({
   };
 
   // تابع برای دریافت پس‌زمینه اسلاید
-  const getSlideBackground = (slide) => {
+  const getSlideBackground = () => {
     if (quizBackgroundImage) {
       return {
         backgroundImage: `url(${quizBackgroundImage})`,
@@ -277,10 +280,6 @@ export default function SlidesPanel({
     return isReordering;
   };
 
-  // محاسبه order برای نمایش
-  const getDisplayOrder = (slide, index) => {
-    return slide.order || index + 1;
-  };
 
   // تابع برای ایجاد key منحصربفرد برای هر اسلاید
   const getUniqueKey = (slide) => {
@@ -375,9 +374,6 @@ export default function SlidesPanel({
 
                           {/* Order indicator */}
                           {/* <div className="absolute top-1 left-1 p-1.5 bg-black/70 text-white text-xs rounded-md z-20">
-                            {getDisplayOrder(slide, index)}
-                          </div> */}
-
                           {/* Leaderboard indicator for question slides */}
                           {isQuestionSlide && hasLeaderboardAfter(slide) && (
                             <div className="absolute top-1 left-2 p-2 bg-yellow-500 text-white text-xs rounded-md z-20 flex items-center gap-1">
