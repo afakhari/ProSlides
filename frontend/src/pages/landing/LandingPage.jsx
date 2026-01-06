@@ -1,18 +1,8 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Seo from "../../components/Seo";
 import SiteHeader from "../../components/SiteHeader";
-function LogoMark() {
-  return (
-    <Link
-      to="/"
-      className="inline-flex items-center gap-1.5 text-[#111827] font-semibold text-lg before:content-['✱'] before:text-xl"
-    >
-      ProSlides
-    </Link>
-  );
-}
-
+import SiteFooter from "../../components/SiteFooter";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -47,8 +37,8 @@ export default function LandingPage() {
             onSubmit={handleJoin}
             className="flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 shadow-[0_6px_14px_rgba(15,23,42,0.05)]"
           >
-            <span className="pl-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9ca3af]">
-              proslides/
+            <span className="pl-2 text-[11px] font-semibold tracking-[0.14em] text-[#9ca3af]">
+              proslides.ir/
             </span>
             <input
               type="text"
@@ -97,6 +87,8 @@ export default function LandingPage() {
           رایگان شروع کنید
         </button>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }
