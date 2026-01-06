@@ -77,6 +77,17 @@ export const quizService = {
     }
   },
 
+  // Getting quiz data for the editor
+  getEditorQuiz: async (quizId) => {
+    try {
+      const response = await api.get(`/quizzes/${quizId}/editor-data/`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching editor quiz:', error);
+      throw error;
+    }
+  },
+
 
   // Updating a quiz
   updateQuiz: async (quizId, quizData) => {
@@ -287,6 +298,35 @@ export const quizService = {
       return response.data;
     } catch (error) {
       console.error('Error updating slide order:', error);
+      throw error;
+    }
+  },
+
+
+  // Get leaderboard entries for a question slide
+  getQuestionLeaderboard: async (quizId, slideId) => {
+    try {
+      const response = await api.get(
+        `/quizzes/${quizId}/slides/${slideId}/question/leaderboard/`
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching question leaderboard:', error);
+      throw error;
+    }
+  },
+
+
+  // Reorder slides for a quiz
+  reorderSlides: async (quizId, slideIds) => {
+    try {
+      const response = await api.post(
+        `/quizzes/${quizId}/slides/reorder/`,
+        { slide_ids: slideIds }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error reordering slides:', error);
       throw error;
     }
   },

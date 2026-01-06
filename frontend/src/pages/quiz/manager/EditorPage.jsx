@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import MiniResultsResultsOnly from "./MiniResultsResultsOnly";
 import LeaderboardPreview from "./LeaderboardPreview";
@@ -13,7 +13,6 @@ import Waiting from "../../loading/LoadingPage";
 import { X } from "lucide-react";
 
 export default function EditorPage() {
-  const navigate = useNavigate();
   const { roomId } = useParams();
   const quizId = parseInt(roomId, 10);
 
@@ -21,28 +20,28 @@ export default function EditorPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const fetchQuiz = useCallback(async () => {
+    if (!quizId) {
+      setError("There is no quiz.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const quizData = await quizService.getEditorQuiz(quizId);
+      setQuiz(quizData);
+      setError(null);
+    } catch (err) {
+      setError("Failed to load quiz");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [quizId]);
+
   useEffect(() => {
-    const fetchQuiz = async () => {
-      if (!quizId) {
-        setError("There is no quiz.");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        // اگر quiz_id داریم، کوئیز را از سرور بگیر
-        const quizData = await quizService.getQuiz(quizId);
-        setQuiz(quizData);
-      } catch (err) {
-        setError("Failed to load quiz");
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchQuiz();
-  }, [quizId, navigate]);
+  }, [fetchQuiz]);
 
   const updateQuiz = (updatedQuiz) => {
     setQuiz(updatedQuiz);
@@ -52,19 +51,11 @@ export default function EditorPage() {
     if (!quiz) return;
 
     try {
-      const savedQuiz = await quizService.updateQuiz(quiz.quiz_id, quiz);
-      setQuiz(savedQuiz);
-      
-      // همچنین slides را هم رفرش کنید
-      const freshSlides = await quizService.getSlidesFromAPI(quiz.quiz_id);
-      setQuiz(prev => ({
-        ...prev,
-        slides: freshSlides.slides || []
-      }));
-      
-      alert("✅ Quiz saved successfully!");
+      await quizService.updateQuiz(quiz.quiz_id, quiz);
+      await fetchQuiz();
+      alert("? Quiz saved successfully!");
     } catch (err) {
-      alert("❌ Failed to save quiz");
+      alert("? Failed to save quiz");
       console.error(err);
     }
   };
@@ -83,18 +74,19 @@ export default function EditorPage() {
   }
 
   return (
-    <QuestionEditor quiz={quiz} updateQuiz={updateQuiz} saveQuiz={saveQuiz} />
+    <QuestionEditor quiz={quiz} updateQuiz={updateQuiz} saveQuiz={saveQuiz} refreshQuiz={fetchQuiz} />
   );
 }
 
 
-function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  
+function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const navigate = useNavigate();
   const [activeSlideType, setActiveSlideType] = useState(null);
+  const [leaderboardPreviewData, setLeaderboardPreviewData] = useState({});
+  const [leaderboardError, setLeaderboardError] = useState(null);
+  const [leaderboardLoading, setLeaderboardLoading] = useState({});
 
   const slides = quiz.slides || [];
   const activeSlide = slides[activeSlideIndex] || null;
@@ -105,19 +97,47 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
   const [showAudioPanel, setShowAudioPanel] = useState(false);
   const [showTypeBox, setShowTypeBox] = useState(false);
 
+  useEffect(() => {
+    if (!activeSlide) return;
+    if (activeSlideType === null || activeSlideType === activeSlide.slide_type) {
+      setActiveSlideType(activeSlide.slide_type);
+    }
+  }, [activeSlide, activeSlideType]);
+
+  const loadLeaderboardPreview = useCallback(async (slideId) => {
+    if (!slideId) return;
+    try {
+      setLeaderboardLoading((prev) => ({ ...prev, [slideId]: true }));
+      const data = await quizService.getQuestionLeaderboard(
+        quiz.quiz_id,
+        slideId
+      );
+      setLeaderboardPreviewData((prev) => ({
+        ...prev,
+        [slideId]: data || [],
+      }));
+      setLeaderboardError(null);
+    } catch (error) {
+      console.error("Failed to load leaderboard preview:", error);
+      setLeaderboardError("Failed to load leaderboard results.");
+    } finally {
+      setLeaderboardLoading((prev) => ({ ...prev, [slideId]: false }));
+    }
+  }, [quiz.quiz_id]);
+
+  useEffect(() => {
+    if (activeSlideType === 3 && activeSlide?.slide_id) {
+      loadLeaderboardPreview(activeSlide.slide_id);
+    }
+  }, [activeSlideType, activeSlide?.slide_id, loadLeaderboardPreview]);
+
 
   const handleSaveAndRefresh = async () => {
     try {
-      // ذخیره کوئیز
       await saveQuiz();
-      
-      // رفرش داده‌های کوئیز از سرور
-      const freshQuiz = await quizService.getQuiz(quiz.quiz_id);
-      updateQuiz(freshQuiz);
-      
-      // رفرش SlidesPanel
-      setRefreshTrigger(prev => prev + 1);
-      
+      if (refreshQuiz) {
+        await refreshQuiz();
+      }
     } catch (error) {
       console.error("Failed to save and refresh:", error);
     }
@@ -125,15 +145,11 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
 
   const handleDeleteLeaderboardAndRefresh = async () => {
     try {
-      // رفرش داده‌های کوئیز از سرور
-      const freshQuiz = await quizService.getQuiz(quiz.quiz_id);
-      updateQuiz(freshQuiz);
-      
-      // رفرش SlidesPanel
-      setRefreshTrigger(prev => prev + 1);
-      
+      if (refreshQuiz) {
+        await refreshQuiz();
+      }
     } catch (error) {
-      console.error("Failed to save and refresh:", error);
+      console.error("Failed to refresh after leaderboard update:", error);
     }
   };
 
@@ -290,6 +306,14 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
     setShowTypeBox(true);
   };
 
+  const resolveQuestionForSlide = async (slideId, fallbackQuestion) => {
+    if (fallbackQuestion?.question_id) {
+      return fallbackQuestion;
+    }
+    const fetched = await quizService.getQuestion(quiz.quiz_id, slideId);
+    return fetched || fallbackQuestion;
+  };
+
 
   const handleSelectType = async (type) => {
     if (!activeSlide || activeSlide.slide_type !== 1) return;
@@ -297,9 +321,11 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
     const questionType = type === "Single Choice" ? "single" : "multiple";
     const quizId = quiz.quiz_id;
     const slideId = activeSlide.slide_id;
-    const currentQuestion = activeSlide.question;
-
     try {
+      const currentQuestion = await resolveQuestionForSlide(
+        slideId,
+        activeSlide.question
+      );
       let updatedQuestion;
 
       if (!currentQuestion || !currentQuestion.question_id) {
@@ -363,7 +389,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
             updatedQuestion = await quizService.updateQuestion(
               quizId,
               slideId,
-              {question_type: questionType}
+              { question_type: questionType }
             );
             
             // به‌روزرسانی داده‌های محلی گزینه‌ها
@@ -373,8 +399,10 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
             }));
             
             // به‌روزرسانی question با گزینه‌های آپدیت شده
-            updatedQuestion = updateData;
-            updatedQuestion.options = updatedOptions;
+            updatedQuestion = {
+              ...updatedQuestion,
+              options: updatedOptions,
+            };
           }
           if(!currentQuestion.options || currentQuestion.options.length === 0){
             updatedQuestion = await quizService.updateQuestion(
@@ -411,7 +439,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
       });
 
       setShowTypeBox(false);
-      setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error("Error changing question type:", error);
 
@@ -473,55 +500,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
   };
 
   // Calculate cumulative leaderboard for the current slide if it's a leaderboard slide
-  const getCumulativeLeaderboard = () => {
-    if (activeSlideType !== 3) return null;
-
-    const playerScores = {};
-    const playerDetails = {};
-
-    // Iterate through all slides BEFORE the current one
-    for (let i = 0; i <= activeSlideIndex; i++) {
-      const slide = slides[i];
-
-      // Only aggregate scores from Question slides (Type 1)
-      if (
-        slide.slide_type === 1 &&
-        slide.leaderboard &&
-        Array.isArray(slide.leaderboard)
-      ) {
-        slide.leaderboard.forEach((player) => {
-          const id = player.rust_session_id || player.player_name;
-
-          if (!playerScores[id]) {
-            playerScores[id] = 0;
-            playerDetails[id] = {
-              rust_session_id: player.rust_session_id,
-              player_name: player.player_name,
-              avatar: player.avatar,
-            };
-          }
-
-          playerScores[id] += player.score || 0;
-        });
-      }
-    }
-
-    // Convert back to array
-    const cumulativeLeaderboard = Object.keys(playerScores).map((id) => ({
-      ...playerDetails[id],
-      score: playerScores[id],
-    }));
-
-    // Sort by score descending
-    cumulativeLeaderboard.sort((a, b) => b.score - a.score);
-
-    // Assign ranks
-    cumulativeLeaderboard.forEach((p, index) => {
-      p.rank = index + 1;
-    });
-
-    return cumulativeLeaderboard;
-  };
 
 
 
@@ -601,32 +579,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
             setActiveSlideTypeParent={setActiveSlideType}
             addNewSlide={addNewSlide}
             deleteSlide={deleteSlide}
-            reorderSlides={async (result) => {
-              if (!result.destination) return;
-
-              const reordered = Array.from(slides);
-              const [removed] = reordered.splice(result.source.index, 1);
-              reordered.splice(result.destination.index, 0, removed);
-
-              // به‌روزرسانی order اسلایدها
-              const updatedSlides = reordered.map((slide, index) => ({
-                ...slide,
-                order: index + 1,
-              }));
-
-              // ذخیره در سرور
-              try {
-                await quizService.reorderSlides(quiz.quiz_id, updatedSlides);
-                updateQuiz({
-                  ...quiz,
-                  slides: updatedSlides,
-                });
-              } catch (error) {
-                console.error("Failed to reorder slides:", error);
-                alert("❌ Failed to reorder slides");
-              }
+            onSlidesReordered={(updatedSlides) => {
+              updateQuiz({
+                ...quiz,
+                slides: updatedSlides,
+              });
             }}
-            refreshTrigger={refreshTrigger}
+            onRefresh={handleDeleteLeaderboardAndRefresh}
             onLeaderboardDeleted={handleLeaderboardDeleted}
             idKey="slide_id"
             titleKey="slide_type"
@@ -634,7 +593,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
             quizId={quiz.quiz_id}
             quizBackground={quiz.background_color}
             quizBackgroundImage={quiz.background_image_url}
-            handleDeleteLeaderboardAndRefresh={handleDeleteLeaderboardAndRefresh}
           />
         </div>
 
@@ -663,15 +621,29 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
             {activeSlide ? (
               activeSlideType === 3 ? (
                 <div className="w-full h-full flex justify-center items-center">
-                  <LeaderboardPreview
-                    slide={activeSlide}
-                    quizBackground={quiz.background_color}
-                    quizBackgroundImage={quiz.background_image_url}
-                    isFullSize={
-                      !showSidebar && !showDesignPanel && !showAudioPanel
-                    }
-                    customLeaderboard={getCumulativeLeaderboard()}
-                  />
+                  <div className="w-full h-full flex flex-col items-center justify-center">
+                    {leaderboardError && (
+                      <div className="text-sm text-red-500 mb-2">
+                        {leaderboardError}
+                      </div>
+                    )}
+                    {leaderboardLoading[activeSlide.slide_id] && (
+                      <div className="text-sm text-slate-500 mb-2">
+                        Loading leaderboard...
+                      </div>
+                    )}
+                    <LeaderboardPreview
+                      slide={activeSlide}
+                      quizBackground={quiz.background_color}
+                      quizBackgroundImage={quiz.background_image_url}
+                      isFullSize={
+                        !showSidebar && !showDesignPanel && !showAudioPanel
+                      }
+                      customLeaderboard={
+                        leaderboardPreviewData[activeSlide.slide_id] || []
+                      }
+                    />
+                  </div>
                 </div>
               ) : activeSlideType === 1 && activeSlide.question ? (
                 <div className="w-full h-full flex justify-center items-center">
@@ -828,7 +800,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
                     <Sidebar
                       quizId={quiz.quiz_id}
                       slide={activeSlide}
-                      setSlide={setActiveSlideIndex}
                       onSaveAndRefresh={handleSaveAndRefresh}
                       slides={slides}
                       activeSlideType={activeSlideType}

@@ -34,11 +34,12 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .models import Quiz, Slide, Question, Option, PlayerSession, Leaderboard, EmailVerification
 from .serializers import (
     QuizSerializer, SlideSerializer, QuestionSerializer, OptionSerializer,
-    ExportSerializer, PlayerSessionSerializer, LeaderboardReceiveSerializer,
+    ExportSerializer, EditorQuizSerializer, PlayerSessionSerializer,
+    LeaderboardReceiveSerializer, LeaderboardEntrySerializer,
     QuestionResultsReceiveSerializer, RegisterSerializer, QuizListSerializer,
     VerifyEmailSerializer, ResendVerificationSerializer, GoogleAuthSerializer,
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
-    TokenWithProfileSerializer,
+    TokenWithProfileSerializer, SlideReorderSerializer,
 )
 from .permissions import IsQuizOwner, IsExportServiceOrQuizOwner, IsServiceToken
 from .pagination import StandardResultsSetPagination
@@ -408,6 +409,17 @@ class QuizViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     @swagger_auto_schema(
+        operation_description="Return quiz data for the editor.",
+        responses={200: EditorQuizSerializer},
+        tags=["Quizzes"],
+    )
+    @action(detail=True, methods=['get'], url_path='editor-data')
+    def editor_data(self, request, pk=None):
+        quiz = self.get_object()
+        serializer = EditorQuizSerializer(quiz)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
         operation_description="صادرات کامل اطلاعات کوئیز برای Rust",
         manual_parameters=[
             openapi.Parameter(
@@ -743,6 +755,47 @@ class SlideViewSet(viewsets.ModelViewSet):
         quiz_id = instance.quiz_id
         super().perform_destroy(instance)
         touch_quiz(quiz_id)
+
+    @swagger_auto_schema(
+        operation_description="Reorder slides for a quiz.",
+        request_body=SlideReorderSerializer,
+        responses={200: openapi.Response("Slides reordered")},
+        tags=["Slides"],
+    )
+    @action(detail=False, methods=["post"], url_path="reorder")
+    def reorder(self, request, quiz_pk=None):
+        quiz = get_object_or_404(
+            Quiz, pk=quiz_pk, owner=self.request.user
+        )
+        serializer = SlideReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        slide_ids = serializer.validated_data["slide_ids"]
+        existing_ids = set(
+            Slide.objects.filter(quiz=quiz).values_list("id", flat=True)
+        )
+        if set(slide_ids) != existing_ids:
+            return Response(
+                {
+                    "detail": "Slide ids must match the quiz slides exactly."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            max_order = (
+                Slide.objects.filter(quiz=quiz)
+                .aggregate(max_order=Max("order"))
+                .get("max_order")
+                or 0
+            )
+            offset = max_order + 1000
+            Slide.objects.filter(quiz=quiz).update(order=F("order") + offset)
+            for idx, slide_id in enumerate(slide_ids, start=1):
+                Slide.objects.filter(pk=slide_id).update(order=idx)
+            touch_quiz(quiz.pk)
+
+        return Response({"status": "ok"})
 
     def partial_update(self, request, *args, **kwargs):
         kwargs['partial'] = True
@@ -1546,6 +1599,35 @@ class LeaderboardReceiveView(viewsets.ViewSet):
             response_data['errors'] = errors
             return Response(response_data, status=status.HTTP_207_MULTI_STATUS)
         return Response(response_data)
+
+    def get_permissions(self):
+        if self.action == "list":
+            return [IsAuthenticated()]
+        return [permission() for permission in self.permission_classes]
+
+    @swagger_auto_schema(
+        operation_description="Return leaderboard entries for a question.",
+        responses={200: LeaderboardEntrySerializer(many=True)},
+        tags=["Leaderboard"],
+    )
+    def list(self, request, quiz_pk=None, slide_pk=None):
+        try:
+            question = Question.objects.get(
+                slide_id=slide_pk,
+                slide__quiz_id=quiz_pk,
+                slide__quiz__owner=request.user,
+            )
+        except Question.DoesNotExist:
+            return Response(
+                {'detail': 'No question found for this slide'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        entries = Leaderboard.objects.filter(
+            question=question
+        ).order_by("rank", "rust_session_id")
+        serializer = LeaderboardEntrySerializer(entries, many=True)
+        return Response(serializer.data)
 
 
 class QuestionResultsReceiveView(viewsets.ViewSet):

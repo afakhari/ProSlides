@@ -1,40 +1,37 @@
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { GripVertical, Trash2, Trophy } from "lucide-react";
 import { quizService } from "../../../services/quizService";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 
-const processSlides = (slidesData) => {
+const buildDisplaySlides = (slidesData) => {
   const result = [];
-  let i = 0;
 
-  while (i < slidesData.length) {
-    const currentSlide = slidesData[i];
+  slidesData.forEach((slide) => {
+    result.push({ ...slide, isSynthetic: false });
 
-    if (currentSlide.slide_type === 3) {
-      const prevSlide = i > 0 ? slidesData[i - 1] : null;
-
-      if (
-        prevSlide &&
-        prevSlide.slide_type === 1 &&
-        currentSlide.order === prevSlide.order
-      ) {
-        result.push(currentSlide);
-        i++;
-      } else {
-        result.push(currentSlide);
-        i++;
-      }
-    } else {
-      result.push(currentSlide);
-      i++;
+    if (slide.slide_type === 1 && slide.show_leaderboard_after) {
+      result.push({
+        slide_id: slide.slide_id,
+        slide_type: 3,
+        order: slide.order,
+        show_leaderboard_after: false,
+        title: null,
+        content_text: null,
+        content_image_url: null,
+        question: null,
+        leaderboard: [],
+        isSynthetic: true,
+        sourceSlideId: slide.slide_id,
+      });
     }
-  }
+  });
 
   return result;
 };
 
 export default function SlidesPanel({
+  slides = [],
   activeSlideId,
   setActiveSlideId,
   setActiveSlideTypeParent,
@@ -45,67 +42,43 @@ export default function SlidesPanel({
   quizId,
   quizBackground = "#ffffff",
   quizBackgroundImage = "",
-  refreshTrigger = 0,
   onLeaderboardDeleted,
-  handleDeleteLeaderboardAndRefresh
+  onSlidesReordered,
+  onRefresh
 }) {
   const [isReordering, setIsReordering] = useState(false);
-  const [processedSlides, setProcessedSlides] = useState([]);
   const [localSlides, setLocalSlides] = useState([]);
   const [activeSlideType, setActiveSlideType] = useState(null); // حالت جدید برای ذخیره slide_type اسلاید فعال
 
   // تابع برای پردازش اسلایدها
 
   // تابع برای دریافت اسلایدها از API
-  const fetchSlides = useCallback(async () => {
-    if (!quizId) return;
-    try {
-      const quizData = await quizService.getSlidesFromAPI(quizId);
-      const slidesData = quizData.slides;
-      const processed = processSlides(slidesData);
-      setProcessedSlides(processed);
-      setLocalSlides(processed);
-    } catch (error) {
-      console.error("Error fetching slides:", error);
-    }
-  }, [quizId]);
-
-
   useEffect(() => {
-    if (quizId && refreshTrigger > 0) {
-      console.log("Refreshing slides after save");
-      fetchSlides();
-    }
-  }, [fetchSlides, quizId, refreshTrigger]);
+    setLocalSlides(slides);
 
-
-
-
-  // دریافت اولیه اسلایدها
-  useEffect(() => {
-    if (quizId) {
-      fetchSlides();
-    }
-  }, [fetchSlides, quizId]);
-
-
-  // به‌روزرسانی localSlides وقتی processedSlides تغییر کرد
-  useEffect(() => {
-    setLocalSlides(processedSlides);
-    
-    // وقتی اسلایدها بارگیری شدند، slide_type اسلاید فعال را پیدا کن
-    if (activeSlideId && processedSlides.length > 0) {
-      const activeSlide = processedSlides.find(s => s[idKey] === activeSlideId);
+    if (activeSlideId && slides.length > 0) {
+      const activeSlide = slides.find((s) => s[idKey] === activeSlideId);
       if (activeSlide) {
         setActiveSlideType(activeSlide.slide_type);
+        if (setActiveSlideTypeParent) {
+          setActiveSlideTypeParent(activeSlide.slide_type);
+        }
       }
     }
-  }, [processedSlides, activeSlideId, idKey]);
+  }, [slides, activeSlideId, idKey, setActiveSlideTypeParent]);
 
-  // تابع برای به‌روزرسانی اسلایدها
-  const refreshSlides = () => {
-    fetchSlides();
-  };
+  const displaySlides = useMemo(
+    () => buildDisplaySlides(localSlides),
+    [localSlides]
+  );
+
+  const draggableIndexMap = useMemo(() => {
+    const map = new Map();
+    localSlides.forEach((slide, index) => {
+      map.set(`${slide[idKey]}-${slide.slide_type}`, index);
+    });
+    return map;
+  }, [localSlides, idKey]);
 
   const handleDragEnd = async (result) => {
     if (!result.destination) return;
@@ -120,21 +93,23 @@ export default function SlidesPanel({
       return;
     }
     
+    const previousSlides = Array.from(localSlides);
     const newSlides = Array.from(localSlides);
     const [movedSlide] = newSlides.splice(sourceIndex, 1);
     newSlides.splice(destinationIndex, 0, movedSlide);
     
     setLocalSlides(newSlides);
     
-    const newOrder = destinationIndex + 1;
-    
     try {
-      await quizService.updateSlideOrder(quizId, movedSlide[idKey], newOrder);
-      refreshSlides();
+      const slideIds = newSlides.map((slide) => slide[idKey]);
+      await quizService.reorderSlides(quizId, slideIds);
+      if (onSlidesReordered) {
+        onSlidesReordered(newSlides);
+      }
     } catch (error) {
       console.error("Failed to update slide order:", error);
       alert("❌ Failed to reorder slide");
-      setLocalSlides(processedSlides);
+      setLocalSlides(previousSlides);
     } finally {
       setIsReordering(false);
     }
@@ -145,7 +120,7 @@ export default function SlidesPanel({
     if (!window.confirm("Are you sure you want to delete this slide?")) return;
 
     try {
-      const slideToDelete = processedSlides.find(
+      const slideToDelete = displaySlides.find(
         s => s[idKey] === slideId && s.slide_type === slideType
       );
 
@@ -158,7 +133,7 @@ export default function SlidesPanel({
         }
 
         // حذف فقط لیدربرد مرتبط
-        const questionSlide = processedSlides.find(
+        const questionSlide = localSlides.find(
           s => s.slide_type === 1 && s.order === slideToDelete.order
         );
 
@@ -175,8 +150,9 @@ export default function SlidesPanel({
         await deleteSlide(slideId);
       }
 
-      refreshSlides();
-      handleDeleteLeaderboardAndRefresh();
+      if (onRefresh) {
+        await onRefresh();
+      }
     } catch (error) {
       console.error("Failed to delete slide:", error);
       alert("❌ Failed to delete slide");
@@ -188,7 +164,9 @@ export default function SlidesPanel({
   const handleAddSlide = async () => {
     try {
       await addNewSlide();
-      refreshSlides();
+      if (onRefresh) {
+        await onRefresh();
+      }
     } catch (error) {
       console.error("Failed to add new slide:", error);
       alert("❌ Failed to add new slide");
@@ -255,27 +233,14 @@ export default function SlidesPanel({
   // بررسی آیا اسلاید لیدربرد بعد از این اسلاید وجود دارد
   const hasLeaderboardAfter = (slide) => {
     if (slide.slide_type !== 1) return false;
-    
-    const currentIndex = localSlides.findIndex(s => s[idKey] === slide[idKey] && s.slide_type === slide.slide_type);
-    if (currentIndex !== -1 && currentIndex + 1 < localSlides.length) {
-      const nextSlide = localSlides[currentIndex + 1];
-      return nextSlide.slide_type === 3 && 
-            nextSlide.order === slide.order;
-    }
-    return false;
+
+    return !!slide.show_leaderboard_after;
   };
 
   // تابع برای غیرفعال کردن درگ برای اسلایدهای لیدربرد
   const isDragDisabled = (slide) => {
-    if (slide.slide_type === 3) {
-      const slideIndex = localSlides.findIndex(s => s[idKey] === slide[idKey] && s.slide_type === slide.slide_type);
-      if (slideIndex > 0) {
-        const prevSlide = localSlides[slideIndex - 1];
-        if (prevSlide.slide_type === 1 && 
-            slide.order === prevSlide.order) {
-          return true;
-        }
-      }
+    if (slide.isSynthetic || slide.slide_type === 3) {
+      return true;
     }
     return isReordering;
   };
@@ -304,7 +269,7 @@ export default function SlidesPanel({
               ref={provided.innerRef}
               className="space-y-4"
             >
-              {localSlides.map((slide, index) => {
+              {displaySlides.map((slide) => {
                 const slideBackground = getSlideBackground(slide);
                 const isLeaderboardSlide = slide.slide_type === 3;
                 const isQuestionSlide = slide.slide_type === 1;
@@ -312,12 +277,70 @@ export default function SlidesPanel({
                 const dragDisabled = isDragDisabled(slide);
                 const isActive = isSlideActive(slide);
                 const uniqueKey = getUniqueKey(slide);
+                const draggableIndex = draggableIndexMap.get(uniqueKey);
+
+                if (slide.isSynthetic) {
+                  return (
+                    <div
+                      key={uniqueKey}
+                      onClick={() => handleSlideClick(slide)}
+                      className={`relative cursor-pointer border rounded-lg overflow-hidden transition-all
+                        w-full aspect-[16/9] max-w-[360px] mx-auto
+                        ${isActive
+                          ? "border-slate-600 outline-2 outline-slate-500 outline"
+                          : "border-gray-300 hover:shadow-md"
+                        }
+                      `}
+                      style={slideBackground}
+                    >
+                      {/* Delete button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteSlide(slide[idKey], slide.slide_type);
+                        }}
+                        disabled={isReordering}
+                        className="absolute top-1 right-2 p-2 rounded-md bg-white/90 hover:bg-red-50 text-red-600 shadow-sm z-20 disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+
+                      {/* Title */}
+                      <div
+                        className="absolute top-10 left-2 right-2 text-sm font-semibold text-black/90 bg-white/80 p-2 rounded leading-tight overflow-hidden text-center"
+                        style={{
+                          maxHeight: "110px",
+                          wordBreak: "break-word",
+                          WebkitLineClamp: 6,
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                        }}
+                      >
+                        <div className="flex flex-col items-center gap-2">
+                          <Trophy className="w-8 h-8 text-yellow-500" />
+                          {slideTitle}
+                        </div>
+                      </div>
+
+                      {/* Type and info */}
+                      <div className="absolute bottom-2 left-2 right-2 text-xs text-center space-y-1">
+                        <div className="bg-white/80 py-1 rounded font-medium text-gray-700">
+                          {getQuestionType(slide)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (draggableIndex === undefined) {
+                  return null;
+                }
 
                 return (
                   <Draggable
-                    key={uniqueKey} // استفاده از key منحصربفرد
-                    draggableId={uniqueKey} // استفاده از شناسه منحصربفرد برای drag
-                    index={index}
+                    key={uniqueKey}
+                    draggableId={uniqueKey}
+                    index={draggableIndex}
                     isDragDisabled={dragDisabled}
                   >
                     {(provided, snapshot) => {
@@ -363,7 +386,6 @@ export default function SlidesPanel({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              // handleDeleteSlide(slide[idKey]);
                               handleDeleteSlide(slide[idKey], slide.slide_type);
                             }}
                             disabled={isReordering}
@@ -372,8 +394,6 @@ export default function SlidesPanel({
                             <Trash2 className="w-4 h-4" />
                           </button>
 
-                          {/* Order indicator */}
-                          {/* <div className="absolute top-1 left-1 p-1.5 bg-black/70 text-white text-xs rounded-md z-20">
                           {/* Leaderboard indicator for question slides */}
                           {isQuestionSlide && hasLeaderboardAfter(slide) && (
                             <div className="absolute top-1 left-2 p-2 bg-yellow-500 text-white text-xs rounded-md z-20 flex items-center gap-1">

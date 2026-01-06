@@ -149,3 +149,28 @@ def test_leaderboard_receive_updates_player_session(api_client):
     player.refresh_from_db()
     assert player.player_name == "New Name"
     assert player.avatar == "N"
+
+
+@pytest.mark.django_db
+def test_leaderboard_list_returns_entries_for_owner(api_client):
+    quiz = QuizFactory()
+    question = QuestionFactory(slide=SlideFactory(quiz=quiz, slide_type=1))
+    player = PlayerSessionFactory(quiz=quiz)
+
+    Leaderboard.objects.create(
+        question=question,
+        rust_session_id=player.rust_session_id,
+        player_name=player.player_name,
+        avatar=player.avatar,
+        score=80,
+        time_taken=2.4,
+        rank=1,
+    )
+
+    api_client.force_authenticate(user=quiz.owner)
+    resp = api_client.get(
+        f"/api/quizzes/{quiz.id}/slides/{question.slide_id}/question/leaderboard/"
+    )
+    assert resp.status_code == 200
+    assert len(resp.data) == 1
+    assert resp.data[0]["rust_session_id"] == player.rust_session_id

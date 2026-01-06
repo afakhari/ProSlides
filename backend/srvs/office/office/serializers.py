@@ -196,6 +196,31 @@ class ExportSerializer(serializers.ModelSerializer):
         }
 
 
+class EditorQuizSerializer(serializers.ModelSerializer):
+    quiz_id = serializers.IntegerField(source='id', read_only=True)
+    slides = SlideSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Quiz
+        fields = [
+            'quiz_id',
+            'title',
+            'access_code',
+            'background_color',
+            'background_image_url',
+            'music_url',
+            'updated_at',
+            'slides',
+        ]
+
+
+class SlideReorderSerializer(serializers.Serializer):
+    slide_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False
+    )
+
+
 class PlayerSessionSerializer(serializers.ModelSerializer):
     user_id = serializers.CharField(write_only=True, required=False)
 

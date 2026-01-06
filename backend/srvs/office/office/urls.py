@@ -41,7 +41,10 @@ content_view = views.ContentViewSet.as_view({
 })
 
 # Leaderboard view
-leaderboard_view = views.LeaderboardReceiveView.as_view({'post': 'create'})
+leaderboard_view = views.LeaderboardReceiveView.as_view({
+    'post': 'create',
+    'get': 'list'
+})
 
 # Question results (votes) view
 question_results_view = views.QuestionResultsReceiveView.as_view({'post': 'create'})

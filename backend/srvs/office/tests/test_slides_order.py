@@ -133,3 +133,26 @@ def test_create_slide_without_order_assigns_next(api_client):
     )
     assert resp.status_code == 201
     assert resp.data["order"] == 3
+
+
+@pytest.mark.django_db
+def test_reorder_slides_endpoint(api_client):
+    quiz = QuizFactory()
+    api_client.force_authenticate(user=quiz.owner)
+    s1 = SlideFactory(quiz=quiz, order=1)
+    s2 = SlideFactory(quiz=quiz, order=2)
+    s3 = SlideFactory(quiz=quiz, order=3)
+
+    resp = api_client.post(
+        f"/api/quizzes/{quiz.id}/slides/reorder/",
+        {"slide_ids": [s3.id, s1.id, s2.id]},
+        format="json",
+    )
+    assert resp.status_code == 200
+
+    s1.refresh_from_db()
+    s2.refresh_from_db()
+    s3.refresh_from_db()
+    assert s3.order == 1
+    assert s1.order == 2
+    assert s2.order == 3
