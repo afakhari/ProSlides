@@ -1,5 +1,5 @@
 ﻿import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   GripVertical,
   Trash2,
@@ -19,21 +19,23 @@ export default function Sidebar({
   quizId,
   slide,
   onSaveAndRefresh,
-  slides,
   onClose,
-  onSlideUpdated
+  onSlideUpdated,
+  onDirtyChange
 }) {
   // Stateهای مدیریت تغییرات
   const [localSlide, setLocalSlide] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [originalSlide, setOriginalSlide] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
   const [originalOptions, setOriginalOptions] = useState([]);
   const [modalState, setModalState] = useState({
     isOpen: false,
     type: "",
     id: null,
   });
+  const questionInputRef = useRef(null);
 
   // تنظیم مقادیر اولیه هنگام بارگذاری
   useEffect(() => {
@@ -60,6 +62,7 @@ export default function Sidebar({
       setOriginalSlide(slideData);
       setLocalSlide(slideData);
       setOriginalOptions(slide.question?.options || []);
+      setLastSavedAt(null);
     }
   }, [slide]);
 
@@ -188,6 +191,12 @@ export default function Sidebar({
     setHasChanges(hasChanged());
   }, [localSlide, originalSlide, originalOptions]);
 
+  useEffect(() => {
+    if (onDirtyChange) {
+      onDirtyChange(hasChanges);
+    }
+  }, [hasChanges, onDirtyChange]);
+
 
   // Effect برای اطمینان از حداقل یک گزینه صحیح در سوالات multiple
   useEffect(() => {
@@ -222,24 +231,7 @@ export default function Sidebar({
 
 
 
-  useEffect(() => {
-    if (!slide || slide.slide_type !== 1) return;
-
-    const hasLeaderboard = slides.some(
-      s => s.slide_type === 3 && s.order === slide.order
-    );
-
-    // اگر لیدربرد حذف شده، تیک را خاموش کن
-    if (!hasLeaderboard && localSlide?.show_leaderboard_after) {
-      setLocalSlide(prev => ({
-        ...prev,
-        show_leaderboard_after: false
-      }));
-    }
-  }, [slides, slide, localSlide?.show_leaderboard_after]);
-
-
-
+  
 
 
 
@@ -258,15 +250,23 @@ export default function Sidebar({
 //////////////////////////////////////////////////////////////////////////////////////////
 
 
+  const safeSlide = localSlide;
+  const question = safeSlide?.question;
+  const options = question?.options || [];
+  const questionType = question?.question_type || "";
+
+  useEffect(() => {
+    if (!slide || !localSlide || !question || isSaving) return;
+    if (question.question_text) return;
+    if (questionInputRef.current) {
+      questionInputRef.current.focus();
+    }
+  }, [slide, localSlide, question, isSaving]);
+
   // اگر slide وجود ندارد، کامپوننت را رندر نکن
   if (!slide || !localSlide) {
     return <div className="h-full overflow-y-auto p-4">No Slide Selected</div>;
   }
-
-  const safeSlide = localSlide;
-  const question = safeSlide.question;
-  const options = question?.options || [];
-  const questionType = question?.question_type || "";
 
   // تغییر متن سوال
   const handleQuestionChange = (value) => {
@@ -555,7 +555,12 @@ export default function Sidebar({
       }
 
       // بستن پنل
-      onClose();
+      setLastSavedAt(new Date());
+      setHasChanges(false);
+      if (onDirtyChange) {
+        onDirtyChange(false);
+      }
+      onClose(true);
     } catch (error) {
       console.error("Error saving changes:", error);
       alert("Failed to save changes. Please try again.");
@@ -575,7 +580,17 @@ export default function Sidebar({
     
     // برگرداندن به حالت اولیه
     setLocalSlide(originalSlide);
-    onClose();
+    if (
+      onSlideUpdated &&
+      originalSlide &&
+      originalSlide.show_leaderboard_after !== safeSlide.show_leaderboard_after
+    ) {
+      onSlideUpdated({
+        ...slide,
+        show_leaderboard_after: originalSlide.show_leaderboard_after,
+      });
+    }
+    onClose(true);
   };
 
 
@@ -745,14 +760,15 @@ export default function Sidebar({
           <div>
             <h3 className="text-sm font-medium text-gray-700 mb-3">Question Text :</h3>
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={question.question_text || ""}
-                onChange={(e) => handleQuestionChange(e.target.value)}
-                className="flex-1 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent text-center"
-                placeholder="Enter your question here..."
-                disabled={isSaving}
-              />
+                <input
+                  type="text"
+                  value={question.question_text || ""}
+                  onChange={(e) => handleQuestionChange(e.target.value)}
+                  ref={questionInputRef}
+                  className="flex-1 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent text-center"
+                  placeholder="Enter your question here..."
+                  disabled={isSaving}
+                />
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => openImageLinkModal("question")}
@@ -1060,10 +1076,12 @@ export default function Sidebar({
                 onChange={(e) => {
                   const isChecked = e.target.checked;
                   handleSlideFieldChange("show_leaderboard_after", isChecked);
-
-                  
-                  
-                
+                  if (onSlideUpdated) {
+                    onSlideUpdated({
+                      ...slide,
+                      show_leaderboard_after: isChecked,
+                    });
+                  }
                 }}
                 className="w-4 h-4 mt-0.5 rounded border-gray-300 cursor-pointer text-blue-600 focus:ring-blue-500"
                 disabled={isSaving}
@@ -1118,6 +1136,11 @@ export default function Sidebar({
             : "No changes to save"
           }
         </p>
+        {lastSavedAt && (
+          <p className="text-xs text-gray-400 text-center mt-1">
+            Last saved at {lastSavedAt.toLocaleTimeString()}
+          </p>
+        )}
       </div>
     </div>
   );
