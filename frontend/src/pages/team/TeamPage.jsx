@@ -1,4 +1,5 @@
 import SiteHeader from "../../components/SiteHeader";
+import SiteFooter from "../../components/SiteFooter";
 import Seo from "../../components/Seo";
 import dotGrid from "../../assets/patterns/dot-grid.svg";
 import amiraliFakhari from "../../assets/avatars/AmiraliFakhari.jpg";
@@ -203,6 +204,7 @@ export default function TeamPage() {
           gridClassName="grid gap-8 md:grid-cols-2 lg:grid-cols-3"
         />
       </div>
+      <SiteFooter />
     </main>
   );
 }
