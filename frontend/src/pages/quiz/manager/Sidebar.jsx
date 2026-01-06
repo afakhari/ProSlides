@@ -17,8 +17,7 @@ import { quizService } from "../../../services/quizService";
 
 export default function Sidebar({ 
   quizId,
-  slide, 
-  setSlide, 
+  slide,
   onSaveAndRefresh,
   slides,
   onClose,
@@ -539,7 +538,6 @@ export default function Sidebar({
           }
         };
 
-        setSlide(updatedSlide);
         setOriginalSlide(safeSlide);
         setOriginalOptions([...currentOptions]);
 
