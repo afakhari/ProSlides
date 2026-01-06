@@ -87,9 +87,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const [leaderboardPreviewData, setLeaderboardPreviewData] = useState({});
   const [leaderboardError, setLeaderboardError] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState({});
+  const [hasSidebarChanges, setHasSidebarChanges] = useState(false);
 
   const slides = quiz.slides || [];
   const activeSlide = slides[activeSlideIndex] || null;
+  const activeLeaderboardEntries = activeSlide?.slide_id
+    ? leaderboardPreviewData[activeSlide.slide_id] || []
+    : [];
 
   const [activeTab, setActiveTab] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -156,6 +160,20 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
   // توابع برای مدیریت تب‌ها
   const handleTabClick = (tabId) => {
+    if (showSidebar && hasSidebarChanges) {
+      const isTogglingSidebar = tabId === "content" && showSidebar;
+      const isLeavingSidebar = tabId !== "content";
+      if (isTogglingSidebar || isLeavingSidebar) {
+        const confirmLeave = window.confirm(
+          "You have unsaved changes. Do you want to discard them?"
+        );
+        if (!confirmLeave) {
+          return;
+        }
+        setHasSidebarChanges(false);
+      }
+    }
+
     if (tabId === "audio") {
       setShowAudioPanel((prev) => !prev);
       setShowSidebar(false);
@@ -194,7 +212,16 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     setActiveTab(null);
   };
 
-  const handleCloseSidebarPanel = () => {
+  const handleCloseSidebarPanel = (forceClose = false) => {
+    if (!forceClose && hasSidebarChanges) {
+      const confirmClose = window.confirm(
+        "You have unsaved changes. Do you want to discard them?"
+      );
+      if (!confirmClose) {
+        return;
+      }
+      setHasSidebarChanges(false);
+    }
     setShowSidebar(false);
     setActiveTab(null);
   };
@@ -570,6 +597,15 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
             slides={slides}
             activeSlideId={activeSlide?.slide_id}
             setActiveSlideId={(id) => {
+              if (hasSidebarChanges && id !== activeSlide?.slide_id) {
+                const confirmSwitch = window.confirm(
+                  "You have unsaved changes. Do you want to discard them?"
+                );
+                if (!confirmSwitch) {
+                  return;
+                }
+                setHasSidebarChanges(false);
+              }
               const slide = slides.find((s) => s.slide_id === id);
               if (slide) {
                 const index = slides.indexOf(slide);
@@ -632,6 +668,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                         Loading leaderboard...
                       </div>
                     )}
+                    {!leaderboardLoading[activeSlide.slide_id] &&
+                      !leaderboardError &&
+                      activeLeaderboardEntries.length === 0 && (
+                        <div className="text-sm text-slate-500 mb-2">
+                          No results yet. Run the quiz to see the leaderboard.
+                        </div>
+                      )}
                     <LeaderboardPreview
                       slide={activeSlide}
                       quizBackground={quiz.background_color}
@@ -640,7 +683,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                         !showSidebar && !showDesignPanel && !showAudioPanel
                       }
                       customLeaderboard={
-                        leaderboardPreviewData[activeSlide.slide_id] || []
+                        activeLeaderboardEntries
                       }
                     />
                   </div>
@@ -801,9 +844,9 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                       quizId={quiz.quiz_id}
                       slide={activeSlide}
                       onSaveAndRefresh={handleSaveAndRefresh}
-                      slides={slides}
                       activeSlideType={activeSlideType}
                       onClose={handleCloseSidebarPanel}
+                      onDirtyChange={setHasSidebarChanges}
                     onSlideUpdated={handleSlideUpdated}
                   />
                 );
