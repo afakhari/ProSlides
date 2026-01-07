@@ -444,6 +444,33 @@ export default function Sidebar({
     });
   };
 
+  const buildSlideSnapshot = (currentSlide) => {
+    if (!currentSlide) return slide;
+    const currentQuestion = currentSlide.question;
+    if (!currentQuestion) {
+      return {
+        ...slide,
+        show_leaderboard_after: currentSlide.show_leaderboard_after,
+      };
+    }
+
+    return {
+      ...slide,
+      show_leaderboard_after: currentSlide.show_leaderboard_after,
+      question: {
+        ...currentQuestion,
+        text: currentQuestion.question_text || "",
+        image_url: currentQuestion.question_image || "",
+        time_limit: currentQuestion.question_time || 10,
+        max_point: currentQuestion.max_point || 0,
+        min_point: currentQuestion.min_point || 0,
+        faster_answers_more_points: currentQuestion.faster_answers_more_points || false,
+        partial_scoring: currentQuestion.partial_scoring || false,
+        options: currentQuestion.options || [],
+      },
+    };
+  };
+
   // ذخیره تغییرات به بک‌اند
   const handleSubmit = async () => {
     if (!hasChanges || !slide || !quizId || isSaving) return;
@@ -1077,10 +1104,11 @@ export default function Sidebar({
                   const isChecked = e.target.checked;
                   handleSlideFieldChange("show_leaderboard_after", isChecked);
                   if (onSlideUpdated) {
-                    onSlideUpdated({
-                      ...slide,
+                    const snapshot = buildSlideSnapshot({
+                      ...safeSlide,
                       show_leaderboard_after: isChecked,
                     });
+                    onSlideUpdated(snapshot);
                   }
                 }}
                 className="w-4 h-4 mt-0.5 rounded border-gray-300 cursor-pointer text-blue-600 focus:ring-blue-500"
