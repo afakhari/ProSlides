@@ -88,6 +88,10 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const [leaderboardError, setLeaderboardError] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState({});
   const [hasSidebarChanges, setHasSidebarChanges] = useState(false);
+  const [isSelectingType, setIsSelectingType] = useState(false);
+  const [typeSelectionError, setTypeSelectionError] = useState(null);
+  const [typeSelectionNotice, setTypeSelectionNotice] = useState(null);
+  const [typeSelectionMode, setTypeSelectionMode] = useState(null);
 
   const slides = quiz.slides || [];
   const activeSlide = slides[activeSlideIndex] || null;
@@ -330,6 +334,21 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
   // تغییر نوع سوال
   const handleTypeChangeClick = () => {
+    if (isSelectingType) {
+      return;
+    }
+    if (hasSidebarChanges) {
+      const confirmDiscard = window.confirm(
+        "You have unsaved changes. Do you want to discard them before changing the question type?"
+      );
+      if (!confirmDiscard) {
+        return;
+      }
+      setHasSidebarChanges(false);
+      handleCloseSidebarPanel(true);
+    }
+    setTypeSelectionError(null);
+    setTypeSelectionMode(null);
     setShowTypeBox(true);
   };
 
@@ -344,11 +363,16 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
   const handleSelectType = async (type) => {
     if (!activeSlide || activeSlide.slide_type !== 1) return;
+    if (isSelectingType) return;
 
     const questionType = type === "Single Choice" ? "single" : "multiple";
     const quizId = quiz.quiz_id;
     const slideId = activeSlide.slide_id;
+    const requestedMode = type === "Single Choice" ? "single" : "multiple";
     try {
+      setIsSelectingType(true);
+      setTypeSelectionError(null);
+      setTypeSelectionMode(requestedMode);
       const currentQuestion = await resolveQuestionForSlide(
         slideId,
         activeSlide.question
@@ -464,17 +488,73 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         ...quiz,
         slides: updatedSlides,
       });
-
+      setTypeSelectionNotice(
+        `Question type set to ${requestedMode === "single" ? "Single Choice" : "Multiple Choice"}.`
+      );
+      setTimeout(() => {
+        setTypeSelectionNotice(null);
+      }, 2500);
       setShowTypeBox(false);
+
     } catch (error) {
       console.error("Error changing question type:", error);
 
+      if (
+        error.response?.status === 400 &&
+        error.response?.data?.error === "This slide already has a question"
+      ) {
+        try {
+          const existingQuestion = await quizService.getQuestion(
+            quizId,
+            slideId
+          );
+          if (existingQuestion?.question_id) {
+            const refreshedQuestion = await quizService.updateQuestion(
+              quizId,
+              slideId,
+              { question_type: questionType }
+            );
+            const updatedSlide = {
+              ...activeSlide,
+              question: refreshedQuestion || existingQuestion,
+            };
+            const updatedSlides = slides.map((s) =>
+              s.slide_id === slideId ? updatedSlide : s
+            );
+            updateQuiz({
+              ...quiz,
+              slides: updatedSlides,
+            });
+            setTypeSelectionNotice(
+              `Question type updated to ${requestedMode === "single" ? "Single Choice" : "Multiple Choice"}.`
+            );
+            setTimeout(() => {
+              setTypeSelectionNotice(null);
+            }, 2500);
+            setShowTypeBox(false);
+            return;
+          }
+        } catch (fetchError) {
+          console.error("Failed to recover question after conflict:", fetchError);
+        }
+        setTypeSelectionError(
+          "This slide already has a question. Try reopening the slide."
+        );
+        return;
+      }
+
       if (error.response?.status === 400) {
         const errorMsg = error.response.data;
-        alert(`Error: ${JSON.stringify(errorMsg)}`);
+        setTypeSelectionError(
+          typeof errorMsg === "string"
+            ? errorMsg
+            : "We could not apply this change. Please try again."
+        );
       } else {
-        alert("Unexpected error. Please try again.");
+        setTypeSelectionError("Unexpected error. Please try again.");
       }
+    } finally {
+      setIsSelectingType(false);
     }
   };
 
@@ -512,15 +592,20 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     }
 
     // بررسی وجود سوال معتبر در همه اسلایدها
-    const allSlidesHaveQuestions = quiz.slides.every(slide => {
-      return slide.question && 
-            typeof slide.question === 'object' && 
-            slide.question !== null &&
-            Object.keys(slide.question).length > 0;
+    const allQuestionSlidesHaveQuestions = quiz.slides.every((slide) => {
+      if (slide.slide_type !== 1) {
+        return true;
+      }
+      return (
+        slide.question &&
+        typeof slide.question === "object" &&
+        slide.question !== null &&
+        Object.keys(slide.question).length > 0
+      );
     });
 
-    if (!allSlidesHaveQuestions) {
-      alert("All slides must have at least one question");
+    if (!allQuestionSlidesHaveQuestions) {
+      alert("All question slides must have at least one question");
     } else {
       navigate(`/manager/presentation/${quiz.quiz_id}/`);
     }
@@ -620,6 +705,14 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                 ...quiz,
                 slides: updatedSlides,
               });
+              if (activeSlide?.slide_id) {
+                const nextIndex = updatedSlides.findIndex(
+                  (slide) => slide.slide_id === activeSlide.slide_id
+                );
+                if (nextIndex !== -1) {
+                  setActiveSlideIndex(nextIndex);
+                }
+              }
             }}
             onRefresh={handleDeleteLeaderboardAndRefresh}
             onLeaderboardDeleted={handleLeaderboardDeleted}
@@ -727,16 +820,41 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                   <h2 className="text-xl font-bold text-pink-700">
                     Select Question Type
                   </h2>
+                  <p className="text-sm text-slate-500 text-center">
+                    Choose how many correct answers this question can have.
+                  </p>
+                  {typeSelectionError && (
+                    <div className="w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 text-center">
+                      {typeSelectionError}
+                    </div>
+                  )}
 
-                  {["Single Choice", "Multiple Choice"].map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => handleSelectType(type)}
-                      className="w-full bg-pink-500 text-white py-2 rounded-xl hover:bg-pink-600 transition"
-                    >
-                      {type}
-                    </button>
-                  ))}
+                  {["Single Choice", "Multiple Choice"].map((type) => {
+                    const isSingle = type === "Single Choice";
+                    const description = isSingle
+                      ? "One correct answer"
+                      : "Multiple correct answers";
+                    const isBusy =
+                      isSelectingType &&
+                      typeSelectionMode === (isSingle ? "single" : "multiple");
+                    return (
+                      <button
+                        key={type}
+                        onClick={() => handleSelectType(type)}
+                        disabled={isSelectingType}
+                        className="w-full bg-pink-500 text-white py-2 rounded-xl hover:bg-pink-600 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        <div className="flex flex-col items-center">
+                          <span className="font-semibold">
+                            {isBusy ? "Applying..." : type}
+                          </span>
+                          <span className="text-xs text-white/80">
+                            {description}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
 
                   <button
                     onClick={() => setShowTypeBox(false)}
@@ -748,6 +866,11 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
               </>
             )}
           </div>
+          {typeSelectionNotice && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg">
+              {typeSelectionNotice}
+            </div>
+          )}
         </div>
 
         {/* ----- Right Panels ----- */}
