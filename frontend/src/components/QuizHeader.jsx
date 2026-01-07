@@ -128,11 +128,12 @@ export default function QuizHeader({
           {!isEditing ? (
             <button
               onClick={() => setIsEditing(true)}
-              className="flex items-center gap-2 px-5 py-2.5 
-                    bg-gradient-to-r from-yellow-400 to-red-500
-                    hover:from-yellow-450 hover:to-red-600
-                    text-white font-semibold rounded-xl shadow-lg shadow-pink-300/40
-                    transition active:scale-95"
+              className="flex items-center gap-2 px-4 py-2 text-sm
+                    bg-white/15 border border-white/40
+                    hover:bg-white/25
+                    text-white font-semibold rounded-xl
+                    transition active:scale-95
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             >
               Change Quiz Name
             </button>
@@ -191,7 +192,8 @@ export default function QuizHeader({
                     bg-gradient-to-r from-pink-600 to-purple-700 
                     hover:from-pink-650 hover:to-purple-800
                     text-white font-semibold rounded-xl shadow-lg shadow-pink-300/40
-                    transition active:scale-95"
+                    transition active:scale-95
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           >
             Share
           </button>
