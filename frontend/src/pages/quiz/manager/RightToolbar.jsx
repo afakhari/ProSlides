@@ -20,11 +20,16 @@ const items = [
 
 export default function RightToolbar({ activeTab, setActiveTab }) {
     return (
-        <div className="h-full w-16 bg-white border-l border-gray-200 shadow-sm flex flex-col items-center py-4 gap-2">
+        <div className="bg-white border-l border-gray-200 shadow-sm flex lg:flex-col flex-row items-center lg:items-center lg:py-4 py-2 lg:px-0 px-2 gap-2 lg:gap-2 w-full h-14 lg:h-full lg:w-16 overflow-x-auto lg:overflow-visible flex-nowrap">
 
             {items.map((item, index) => {
                 if (item === "divider") {
-                    return <div key={index} className="w-8 h-px bg-gray-300 my-2"></div>;
+                    return (
+                        <div
+                            key={index}
+                            className="lg:w-8 lg:h-px w-px h-8 bg-gray-300 lg:my-2"
+                        ></div>
+                    );
                 }
 
                 const Icon = item.icon;

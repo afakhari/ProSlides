@@ -436,6 +436,28 @@ export default function Sidebar({
     });
   };
 
+  const normalizeDigits = (value) => (
+    value
+      .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+      .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+  );
+
+  const parseIntegerInput = (value) => {
+    const normalized = normalizeDigits(value);
+    if (!normalized.trim()) {
+      return "";
+    }
+    const parsed = parseInt(normalized, 10);
+    return Number.isNaN(parsed) ? "" : parsed;
+  };
+
+  const clampInteger = (value, minValue) => {
+    if (value === "") {
+      return "";
+    }
+    return Math.max(minValue, value);
+  };
+
   // مدیریت تغییرات slide fields
   const handleSlideFieldChange = (field, value) => {
     setLocalSlide({
@@ -965,11 +987,16 @@ export default function Sidebar({
             <h3 className="text-sm font-medium text-gray-700 mb-3">Question Time :</h3>
             <div className="flex items-center gap-3">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9۰-۹٠-٩]*"
                 min="1"
-                value={question.question_time || 10}
+                value={question.question_time ?? 10}
                 onChange={(e) =>
-                  handleFieldChange("question_time", parseInt(e.target.value) || 10)
+                  handleFieldChange(
+                    "question_time",
+                    clampInteger(parseIntegerInput(e.target.value), 1)
+                  )
                 }
                 className="w-20 border border-gray-300 rounded-lg p-2 text-center focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                 disabled={isSaving}
@@ -989,11 +1016,16 @@ export default function Sidebar({
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Max Points</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9۰-۹٠-٩]*"
                   min="0"
-                  value={question.max_point || 0}
+                  value={question.max_point ?? 0}
                   onChange={(e) =>
-                    handleFieldChange("max_point", parseInt(e.target.value) || 0)
+                    handleFieldChange(
+                      "max_point",
+                      clampInteger(parseIntegerInput(e.target.value), 0)
+                    )
                   }
                   className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                   disabled={isSaving}
@@ -1003,11 +1035,16 @@ export default function Sidebar({
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Min Points</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9۰-۹٠-٩]*"
                   min="0"
-                  value={question.min_point || 0}
+                  value={question.min_point ?? 0}
                   onChange={(e) =>
-                    handleFieldChange("min_point", parseInt(e.target.value) || 0)
+                    handleFieldChange(
+                      "min_point",
+                      clampInteger(parseIntegerInput(e.target.value), 0)
+                    )
                   }
                   className={`w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent ${
                     !question.faster_answers_more_points ? "bg-gray-100 cursor-not-allowed opacity-50" : ""

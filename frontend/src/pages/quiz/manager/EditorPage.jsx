@@ -683,9 +683,9 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       />
 
       {/* ----- Main Layout ----- */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden flex-col lg:flex-row gap-4 lg:gap-0">
         {/* ----- Left Panel (Slides Panel) ----- */}
-        <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/5">
+        <div className="bg-white rounded-xl shadow p-4 overflow-y-auto w-full max-h-[40vh] lg:max-h-none lg:h-full lg:w-1/5">
           <SlidesPanel
             slides={slides}
             activeSlideId={activeSlide?.slide_id}
@@ -734,7 +734,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         </div>
 
         {/* ----- Middle panel ----- */}
-        <div className="flex-1 mx-4 relative">
+        <div className="flex-1 relative lg:mx-4 mx-0">
           <div className="bg-white rounded-xl shadow p-2 h-full flex justify-center items-center overflow-hidden relative">
             {/* ----- Present Button ----- */}
             <button
@@ -883,7 +883,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
         {/* ----- Right Panels ----- */}
         {showSidebar && (activeSlideType === 1 || activeSlideType === 3) && (
-          <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/4">
+          <div className="bg-white rounded-xl shadow p-4 overflow-y-auto w-full max-h-[40vh] lg:max-h-none lg:h-full lg:w-1/4">
             {activeSlideType === 3 ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-4">
                 {/* ردیف برای دکمه بستن */}
@@ -989,7 +989,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         {/* ----------------------------------------------------------------------------------------------------- */}
         
         {showDesignPanel && (
-          <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/4">
+          <div className="bg-white rounded-xl shadow p-4 overflow-y-auto w-full max-h-[40vh] lg:max-h-none lg:h-full lg:w-1/4">
             {activeSlide && (
               <DesignPanel
                 quiz={quiz}
@@ -1001,7 +1001,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         )}
 
         {showAudioPanel && (
-          <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/4">
+          <div className="bg-white rounded-xl shadow p-4 overflow-y-auto w-full max-h-[40vh] lg:max-h-none lg:h-full lg:w-1/4">
             {activeSlide && (
               <AudioPanel
                 slide={activeSlide}
