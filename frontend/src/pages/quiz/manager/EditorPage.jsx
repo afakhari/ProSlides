@@ -495,6 +495,10 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         setTypeSelectionNotice(null);
       }, 2500);
       setShowTypeBox(false);
+      setShowSidebar(true);
+      setShowDesignPanel(false);
+      setShowAudioPanel(false);
+      setActiveTab("content");
 
     } catch (error) {
       console.error("Error changing question type:", error);
@@ -532,6 +536,10 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
               setTypeSelectionNotice(null);
             }, 2500);
             setShowTypeBox(false);
+            setShowSidebar(true);
+            setShowDesignPanel(false);
+            setShowAudioPanel(false);
+            setActiveTab("content");
             return;
           }
         } catch (fetchError) {
