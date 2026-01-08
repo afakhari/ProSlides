@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../../utils/apiFetch";
+import { resetAuthExpiredFlag, UNSAVED_CHANGES_KEY } from "../../utils/auth";
 import Seo from "../../components/Seo";
 
 function formatError(payload) {
@@ -464,6 +465,40 @@ function ChatBubble() {
 export default function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const authReason = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("reason");
+  }, [location.search]);
+  const authReasonMessage = useMemo(() => {
+    if (!authReason) return "";
+    switch (authReason) {
+      case "session-revoked":
+        return "دسترسی شما لغو شده است. لطفا دوباره وارد شوید.";
+      case "auth-required":
+        return "برای ادامه لازم است وارد حساب خود شوید.";
+      case "session-expired":
+      default:
+        return "نشست شما منقضی شده است. لطفا دوباره وارد شوید.";
+    }
+  }, [authReason]);
+  const hadUnsavedChanges = useMemo(() => {
+    if (!authReason || typeof window === "undefined") return false;
+    return localStorage.getItem(UNSAVED_CHANGES_KEY) === "1";
+  }, [authReason]);
+  const nextPath = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const next = params.get("next");
+    if (!next || !next.startsWith("/") || next.startsWith("//")) return null;
+    if (
+      next.startsWith("/auth") ||
+      next.startsWith("/login") ||
+      next.startsWith("/signup") ||
+      next.startsWith("/reset-password")
+    ) {
+      return null;
+    }
+    return next;
+  }, [location.search]);
   const initialMode = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const queryMode = params.get("mode");
@@ -736,8 +771,23 @@ export default function AuthPage() {
   };
 
   const navigateToDashboard = useCallback(() => {
-    navigate("/manager/panel");
-  }, [navigate]);
+    resetAuthExpiredFlag();
+    navigate(nextPath || "/manager/panel", { replace: true });
+  }, [navigate, nextPath]);
+
+  useEffect(() => {
+    if (!authReason) return;
+    const extraNote = hadUnsavedChanges
+      ? "برخی تغییرات ذخیره نشده ممکن است از بین رفته باشند."
+      : "";
+    setStatus({
+      type: "error",
+      message: extraNote ? `${authReasonMessage} ${extraNote}` : authReasonMessage,
+    });
+    if (hadUnsavedChanges) {
+      localStorage.removeItem(UNSAVED_CHANGES_KEY);
+    }
+  }, [authReason, authReasonMessage, hadUnsavedChanges]);
 
   const handleGoogleResponse = useCallback(
     async (response) => {

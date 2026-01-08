@@ -9,6 +9,7 @@ import RightToolbar from "./RightToolbar";
 import DesignPanel from "./DesignPanel";
 import AudioPanel from "./AudioPanel";
 import { quizService } from "../../../services/quizService";
+import { UNSAVED_CHANGES_KEY } from "../../../utils/auth";
 import Waiting from "../../loading/LoadingPage";
 import { X } from "lucide-react";
 
@@ -121,6 +122,18 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const [showAudioPanel, setShowAudioPanel] = useState(false);
   const [showTypeBox, setShowTypeBox] = useState(false);
   const [showSlidesPanel, setShowSlidesPanel] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hasSidebarChanges) {
+      localStorage.setItem(UNSAVED_CHANGES_KEY, "1");
+    } else {
+      localStorage.removeItem(UNSAVED_CHANGES_KEY);
+    }
+    return () => {
+      localStorage.removeItem(UNSAVED_CHANGES_KEY);
+    };
+  }, [hasSidebarChanges]);
 
   useEffect(() => {
     if (!activeSlide) return;
