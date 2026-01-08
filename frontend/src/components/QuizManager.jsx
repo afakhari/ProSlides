@@ -19,6 +19,20 @@ import ShareMenu from "./ShareMenu";
 import { apiFetch } from "../utils/apiFetch";
 import { clearAuthStorage, getRefreshToken } from "../utils/auth";
 
+const safeTimestamp = (value) => {
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? 0 : time;
+};
+
+const formatDate = (timestamp) =>
+  timestamp
+    ? new Date(timestamp).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "-";
+
 export default function QuizManager({ onNewPresentation }) {
   const navigate = useNavigate();
   const [loggedInUser] = useState(
@@ -46,25 +60,23 @@ export default function QuizManager({ onNewPresentation }) {
       const data = await response.json();
 
       // Map API response to local quiz structure
-      const mappedQuizzes = data.results.map((quiz) => ({
-        id: quiz.quiz_id,
-        name: quiz.quiz_name,
-        accessCode: quiz.access_code,
-        slides: quiz.slides_count,
-        participants: quiz.participants_count,
-        members: "",
-        createdBy: quiz.owner_full_name || quiz.owner_name || loggedInUser,
-        lastUpdated: new Date(quiz.last_update).toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        }),
-        created: new Date(quiz.created_at).toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        }),
-      }));
+      const mappedQuizzes = data.results.map((quiz) => {
+        const updatedAt = safeTimestamp(quiz.last_update);
+        const createdAt = safeTimestamp(quiz.created_at);
+        return {
+          id: quiz.quiz_id,
+          name: quiz.quiz_name,
+          accessCode: quiz.access_code,
+          slides: quiz.slides_count,
+          participants: quiz.participants_count,
+          members: "",
+          createdBy: quiz.owner_full_name || quiz.owner_name || loggedInUser,
+          lastUpdated: formatDate(updatedAt),
+          created: formatDate(createdAt),
+          updatedAt,
+          createdAt,
+        };
+      });
 
       setQuizzes(mappedQuizzes);
       setError(null);
@@ -178,25 +190,6 @@ export default function QuizManager({ onNewPresentation }) {
   };
 
   // Helper function to parse date strings in "DD Mon YYYY" format
-  const parseDateString = (dateStr) => {
-    const months = {
-      Jan: 0,
-      Feb: 1,
-      Mar: 2,
-      Apr: 3,
-      May: 4,
-      Jun: 5,
-      Jul: 6,
-      Aug: 7,
-      Sep: 8,
-      Oct: 9,
-      Nov: 10,
-      Dec: 11,
-    };
-    const parts = dateStr.split(" ");
-    return new Date(parts[2], months[parts[1]], parts[0]);
-  };
-
   const filteredQuizzes = quizzes
     .filter((quiz) =>
       quiz.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -205,15 +198,13 @@ export default function QuizManager({ onNewPresentation }) {
       switch (sortBy) {
         case "Recently updated":
           // Sort by lastUpdated descending (newest first)
-          return (
-            parseDateString(b.lastUpdated) - parseDateString(a.lastUpdated)
-          );
+          return b.updatedAt - a.updatedAt;
         case "Name":
           // Sort by name ascending (A-Z)
           return a.name.localeCompare(b.name);
         case "Created date":
           // Sort by created descending (newest first)
-          return parseDateString(b.created) - parseDateString(a.created);
+          return b.createdAt - a.createdAt;
         default:
           return 0;
       }
@@ -297,9 +288,17 @@ export default function QuizManager({ onNewPresentation }) {
       }
 
       // Update local state on success
+      const now = Date.now();
       setQuizzes((prevQuizzes) =>
         prevQuizzes.map((q) =>
-          q.id === quizId ? { ...q, name: newName.trim() } : q
+          q.id === quizId
+            ? {
+                ...q,
+                name: newName.trim(),
+                updatedAt: now,
+                lastUpdated: formatDate(now),
+              }
+            : q
         )
       );
       return true;
@@ -476,6 +475,7 @@ export default function QuizManager({ onNewPresentation }) {
 
       // Add the duplicated quiz to local state
       // Assuming the API returns the new quiz data, map it to our local format
+      const now = Date.now();
       const newQuiz = {
         id: duplicatedQuizData.quiz_id || duplicatedQuizData.id,
         name: duplicatedQuizData.quiz_name || duplicatedQuizData.title,
@@ -485,16 +485,10 @@ export default function QuizManager({ onNewPresentation }) {
           duplicatedQuizData.participants_count || quiz.participants,
         members: "",
         createdBy: quiz.createdBy,
-        lastUpdated: new Date().toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        }),
-        created: new Date().toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        }),
+        lastUpdated: formatDate(now),
+        created: formatDate(now),
+        updatedAt: now,
+        createdAt: now,
       };
 
       setQuizzes([...quizzes, newQuiz]);
@@ -1042,8 +1036,32 @@ export default function QuizManager({ onNewPresentation }) {
                               </div>
                             )}
                             <div className="text-xs text-gray-500 flex items-center gap-2">
-                              <span>📄 {quiz.slides}</span>
-                              <span>👥 {quiz.participants}</span>
+                              <span
+                                className="relative inline-flex items-center gap-1 group/tooltip"
+                                aria-label={`Slides: ${quiz.slides}`}
+                              >
+                                <span aria-hidden="true">📄</span>
+                                {quiz.slides}
+                                <span
+                                  role="tooltip"
+                                  className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] text-white opacity-0 shadow-lg transition duration-150 group-hover/tooltip:opacity-100"
+                                >
+                                  Slides count
+                                </span>
+                              </span>
+                              <span
+                                className="relative inline-flex items-center gap-1 group/tooltip"
+                                aria-label={`Participants: ${quiz.participants}`}
+                              >
+                                <span aria-hidden="true">👥</span>
+                                {quiz.participants}
+                                <span
+                                  role="tooltip"
+                                  className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] text-white opacity-0 shadow-lg transition duration-150 group-hover/tooltip:opacity-100"
+                                >
+                                  Participants count
+                                </span>
+                              </span>
                               <span className="text-gray-400">
                                 {quiz.members}
                               </span>
@@ -1286,11 +1304,31 @@ export default function QuizManager({ onNewPresentation }) {
                           </h3>
                         )}
                         <div className="text-xs text-gray-500 flex items-center gap-3 mt-1">
-                          <span className="flex items-center gap-1">
-                            📄 {quiz.slides}
+                          <span
+                            className="relative inline-flex items-center gap-1 group/tooltip"
+                            aria-label={`Slides: ${quiz.slides}`}
+                          >
+                            <span aria-hidden="true">📄</span>
+                            {quiz.slides}
+                            <span
+                              role="tooltip"
+                              className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] text-white opacity-0 shadow-lg transition duration-150 group-hover/tooltip:opacity-100"
+                            >
+                              Slides count
+                            </span>
                           </span>
-                          <span className="flex items-center gap-1">
-                            👥 {quiz.participants}
+                          <span
+                            className="relative inline-flex items-center gap-1 group/tooltip"
+                            aria-label={`Participants: ${quiz.participants}`}
+                          >
+                            <span aria-hidden="true">👥</span>
+                            {quiz.participants}
+                            <span
+                              role="tooltip"
+                              className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] text-white opacity-0 shadow-lg transition duration-150 group-hover/tooltip:opacity-100"
+                            >
+                              Participants count
+                            </span>
                           </span>
                         </div>
                       </div>

@@ -27,14 +27,14 @@ class Quiz(models.Model):
         blank=True,
     )
     access_code = models.CharField(
-        max_length=16,
+        max_length=12,
         unique=True,
         db_index=True,
         blank=True,
         validators=[
             RegexValidator(
-                regex=r'^[A-Za-z0-9_-]{4,16}$',
-                message='access_code must be 4-16 chars and use letters, numbers, "_" or "-" only',
+                regex=r'^[A-Za-z0-9]{5,12}$',
+                message='access_code must be 5-12 chars and use letters and numbers only',
             )
         ],
     )
