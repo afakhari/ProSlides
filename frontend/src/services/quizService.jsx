@@ -6,34 +6,51 @@ import {
   clearAuthStorage,
   getAuthHeaders,
   getRefreshToken,
+  notifyAuthExpired,
+  notifyAppNotice,
 } from "../utils/auth";
 
 
 const api = axios.create({ baseURL: getApiBase() });
+const isAuthFailureStatus = (status) => status === 401 || status === 419;
+const isForbiddenStatus = (status) => status === 403;
+const isRateLimitStatus = (status) => status === 429;
+
+let refreshPromise = null;
 
 const refreshAccessToken = async () => {
-  const refresh = getRefreshToken();
-  if (!refresh) return null;
+  if (refreshPromise) return refreshPromise;
 
-  const response = await fetch(buildApiUrl("/auth/token/refresh/"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh }),
-  });
+  refreshPromise = (async () => {
+    const refresh = getRefreshToken();
+    if (!refresh) return null;
 
-  if (!response.ok) {
+    const response = await fetch(buildApiUrl("/auth/token/refresh/"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh }),
+    });
+
+    if (!response.ok) {
+      clearAuthStorage();
+      return null;
+    }
+
+    const payload = await response.json().catch(() => null);
+    if (payload?.access) {
+      localStorage.setItem("auth.access", payload.access);
+      return payload.access;
+    }
+
     clearAuthStorage();
     return null;
-  }
+  })();
 
-  const payload = await response.json().catch(() => null);
-  if (payload?.access) {
-    localStorage.setItem("auth.access", payload.access);
-    return payload.access;
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
   }
-
-  clearAuthStorage();
-  return null;
 };
 
 api.interceptors.request.use((config) => {
@@ -47,8 +64,16 @@ api.interceptors.response.use(
     const status = error?.response?.status;
     const originalRequest = error?.config;
 
-    if (status === 401 && originalRequest && !originalRequest._retry) {
+    if (isAuthFailureStatus(status) && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
+        clearAuthStorage();
+        if (!originalRequest?.silent) {
+          notifyAuthExpired("auth-required");
+        }
+        return Promise.reject(error);
+      }
       const newAccess = await refreshAccessToken();
       if (newAccess) {
         originalRequest.headers = {
@@ -57,6 +82,21 @@ api.interceptors.response.use(
         };
         return api(originalRequest);
       }
+    }
+
+    if (isAuthFailureStatus(status)) {
+      clearAuthStorage();
+      if (!originalRequest?.silent) {
+        notifyAuthExpired("session-expired");
+      }
+    }
+
+    if (!originalRequest?.silent && isForbiddenStatus(status)) {
+      notifyAppNotice("access-denied", "error");
+    }
+
+    if (!originalRequest?.silent && isRateLimitStatus(status)) {
+      notifyAppNotice("rate-limit", "warning");
     }
 
     return Promise.reject(error);

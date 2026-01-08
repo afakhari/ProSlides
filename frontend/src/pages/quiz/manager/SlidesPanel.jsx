@@ -44,11 +44,20 @@ export default function SlidesPanel({
   quizBackgroundImage = "",
   onLeaderboardDeleted,
   onSlidesReordered,
-  onRefresh
+  onRefresh,
+  onNotify
 }) {
   const [isReordering, setIsReordering] = useState(false);
   const [localSlides, setLocalSlides] = useState([]);
   const [activeSlideType, setActiveSlideType] = useState(null); // حالت جدید برای ذخیره slide_type اسلاید فعال
+
+  const notify = (message, tone = "error") => {
+    if (onNotify) {
+      onNotify(message, tone);
+    } else {
+      alert(message);
+    }
+  };
 
   // تابع برای پردازش اسلایدها
 
@@ -108,7 +117,7 @@ export default function SlidesPanel({
       }
     } catch (error) {
       console.error("Failed to update slide order:", error);
-      alert("❌ Failed to reorder slide");
+      notify("Failed to reorder slide.", "error");
       setLocalSlides(previousSlides);
     } finally {
       setIsReordering(false);
@@ -155,7 +164,7 @@ export default function SlidesPanel({
       }
     } catch (error) {
       console.error("Failed to delete slide:", error);
-      alert("❌ Failed to delete slide");
+      notify("Failed to delete slide.", "error");
     }
   };
 
@@ -169,7 +178,7 @@ export default function SlidesPanel({
       }
     } catch (error) {
       console.error("Failed to add new slide:", error);
-      alert("❌ Failed to add new slide");
+      notify("Failed to add new slide.", "error");
     }
   };
 

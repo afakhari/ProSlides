@@ -15,13 +15,14 @@ import {
 import { quizService } from "../../../services/quizService"; 
 
 
-export default function Sidebar({ 
+export default function Sidebar({
   quizId,
   slide,
   onSaveAndRefresh,
   onClose,
   onSlideUpdated,
-  onDirtyChange
+  onDirtyChange,
+  onNotify
 }) {
   // Stateهای مدیریت تغییرات
   const [localSlide, setLocalSlide] = useState(null);
@@ -36,6 +37,18 @@ export default function Sidebar({
     id: null,
   });
   const questionInputRef = useRef(null);
+  const saveState = isSaving ? "saving" : hasChanges ? "dirty" : "clean";
+
+  const notify = useCallback(
+    (message, tone = "error") => {
+      if (onNotify) {
+        onNotify(message, tone);
+      } else {
+        alert(message);
+      }
+    },
+    [onNotify]
+  );
 
   // تنظیم مقادیر اولیه هنگام بارگذاری
   useEffect(() => {
@@ -125,10 +138,10 @@ export default function Sidebar({
           }
         });
         
-        alert('❌ Failed to reorder option');
+        notify("Failed to reorder option.", "error");
       }
     },
-    [localSlide, quizId]
+    [localSlide, quizId, notify]
   );
 
   // تشخیص تغییرات
@@ -436,6 +449,28 @@ export default function Sidebar({
     });
   };
 
+  const normalizeDigits = (value) => (
+    value
+      .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+      .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+  );
+
+  const parseIntegerInput = (value) => {
+    const normalized = normalizeDigits(value);
+    if (!normalized.trim()) {
+      return "";
+    }
+    const parsed = parseInt(normalized, 10);
+    return Number.isNaN(parsed) ? "" : parsed;
+  };
+
+  const clampInteger = (value, minValue) => {
+    if (value === "") {
+      return "";
+    }
+    return Math.max(minValue, value);
+  };
+
   // مدیریت تغییرات slide fields
   const handleSlideFieldChange = (field, value) => {
     setLocalSlide({
@@ -564,7 +599,7 @@ export default function Sidebar({
       onClose(true);
     } catch (error) {
       console.error("Error saving changes:", error);
-      alert("Failed to save changes. Please try again.");
+      notify("Failed to save changes. Please try again.", "error");
     } finally {
       setIsSaving(false);
     }
@@ -726,7 +761,8 @@ export default function Sidebar({
   };
 
   return (
-    <div className="h-full overflow-y-auto p-4">
+    <div className="h-full overflow-y-auto">
+      <div className="p-4 pb-6">
       {/* هدر */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
@@ -739,13 +775,35 @@ export default function Sidebar({
             )}
           </div>
         </div>
-        <button
-          onClick={handleCancel}
-          className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-          disabled={isSaving}
-        >
-          <X className="w-5 h-5 text-gray-500" />
-        </button>
+        <div className="flex items-center gap-2">
+          {(hasChanges || isSaving) && (
+            <button
+              onClick={handleSubmit}
+              disabled={!hasChanges || isSaving}
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition
+                bg-pink-600 text-white hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save
+                </>
+              )}
+            </button>
+          )}
+          <button
+            onClick={handleCancel}
+            className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+            disabled={isSaving}
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
       </div>
 
       {/* Question Slides Content */}
@@ -965,11 +1023,16 @@ export default function Sidebar({
             <h3 className="text-sm font-medium text-gray-700 mb-3">Question Time :</h3>
             <div className="flex items-center gap-3">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9۰-۹٠-٩]*"
                 min="1"
-                value={question.question_time || 10}
+                value={question.question_time ?? 10}
                 onChange={(e) =>
-                  handleFieldChange("question_time", parseInt(e.target.value) || 10)
+                  handleFieldChange(
+                    "question_time",
+                    clampInteger(parseIntegerInput(e.target.value), 1)
+                  )
                 }
                 className="w-20 border border-gray-300 rounded-lg p-2 text-center focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                 disabled={isSaving}
@@ -989,11 +1052,16 @@ export default function Sidebar({
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Max Points</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9۰-۹٠-٩]*"
                   min="0"
-                  value={question.max_point || 0}
+                  value={question.max_point ?? 0}
                   onChange={(e) =>
-                    handleFieldChange("max_point", parseInt(e.target.value) || 0)
+                    handleFieldChange(
+                      "max_point",
+                      clampInteger(parseIntegerInput(e.target.value), 0)
+                    )
                   }
                   className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                   disabled={isSaving}
@@ -1003,11 +1071,16 @@ export default function Sidebar({
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Min Points</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9۰-۹٠-٩]*"
                   min="0"
-                  value={question.min_point || 0}
+                  value={question.min_point ?? 0}
                   onChange={(e) =>
-                    handleFieldChange("min_point", parseInt(e.target.value) || 0)
+                    handleFieldChange(
+                      "min_point",
+                      clampInteger(parseIntegerInput(e.target.value), 0)
+                    )
                   }
                   className={`w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent ${
                     !question.faster_answers_more_points ? "bg-gray-100 cursor-not-allowed opacity-50" : ""
@@ -1083,54 +1156,124 @@ export default function Sidebar({
           </div>
         </div>
       )}
-
-
-      {/* دکمه‌های Cancel و Save Changes */}
-      <div className="mt-8 pt-6 border-t border-gray-200">
-        <div className="flex gap-3">
-          <button
-            onClick={handleCancel}
-            disabled={isSaving}
-            className="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!hasChanges || isSaving}
-            className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm ${
-              hasChanges && !isSaving
-                ? "bg-pink-600 text-white hover:bg-pink-700"
-                : "bg-gray-100 text-gray-400 cursor-not-allowed"
-            }`}
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                Save Changes
-              </>
-            )}
-          </button>
-        </div>
-        <p className="text-xs text-gray-500 text-center mt-3">
-          {hasChanges 
-            ? "Click 'Save Changes' to update slide settings"
-            : isSaving 
-            ? "Saving changes to server..."
-            : "No changes to save"
-          }
-        </p>
-        {lastSavedAt && (
-          <p className="text-xs text-gray-400 text-center mt-1">
-            Last saved at {lastSavedAt.toLocaleTimeString()}
-          </p>
-        )}
       </div>
+
+      {/* Desktop Save Bar */}
+      {saveState !== "clean" ? (
+        <div className="hidden md:block sticky bottom-0 bg-white border-t border-gray-200 mt-8 pt-4 pb-3 px-4 shadow-[0_-6px_16px_rgba(0,0,0,0.08)]">
+          <div className="flex items-center gap-2 mb-2">
+            {hasChanges && (
+              <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded-full">
+                Unsaved changes
+              </span>
+            )}
+            {isSaving && (
+              <span className="text-xs text-blue-600">Saving in progress…</span>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleCancel}
+              disabled={isSaving}
+              className="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!hasChanges || isSaving}
+              className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm ${
+                hasChanges && !isSaving
+                  ? "bg-pink-600 text-white hover:bg-pink-700"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Changes
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="hidden md:block mt-8 pt-4 pb-4 border-t border-gray-200 px-4">
+          <div className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-600">
+            <CheckCircle2 className="w-4 h-4" />
+            All changes saved
+          </div>
+          {lastSavedAt && (
+            <p className="text-xs text-gray-400 text-center mt-1">
+              Last saved at {lastSavedAt.toLocaleTimeString()}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Mobile Save Bar */}
+      {saveState !== "clean" ? (
+        <div className="md:hidden sticky bottom-0 bg-white border-t border-gray-200 mt-6 pt-4 pb-[calc(0.75rem+3.5rem+env(safe-area-inset-bottom))] px-4 shadow-[0_-6px_16px_rgba(0,0,0,0.08)] z-20">
+          <div className="flex items-center gap-2 mb-2">
+            {hasChanges && (
+              <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded-full">
+                Unsaved changes
+              </span>
+            )}
+            {isSaving && (
+              <span className="text-xs text-blue-600">Saving in progress.</span>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleCancel}
+              disabled={isSaving}
+              className="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!hasChanges || isSaving}
+              className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm ${
+                hasChanges && !isSaving
+                  ? "bg-pink-600 text-white hover:bg-pink-700 shadow-sm"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Changes
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="md:hidden sticky bottom-0 bg-white border-t border-gray-200 mt-6 pt-3 pb-[calc(0.75rem+3.5rem+env(safe-area-inset-bottom))] px-4 shadow-[0_-6px_16px_rgba(0,0,0,0.08)] z-20">
+          <div className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-600">
+            <CheckCircle2 className="w-4 h-4" />
+            All changes saved
+          </div>
+          {lastSavedAt && (
+            <p className="text-xs text-gray-400 text-center mt-1">
+              Last saved at {lastSavedAt.toLocaleTimeString()}
+            </p>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }

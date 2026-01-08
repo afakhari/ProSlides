@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import MiniResultsResultsOnly from "./MiniResultsResultsOnly";
 import LeaderboardPreview from "./LeaderboardPreview";
@@ -9,6 +9,7 @@ import RightToolbar from "./RightToolbar";
 import DesignPanel from "./DesignPanel";
 import AudioPanel from "./AudioPanel";
 import { quizService } from "../../../services/quizService";
+import { UNSAVED_CHANGES_KEY } from "../../../utils/auth";
 import Waiting from "../../loading/LoadingPage";
 import { X } from "lucide-react";
 
@@ -50,14 +51,8 @@ export default function EditorPage() {
   const saveQuiz = async () => {
     if (!quiz) return;
 
-    try {
-      await quizService.updateQuiz(quiz.quiz_id, quiz);
-      await fetchQuiz();
-      alert("? Quiz saved successfully!");
-    } catch (err) {
-      alert("? Failed to save quiz");
-      console.error(err);
-    }
+    await quizService.updateQuiz(quiz.quiz_id, quiz);
+    await fetchQuiz();
   };
 
 
@@ -92,18 +87,53 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const [typeSelectionError, setTypeSelectionError] = useState(null);
   const [typeSelectionNotice, setTypeSelectionNotice] = useState(null);
   const [typeSelectionMode, setTypeSelectionMode] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const noticeTimeoutRef = useRef(null);
 
   const slides = quiz.slides || [];
   const activeSlide = slides[activeSlideIndex] || null;
   const activeLeaderboardEntries = activeSlide?.slide_id
     ? leaderboardPreviewData[activeSlide.slide_id] || []
     : [];
+  const presentStatus = (() => {
+    if (!slides.length) {
+      return { ready: false, reason: "Add at least one slide to present." };
+    }
+    const missingQuestion = slides.find(
+      (slide) =>
+        slide.slide_type === 1 &&
+        (!slide.question ||
+          typeof slide.question !== "object" ||
+          Object.keys(slide.question).length === 0)
+    );
+    if (missingQuestion) {
+      return {
+        ready: false,
+        reason: "Complete all question slides before presenting.",
+      };
+    }
+    return { ready: true, reason: "Start presentation" };
+  })();
 
   const [activeTab, setActiveTab] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [showDesignPanel, setShowDesignPanel] = useState(false);
   const [showAudioPanel, setShowAudioPanel] = useState(false);
   const [showTypeBox, setShowTypeBox] = useState(false);
+  const [showSlidesPanel, setShowSlidesPanel] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hasSidebarChanges) {
+      localStorage.setItem(UNSAVED_CHANGES_KEY, "1");
+    } else {
+      localStorage.removeItem(UNSAVED_CHANGES_KEY);
+    }
+    return () => {
+      localStorage.removeItem(UNSAVED_CHANGES_KEY);
+    };
+  }, [hasSidebarChanges]);
 
   useEffect(() => {
     if (!activeSlide) return;
@@ -111,6 +141,73 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       setActiveSlideType(activeSlide.slide_type);
     }
   }, [activeSlide, activeSlideType]);
+
+  const showNotice = useCallback((message, tone = "info") => {
+    setNotice({ message, tone });
+    if (noticeTimeoutRef.current) {
+      clearTimeout(noticeTimeoutRef.current);
+    }
+    noticeTimeoutRef.current = setTimeout(() => {
+      setNotice(null);
+    }, 3000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (noticeTimeoutRef.current) {
+        clearTimeout(noticeTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    const media = window.matchMedia("(max-width: 767px), (max-height: 600px)");
+    const handleChange = () => setIsMobile(media.matches);
+    handleChange();
+    if (media.addEventListener) {
+      media.addEventListener("change", handleChange);
+    } else {
+      media.addListener(handleChange);
+    }
+    return () => {
+      if (media.removeEventListener) {
+        media.removeEventListener("change", handleChange);
+      } else {
+        media.removeListener(handleChange);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const shouldLock =
+      isMobile &&
+      (showSlidesPanel ||
+        showSidebar ||
+        showDesignPanel ||
+        showAudioPanel ||
+        showTypeBox);
+    if (shouldLock) {
+      document.body.classList.add("overflow-hidden");
+    } else {
+      document.body.classList.remove("overflow-hidden");
+    }
+    return () => {
+      document.body.classList.remove("overflow-hidden");
+    };
+  }, [
+    isMobile,
+    showSlidesPanel,
+    showSidebar,
+    showDesignPanel,
+    showAudioPanel,
+    showTypeBox,
+  ]);
 
   const loadLeaderboardPreview = useCallback(async (slideId) => {
     if (!slideId) return;
@@ -146,8 +243,10 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       if (refreshQuiz) {
         await refreshQuiz();
       }
+      showNotice("Quiz saved.", "success");
     } catch (error) {
       console.error("Failed to save and refresh:", error);
+      showNotice("Failed to save quiz.", "error");
     }
   };
 
@@ -164,6 +263,18 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
   // توابع برای مدیریت تب‌ها
   const handleTabClick = (tabId) => {
+    if (tabId === "slides") {
+      setShowSlidesPanel((prev) => {
+        const next = !prev;
+        setShowSidebar(false);
+        setShowDesignPanel(false);
+        setShowAudioPanel(false);
+        setActiveTab(next ? tabId : null);
+        return next;
+      });
+      return;
+    }
+
     if (showSidebar && hasSidebarChanges) {
       const isTogglingSidebar = tabId === "content" && showSidebar;
       const isLeavingSidebar = tabId !== "content";
@@ -182,6 +293,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       setShowAudioPanel((prev) => !prev);
       setShowSidebar(false);
       setShowDesignPanel(false);
+      setShowSlidesPanel(false);
       if (showAudioPanel) {
         setActiveTab(null);
       } else {
@@ -191,14 +303,17 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       setShowSidebar(!showSidebar);
       setShowDesignPanel(false);
       setShowAudioPanel(false);
+      setShowSlidesPanel(false);
     } else if (tabId === "design") {
       setShowDesignPanel(!showDesignPanel);
       setShowSidebar(false);
       setShowAudioPanel(false);
+      setShowSlidesPanel(false);
     } else {
       setShowSidebar(false);
       setShowDesignPanel(false);
       setShowAudioPanel(false);
+      setShowSlidesPanel(false);
     }
 
     if (tabId !== "audio" || !showAudioPanel) {
@@ -270,7 +385,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       setActiveSlideIndex(updatedSlides.length - 1);
     } catch (error) {
       console.error("Failed to create new slide:", error);
-      alert("❌ Failed to create new slide");
+      showNotice("Failed to create new slide.", "error");
     }
   };
 
@@ -303,7 +418,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       }
     } catch (error) {
       console.error("Failed to delete slide:", error);
-      alert("❌ Failed to delete slide");
+      showNotice("Failed to delete slide.", "error");
     }
   };
 
@@ -328,7 +443,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       });
     } catch (error) {
       console.error("Failed to update slide:", error);
-      alert("❌ Failed to update slide");
+      showNotice("Failed to update slide.", "error");
     }
   };
 
@@ -349,6 +464,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     }
     setTypeSelectionError(null);
     setTypeSelectionMode(null);
+    setShowSlidesPanel(false);
     setShowTypeBox(true);
   };
 
@@ -593,30 +709,11 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
 
   const handlePresent = () => {
-  // بررسی وجود slides
-    if (!quiz.slides || quiz.slides.length === 0) {
-      alert("Quiz has no slides");
+    if (!presentStatus.ready) {
+      showNotice(presentStatus.reason, "warning");
       return;
     }
-
-    // بررسی وجود سوال معتبر در همه اسلایدها
-    const allQuestionSlidesHaveQuestions = quiz.slides.every((slide) => {
-      if (slide.slide_type !== 1) {
-        return true;
-      }
-      return (
-        slide.question &&
-        typeof slide.question === "object" &&
-        slide.question !== null &&
-        Object.keys(slide.question).length > 0
-      );
-    });
-
-    if (!allQuestionSlidesHaveQuestions) {
-      alert("All question slides must have at least one question");
-    } else {
-      navigate(`/manager/presentation/${quiz.quiz_id}/`);
-    }
+    navigate(`/manager/presentation/${quiz.quiz_id}/`);
   };
 
   // Calculate cumulative leaderboard for the current slide if it's a leaderboard slide
@@ -674,7 +771,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   };
   //////////////////////////////////////////////////////////////////////////////////////////////////////////
   return (
-    <div className="h-full flex flex-col relative pt-14">
+    <div className="h-full flex flex-col relative pt-14 pb-20 md:pb-0">
       {/* ----- Header -----*/}
       <QuizHeader
         accessCode={quiz.access_code}
@@ -683,64 +780,70 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       />
 
       {/* ----- Main Layout ----- */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden flex-col md:flex-row gap-4 md:gap-4 lg:gap-0">
         {/* ----- Left Panel (Slides Panel) ----- */}
-        <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/5">
-          <SlidesPanel
-            slides={slides}
-            activeSlideId={activeSlide?.slide_id}
-            setActiveSlideId={(id) => {
-              if (hasSidebarChanges && id !== activeSlide?.slide_id) {
-                const confirmSwitch = window.confirm(
-                  "You have unsaved changes. Do you want to discard them?"
-                );
-                if (!confirmSwitch) {
-                  return;
+        {!isMobile && (
+          <div className="bg-white rounded-xl shadow p-4 overflow-y-auto w-full max-h-[40vh] md:max-h-none md:h-full md:w-1/4 lg:w-1/5">
+            <SlidesPanel
+              slides={slides}
+              activeSlideId={activeSlide?.slide_id}
+              setActiveSlideId={(id) => {
+                if (hasSidebarChanges && id !== activeSlide?.slide_id) {
+                  const confirmSwitch = window.confirm(
+                    "You have unsaved changes. Do you want to discard them?"
+                  );
+                  if (!confirmSwitch) {
+                    return;
+                  }
+                  setHasSidebarChanges(false);
                 }
-                setHasSidebarChanges(false);
-              }
-              const slide = slides.find((s) => s.slide_id === id);
-              if (slide) {
-                const index = slides.indexOf(slide);
-                setActiveSlideIndex(index);
-              }
-            }}
-            setActiveSlideTypeParent={setActiveSlideType}
-            addNewSlide={addNewSlide}
-            deleteSlide={deleteSlide}
-            onSlidesReordered={(updatedSlides) => {
-              updateQuiz({
-                ...quiz,
-                slides: updatedSlides,
-              });
-              if (activeSlide?.slide_id) {
-                const nextIndex = updatedSlides.findIndex(
-                  (slide) => slide.slide_id === activeSlide.slide_id
-                );
-                if (nextIndex !== -1) {
-                  setActiveSlideIndex(nextIndex);
+                const slide = slides.find((s) => s.slide_id === id);
+                if (slide) {
+                  const index = slides.indexOf(slide);
+                  setActiveSlideIndex(index);
                 }
-              }
-            }}
-            onRefresh={handleDeleteLeaderboardAndRefresh}
-            onLeaderboardDeleted={handleLeaderboardDeleted}
-            idKey="slide_id"
-            titleKey="slide_type"
+              }}
+              setActiveSlideTypeParent={setActiveSlideType}
+              addNewSlide={addNewSlide}
+              deleteSlide={deleteSlide}
+              onSlidesReordered={(updatedSlides) => {
+                updateQuiz({
+                  ...quiz,
+                  slides: updatedSlides,
+                });
+                if (activeSlide?.slide_id) {
+                  const nextIndex = updatedSlides.findIndex(
+                    (slide) => slide.slide_id === activeSlide.slide_id
+                  );
+                  if (nextIndex !== -1) {
+                    setActiveSlideIndex(nextIndex);
+                  }
+                }
+              }}
+              onRefresh={handleDeleteLeaderboardAndRefresh}
+              onLeaderboardDeleted={handleLeaderboardDeleted}
+              idKey="slide_id"
+              titleKey="slide_type"
             getSlideTitle={getSlideTitle}
             quizId={quiz.quiz_id}
             quizBackground={quiz.background_color}
             quizBackgroundImage={quiz.background_image_url}
+            onNotify={showNotice}
           />
         </div>
+        )}
 
         {/* ----- Middle panel ----- */}
-        <div className="flex-1 mx-4 relative">
+        <div className="flex-1 relative md:mx-4 mx-0">
           <div className="bg-white rounded-xl shadow p-2 h-full flex justify-center items-center overflow-hidden relative">
             {/* ----- Present Button ----- */}
             <button
               onClick={handlePresent}
+              disabled={!presentStatus.ready}
+              title={presentStatus.reason}
               className="absolute top-2.5 left-2.5 bg-gradient-to-r from-slate-500 to-teal-600 
-                        hover:from-slate-600 hover:to-teal-700 text-white px-4 py-2.5 rounded-xl text-base font-semibold transition z-10"
+                        hover:from-slate-600 hover:to-teal-700 text-white px-4 py-2.5 rounded-xl text-base font-semibold transition z-10
+                        disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Present
             </button>
@@ -883,7 +986,17 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
         {/* ----- Right Panels ----- */}
         {showSidebar && (activeSlideType === 1 || activeSlideType === 3) && (
-          <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/4">
+          <div
+            className="bg-white rounded-xl shadow p-4 overflow-y-auto w-full md:h-full md:w-1/3 lg:w-1/4 md:static fixed inset-x-0 bottom-0 top-14 z-50"
+            style={
+              isMobile
+                ? {
+                    top: "calc(3.5rem + env(safe-area-inset-top))",
+                    maxHeight: "none",
+                  }
+                : undefined
+            }
+          >
             {activeSlideType === 3 ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-4">
                 {/* ردیف برای دکمه بستن */}
@@ -978,7 +1091,8 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                       activeSlideType={activeSlideType}
                       onClose={handleCloseSidebarPanel}
                       onDirtyChange={setHasSidebarChanges}
-                    onSlideUpdated={handleSlideUpdated}
+                      onSlideUpdated={handleSlideUpdated}
+                      onNotify={showNotice}
                   />
                 );
               })()
@@ -989,7 +1103,17 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         {/* ----------------------------------------------------------------------------------------------------- */}
         
         {showDesignPanel && (
-          <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/4">
+          <div
+            className="bg-white rounded-xl shadow p-4 overflow-y-auto w-full md:h-full md:w-1/3 lg:w-1/4 md:static fixed inset-x-0 bottom-0 top-14 z-50"
+            style={
+              isMobile
+                ? {
+                    top: "calc(3.5rem + env(safe-area-inset-top))",
+                    maxHeight: "none",
+                  }
+                : undefined
+            }
+          >
             {activeSlide && (
               <DesignPanel
                 quiz={quiz}
@@ -1001,7 +1125,17 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         )}
 
         {showAudioPanel && (
-          <div className="bg-white rounded-xl shadow p-4 h-full overflow-y-auto w-1/4">
+          <div
+            className="bg-white rounded-xl shadow p-4 overflow-y-auto w-full md:h-full md:w-1/3 lg:w-1/4 md:static fixed inset-x-0 bottom-0 top-14 z-50"
+            style={
+              isMobile
+                ? {
+                    top: "calc(3.5rem + env(safe-area-inset-top))",
+                    maxHeight: "none",
+                  }
+                : undefined
+            }
+          >
             {activeSlide && (
               <AudioPanel
                 slide={activeSlide}
@@ -1018,9 +1152,101 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         <RightToolbar
           activeTab={activeTab}
           setActiveTab={handleTabClick}
+          isCompact={isMobile}
           // hasQuestion={activeSlide?.slide_type === 1}
         />
       </div>
+      {isMobile && showSlidesPanel && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setShowSlidesPanel(false)}
+          ></div>
+          <div
+            className="absolute inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl p-4 overflow-y-auto"
+            style={{
+              top: "calc(3.5rem + env(safe-area-inset-top))",
+            }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-gray-800">Slides</h2>
+              <button
+                onClick={() => setShowSlidesPanel(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 transition"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <SlidesPanel
+              slides={slides}
+              activeSlideId={activeSlide?.slide_id}
+              setActiveSlideId={(id) => {
+                if (hasSidebarChanges && id !== activeSlide?.slide_id) {
+                  const confirmSwitch = window.confirm(
+                    "You have unsaved changes. Do you want to discard them?"
+                  );
+                  if (!confirmSwitch) {
+                    return;
+                  }
+                  setHasSidebarChanges(false);
+                }
+                const slide = slides.find((s) => s.slide_id === id);
+                if (slide) {
+                  const index = slides.indexOf(slide);
+                  setActiveSlideIndex(index);
+                  setShowSlidesPanel(false);
+                }
+              }}
+              setActiveSlideTypeParent={setActiveSlideType}
+              addNewSlide={addNewSlide}
+              deleteSlide={deleteSlide}
+              onSlidesReordered={(updatedSlides) => {
+                updateQuiz({
+                  ...quiz,
+                  slides: updatedSlides,
+                });
+                if (activeSlide?.slide_id) {
+                  const nextIndex = updatedSlides.findIndex(
+                    (slide) => slide.slide_id === activeSlide.slide_id
+                  );
+                  if (nextIndex !== -1) {
+                    setActiveSlideIndex(nextIndex);
+                  }
+                }
+              }}
+              onRefresh={handleDeleteLeaderboardAndRefresh}
+              onLeaderboardDeleted={handleLeaderboardDeleted}
+              idKey="slide_id"
+              titleKey="slide_type"
+              getSlideTitle={getSlideTitle}
+              quizId={quiz.quiz_id}
+              quizBackground={quiz.background_color}
+              quizBackgroundImage={quiz.background_image_url}
+              onNotify={showNotice}
+            />
+          </div>
+        </div>
+      )}
+      {notice && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-50 px-4"
+          style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+        >
+          <div
+            className={`rounded-full px-4 py-2 text-sm font-semibold shadow-lg ${
+              notice.tone === "success"
+                ? "bg-emerald-500 text-white"
+                : notice.tone === "error"
+                ? "bg-red-500 text-white"
+                : notice.tone === "warning"
+                ? "bg-amber-500 text-white"
+                : "bg-slate-700 text-white"
+            }`}
+          >
+            {notice.message}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
