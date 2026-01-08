@@ -298,7 +298,7 @@ function InviteAudienceUI({
         <span className="text-gray-500">{BASE}</span>
         <div className="flex flex-1 flex-wrap items-center gap-2">
           <input
-            className={`flex-1 min-w-[160px] border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pink-500 ${
+            className={`w-full sm:w-[16ch] md:w-[18ch] flex-none border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pink-500 ${
               inputError ? "border-pink-500" : "border-gray-300"
             }`}
             placeholder="room1"

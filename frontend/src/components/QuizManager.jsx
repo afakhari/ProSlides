@@ -1036,8 +1036,32 @@ export default function QuizManager({ onNewPresentation }) {
                               </div>
                             )}
                             <div className="text-xs text-gray-500 flex items-center gap-2">
-                              <span>📄 {quiz.slides}</span>
-                              <span>👥 {quiz.participants}</span>
+                              <span
+                                className="relative inline-flex items-center gap-1 group/tooltip"
+                                aria-label={`Slides: ${quiz.slides}`}
+                              >
+                                <span aria-hidden="true">📄</span>
+                                {quiz.slides}
+                                <span
+                                  role="tooltip"
+                                  className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] text-white opacity-0 shadow-lg transition duration-150 group-hover/tooltip:opacity-100"
+                                >
+                                  Slides count
+                                </span>
+                              </span>
+                              <span
+                                className="relative inline-flex items-center gap-1 group/tooltip"
+                                aria-label={`Participants: ${quiz.participants}`}
+                              >
+                                <span aria-hidden="true">👥</span>
+                                {quiz.participants}
+                                <span
+                                  role="tooltip"
+                                  className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] text-white opacity-0 shadow-lg transition duration-150 group-hover/tooltip:opacity-100"
+                                >
+                                  Participants count
+                                </span>
+                              </span>
                               <span className="text-gray-400">
                                 {quiz.members}
                               </span>
@@ -1280,11 +1304,31 @@ export default function QuizManager({ onNewPresentation }) {
                           </h3>
                         )}
                         <div className="text-xs text-gray-500 flex items-center gap-3 mt-1">
-                          <span className="flex items-center gap-1">
-                            📄 {quiz.slides}
+                          <span
+                            className="relative inline-flex items-center gap-1 group/tooltip"
+                            aria-label={`Slides: ${quiz.slides}`}
+                          >
+                            <span aria-hidden="true">📄</span>
+                            {quiz.slides}
+                            <span
+                              role="tooltip"
+                              className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] text-white opacity-0 shadow-lg transition duration-150 group-hover/tooltip:opacity-100"
+                            >
+                              Slides count
+                            </span>
                           </span>
-                          <span className="flex items-center gap-1">
-                            👥 {quiz.participants}
+                          <span
+                            className="relative inline-flex items-center gap-1 group/tooltip"
+                            aria-label={`Participants: ${quiz.participants}`}
+                          >
+                            <span aria-hidden="true">👥</span>
+                            {quiz.participants}
+                            <span
+                              role="tooltip"
+                              className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] text-white opacity-0 shadow-lg transition duration-150 group-hover/tooltip:opacity-100"
+                            >
+                              Participants count
+                            </span>
                           </span>
                         </div>
                       </div>
