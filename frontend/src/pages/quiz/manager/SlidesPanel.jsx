@@ -2,6 +2,7 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { GripVertical, Trash2, Trophy } from "lucide-react";
 import { quizService } from "../../../services/quizService";
 import { useState, useEffect, useMemo } from "react";
+import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 
 
 const buildDisplaySlides = (slidesData) => {
@@ -49,7 +50,15 @@ export default function SlidesPanel({
 }) {
   const [isReordering, setIsReordering] = useState(false);
   const [localSlides, setLocalSlides] = useState([]);
-  const [activeSlideType, setActiveSlideType] = useState(null); // حالت جدید برای ذخیره slide_type اسلاید فعال
+  const [activeSlideType, setActiveSlideType] = useState(null); // ???? ???? ???? ????? slide_type ?????? ????
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: null,
+    confirmText: "",
+    cancelText: "",
+  });
 
   const notify = (message, tone = "error") => {
     if (onNotify) {
@@ -59,9 +68,9 @@ export default function SlidesPanel({
     }
   };
 
-  // تابع برای پردازش اسلایدها
+  // ???? ???? ?????? ????????
 
-  // تابع برای دریافت اسلایدها از API
+  // ???? ???? ?????? ???????? ?? API
   useEffect(() => {
     setLocalSlides(slides);
 
@@ -125,25 +134,35 @@ export default function SlidesPanel({
   };
 
 
-  const handleDeleteSlide = async (slideId, slideType) => {
-    if (!window.confirm("Are you sure you want to delete this slide?")) return;
+  const handleDeleteSlide = (slideId, slideType) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Slide",
+      description: "Are you sure you want to delete this slide?",
+      onConfirm: async () => {
+        await performDeleteSlide(slideId, slideType);
+      },
+      confirmText: "Delete",
+      cancelText: "Cancel",
+    });
+  };
 
+  const performDeleteSlide = async (slideId, slideType) => {
     try {
       const slideToDelete = displaySlides.find(
-        s => s[idKey] === slideId && s.slide_type === slideType
+        (s) => s[idKey] === slideId && s.slide_type === slideType
       );
 
       if (!slideToDelete) return;
 
       if (slideType === 3) {
-
         if (onLeaderboardDeleted) {
-            await onLeaderboardDeleted(slideId);
+          await onLeaderboardDeleted(slideId);
         }
 
-        // حذف فقط لیدربرد مرتبط
+        // ??? ??? ??????? ?????
         const questionSlide = localSlides.find(
-          s => s.slide_type === 1 && s.order === slideToDelete.order
+          (s) => s.slide_type === 1 && s.order === slideToDelete.order
         );
 
         if (questionSlide) {
@@ -155,7 +174,7 @@ export default function SlidesPanel({
           await deleteSlide(slideId);
         }
       } else {
-        // حذف اسلاید معمولی
+        // ??? ?????? ?????
         await deleteSlide(slideId);
       }
 
@@ -168,8 +187,30 @@ export default function SlidesPanel({
     }
   };
 
+  const handleConfirm = () => {
+    if (confirmDialog.onConfirm) {
+      confirmDialog.onConfirm();
+    }
+    closeConfirmDialog();
+  };
 
-  // تابع اضافه کردن اسلاید جدید
+  const closeConfirmDialog = () => {
+    setConfirmDialog({
+      isOpen: false,
+      title: "",
+      description: "",
+      onConfirm: null,
+      confirmText: "",
+      cancelText: "",
+    });
+  };
+
+  const handleCancelForModal = () => {
+    closeConfirmDialog();
+  };
+
+
+  // ???? ????? ???? ?????? ????
   const handleAddSlide = async () => {
     try {
       await addNewSlide();
@@ -182,34 +223,34 @@ export default function SlidesPanel({
     }
   };
 
-  // تابع کلیک روی اسلاید - کلید اصلی حل مشکل
+  // ???? ???? ??? ?????? - ???? ???? ?? ????
   const handleSlideClick = (slide) => {
-    // همیشه slide_id را به پرنت پاس می‌دهیم
+    // ????? slide_id ?? ?? ???? ??? ???????
     setActiveSlideId(slide[idKey]);
-    // و slide_type اسلاید فعلی را هم ذخیره می‌کنیم
+    // ? slide_type ?????? ???? ?? ?? ????? ???????
     setActiveSlideType(slide.slide_type);
     setActiveSlideTypeParent(slide.slide_type);
   };
 
-  // تابع برای بررسی اینکه آیا اسلاید فعلی انتخاب شده است
+  // ???? ???? ????? ????? ??? ?????? ???? ?????? ??? ???
   const isSlideActive = (slide) => {
-    // اول بررسی کن که آیا slide_id مطابقت دارد
+    // ??? ????? ?? ?? ??? slide_id ?????? ????
     if (slide[idKey] !== activeSlideId) {
       return false;
     }
     
-    // اگر slide_id مطابقت دارد، حالا باید slide_type را هم بررسی کنیم
-    // اگر slide_type ذخیره شده داریم (activeSlideType) از آن استفاده کن
+    // ??? slide_id ?????? ????? ???? ???? slide_type ?? ?? ????? ????
+    // ??? slide_type ????? ??? ????? (activeSlideType) ?? ?? ??????? ??
     if (activeSlideType !== null) {
       return slide.slide_type === activeSlideType;
     }
     
-    // اگر activeSlideType نداریم، ممکن است مشکل ایجاد شود
-    // در این حالت، فرض می‌کنیم که اولین اسلاید با این slide_id انتخاب شده
+    // ??? activeSlideType ??????? ???? ??? ???? ????? ???
+    // ?? ??? ????? ??? ??????? ?? ????? ?????? ?? ??? slide_id ?????? ???
     return true;
   };
 
-  // تابع کمکی برای دریافت نوع سوال
+  // ???? ???? ???? ?????? ??? ????
   const getQuestionType = (slide) => {
     if (slide.slide_type === 3) {
       return "Leaderboard";
@@ -224,7 +265,7 @@ export default function SlidesPanel({
     return "Not Selected";
   };
 
-  // تابع برای دریافت پس‌زمینه اسلاید
+  // ???? ???? ?????? ???????? ??????
   const getSlideBackground = () => {
     if (quizBackgroundImage) {
       return {
@@ -239,14 +280,14 @@ export default function SlidesPanel({
     };
   };
 
-  // بررسی آیا اسلاید لیدربرد بعد از این اسلاید وجود دارد
+  // ????? ??? ?????? ??????? ??? ?? ??? ?????? ???? ????
   const hasLeaderboardAfter = (slide) => {
     if (slide.slide_type !== 1) return false;
 
     return !!slide.show_leaderboard_after;
   };
 
-  // تابع برای غیرفعال کردن درگ برای اسلایدهای لیدربرد
+  // ???? ???? ??????? ???? ??? ???? ????????? ???????
   const isDragDisabled = (slide) => {
     if (slide.isSynthetic || slide.slide_type === 3) {
       return true;
@@ -255,9 +296,9 @@ export default function SlidesPanel({
   };
 
 
-  // تابع برای ایجاد key منحصربفرد برای هر اسلاید
+  // ???? ???? ????? key ????????? ???? ?? ??????
   const getUniqueKey = (slide) => {
-    // ترکیب slide_id و slide_type برای ایجاد key منحصربفرد
+    // ????? slide_id ? slide_type ???? ????? key ?????????
     return `${slide[idKey]}-${slide.slide_type}`;
   };
 
@@ -458,8 +499,20 @@ export default function SlidesPanel({
           w-full aspect-[16/9] max-w-[360px] mx-auto flex items-center justify-center
           ${isReordering ? 'opacity-50 cursor-not-allowed' : 'border-gray-300 text-gray-500 hover:border-green-300'}`}
       >
-        ➕ Add Slide
+        + Add Slide
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={handleCancelForModal}
+        onConfirm={handleConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        confirmVariant="destructive"
+        isLoading={false}
+      />
     </div>
   );
 }

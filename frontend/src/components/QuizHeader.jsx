@@ -10,6 +10,7 @@ export default function QuizHeader({
   accessCode = "ABC123",
   quizTitle = "", 
   quizId,
+  setNameSelectionNotice,
 }) {
 
   const navigate = useNavigate();
@@ -57,7 +58,14 @@ export default function QuizHeader({
       );
 
       if (response.status === 200) {
-        alert("Quiz name changed successfully.");
+        if (setNameSelectionNotice) {
+          setNameSelectionNotice("Quiz name changed successfully.");
+          setTimeout(() => {
+            setNameSelectionNotice(null);
+          }, 2500);
+        } else {
+          alert("Quiz name changed successfully.");
+        }
       }
     } catch (error) {
       // Return to previous name
@@ -88,7 +96,7 @@ export default function QuizHeader({
   };
 
 
-  // تابع handleInputChange برای اطمینان از مقدار معتبر
+  // ???? handleInputChange ???? ??????? ?? ????? ?????
   const handleInputChange = (e) => {
     const value = e.target.value || "";
     setNewQuizTitle(value);
@@ -119,7 +127,7 @@ export default function QuizHeader({
               <polyline points="9 22 9 12 15 12 15 22"></polyline>
             </svg>
           </button>
-          <div className="text-white font-semibold text-base flex items-center gap-1.5 before:content-['✱'] before:text-xl">
+          <div className="text-white font-semibold text-base flex items-center gap-1.5 before:content-['?'] before:text-xl">
             ProSlides
           </div>
         </div>
@@ -167,7 +175,7 @@ export default function QuizHeader({
                 {isUpdating ? (
                   <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
                 ) : (
-                  <span className="text-lg">✓</span>
+                  <span className="text-lg">?</span>
                 )}
               </button>
 
@@ -179,7 +187,7 @@ export default function QuizHeader({
                         rounded-lg transition disabled:opacity-50"
                 title="cancel"
               >
-                <span className="text-lg">✕</span>
+                <span className="text-lg">?</span>
               </button>
             </div>
           )}

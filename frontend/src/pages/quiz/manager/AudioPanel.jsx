@@ -1,9 +1,17 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Music, Trash2, Play, Pause, Save } from "lucide-react";
 import { quizService } from "../../../services/quizService";
+import { ErrorModal } from "./ErrorModal";
+import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 
 
-export default function AudioPanel({ onClose, quiz, updateQuiz }) {
+export default function AudioPanel({
+  onClose,
+  quiz,
+  updateQuiz,
+  setAudioSaveNotice,
+  onDirtyChange,
+}) {
 
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -14,6 +22,16 @@ export default function AudioPanel({ onClose, quiz, updateQuiz }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [errorForModal, setErrorForModal] = useState(null);
+  const [errorModalOpen, setErrorModalOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: null,
+    confirmText: "",
+    cancelText: "",
+  });
 
 
   // Setting the initial value when loading the component
@@ -29,6 +47,15 @@ export default function AudioPanel({ onClose, quiz, updateQuiz }) {
     setHasChanges(hasUnsavedChanges);
   }, [localAudio, originalAudio]);
 
+  useEffect(() => {
+    if (onDirtyChange) {
+      onDirtyChange(hasChanges);
+    }
+  }, [hasChanges, onDirtyChange]);
+
+  const closeErrorModal = () => {
+    setErrorModalOpen(false);
+  };
 
   // Audio link testing and preview
   const testAudioLoad = () => {
@@ -119,7 +146,8 @@ export default function AudioPanel({ onClose, quiz, updateQuiz }) {
     }
 
     if (!quiz?.quiz_id) {
-      alert("Quiz ID is required.");
+      setErrorForModal("Quiz ID is required.");
+      setErrorModalOpen(true);
       return;
     }
 
@@ -137,9 +165,22 @@ export default function AudioPanel({ onClose, quiz, updateQuiz }) {
       setOriginalAudio(localAudio);
       setSaving(false);
       onClose();
+
+      if (setAudioSaveNotice) {
+        setAudioSaveNotice("Audio changed successfully.");
+        setTimeout(() => {
+          setAudioSaveNotice(null);
+        }, 2500);
+      }
+
+      setHasChanges(false);
+      if (onDirtyChange) {
+        onDirtyChange(false);
+      }
       
     } catch {
-      alert("Failed to save changes to the server.");
+      setErrorForModal("Failed to save changes. Please try again.");
+      setErrorModalOpen(true);
       setSaving(false);
     }
   };
@@ -148,15 +189,48 @@ export default function AudioPanel({ onClose, quiz, updateQuiz }) {
   // Cancel changes
   const handleCancel = () => {
     if (hasChanges) {
-      const confirmCancel = window.confirm(
-        "You have unsaved changes. Are you sure you want to cancel?"
-      );
-      if (!confirmCancel) return;
+      setConfirmDialog({
+        isOpen: true,
+        title: "Unsaved Changes",
+        description: "You have unsaved changes. Are you sure you want to cancel?",
+        onConfirm: () => {
+          resetAudioToOriginal();
+        },
+        confirmText: "Discard Changes",
+        cancelText: "Keep Editing",
+      });
+      return;
     }
 
+    resetAudioToOriginal();
+  };
+
+  const resetAudioToOriginal = () => {
     setLocalAudio(originalAudio);
     setAudioUrl("");
     onClose();
+  };
+
+  const handleConfirm = () => {
+    if (confirmDialog.onConfirm) {
+      confirmDialog.onConfirm();
+    }
+    closeConfirmDialog();
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog({
+      isOpen: false,
+      title: "",
+      description: "",
+      onConfirm: null,
+      confirmText: "",
+      cancelText: "",
+    });
+  };
+
+  const handleCancelForModal = () => {
+    closeConfirmDialog();
   };
 
 
@@ -213,7 +287,7 @@ export default function AudioPanel({ onClose, quiz, updateQuiz }) {
           </div>
 
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <h5 className="font-medium text-amber-800 text-sm mb-1">💡 Recommendation</h5>
+            <h5 className="font-medium text-amber-800 text-sm mb-1">?? Recommendation</h5>
             <p className="text-amber-700 text-xs">
               Use short audio clips (under 30 seconds) for better experience. Audio will loop automatically.
             </p>
@@ -327,6 +401,24 @@ export default function AudioPanel({ onClose, quiz, updateQuiz }) {
           </p>
         </div>
       </div>
+
+      <ErrorModal
+        isOpen={errorModalOpen}
+        onClose={closeErrorModal}
+        message={errorForModal}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={handleCancelForModal}
+        onConfirm={handleConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        confirmVariant="destructive"
+        isLoading={false}
+      />
     </>
   );
 }

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import MiniResultsResultsOnly from "./MiniResultsResultsOnly";
 import LeaderboardPreview from "./LeaderboardPreview";
@@ -12,6 +12,7 @@ import { quizService } from "../../../services/quizService";
 import { UNSAVED_CHANGES_KEY } from "../../../utils/auth";
 import Waiting from "../../loading/LoadingPage";
 import { X } from "lucide-react";
+import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 
 export default function EditorPage() {
   const { roomId } = useParams();
@@ -20,6 +21,7 @@ export default function EditorPage() {
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [saveNotice, setSaveNotice] = useState(null);
 
   const fetchQuiz = useCallback(async () => {
     if (!quizId) {
@@ -50,9 +52,16 @@ export default function EditorPage() {
 
   const saveQuiz = async () => {
     if (!quiz) return;
-
-    await quizService.updateQuiz(quiz.quiz_id, quiz);
-    await fetchQuiz();
+    try {
+      await quizService.updateQuiz(quiz.quiz_id, quiz);
+      await fetchQuiz();
+      setSaveNotice("Quiz saved successfully.");
+      setTimeout(() => {
+        setSaveNotice(null);
+      }, 2500);
+    } catch (err) {
+      console.error("Failed to save quiz:", err);
+    }
   };
 
 
@@ -61,7 +70,56 @@ export default function EditorPage() {
   }
 
   if (error || !quiz) {
-    return (
+  
+  const handleSetActiveSlideId = (id) => {
+    if (hasSidebarChanges && id !== activeSlide?.slide_id) {
+      setConfirmDialog({
+        isOpen: true,
+        title: "Unsaved Changes",
+        description: "You have unsaved changes. Do you want to discard them?",
+        onConfirm: () => {
+          setHasSidebarChanges(false);
+          proceedWithSlideChange(id);
+        },
+        confirmText: "Discard Changes",
+        cancelText: "Keep Editing",
+      });
+      return;
+    }
+
+    proceedWithSlideChange(id);
+  };
+
+  const handleSetActiveSlideIdForMobile = (id) => {
+    if (hasSidebarChanges && id !== activeSlide?.slide_id) {
+      setConfirmDialog({
+        isOpen: true,
+        title: "Unsaved Changes",
+        description: "You have unsaved changes. Do you want to discard them?",
+        onConfirm: () => {
+          setHasSidebarChanges(false);
+          proceedWithSlideChange(id);
+          setShowSlidesPanel(false);
+        },
+        confirmText: "Discard Changes",
+        cancelText: "Keep Editing",
+      });
+      return;
+    }
+
+    proceedWithSlideChange(id);
+    setShowSlidesPanel(false);
+  };
+
+  const proceedWithSlideChange = (id) => {
+    const slide = slides.find((s) => s.slide_id === id);
+    if (slide) {
+      const index = slides.indexOf(slide);
+      setActiveSlideIndex(index);
+    }
+  };
+
+  return (
       <div className="h-screen flex items-center justify-center">
         <div className="text-xl text-red-500">{error || "Quiz not found"}</div>
       </div>
@@ -69,7 +127,19 @@ export default function EditorPage() {
   }
 
   return (
-    <QuestionEditor quiz={quiz} updateQuiz={updateQuiz} saveQuiz={saveQuiz} refreshQuiz={fetchQuiz} />
+    <>
+      <QuestionEditor
+        quiz={quiz}
+        updateQuiz={updateQuiz}
+        saveQuiz={saveQuiz}
+        refreshQuiz={fetchQuiz}
+      />
+      {saveNotice && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg">
+          {saveNotice}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -83,6 +153,8 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const [leaderboardError, setLeaderboardError] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState({});
   const [hasSidebarChanges, setHasSidebarChanges] = useState(false);
+  const [hasAudioChanges, setHasAudioChanges] = useState(false);
+  const [hasDesignChanges, setHasDesignChanges] = useState(false);
   const [isSelectingType, setIsSelectingType] = useState(false);
   const [typeSelectionError, setTypeSelectionError] = useState(null);
   const [typeSelectionNotice, setTypeSelectionNotice] = useState(null);
@@ -90,6 +162,9 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const [isMobile, setIsMobile] = useState(false);
   const [notice, setNotice] = useState(null);
   const noticeTimeoutRef = useRef(null);
+  const [nameSelectionNotice, setNameSelectionNotice] = useState(null);
+  const [audioSaveNotice, setAudioSaveNotice] = useState(null);
+  const [backgroundSaveNotice, setBackgroundSaveNotice] = useState(null);
 
   const slides = quiz.slides || [];
   const activeSlide = slides[activeSlideIndex] || null;
@@ -122,6 +197,14 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const [showAudioPanel, setShowAudioPanel] = useState(false);
   const [showTypeBox, setShowTypeBox] = useState(false);
   const [showSlidesPanel, setShowSlidesPanel] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: null,
+    confirmText: "",
+    cancelText: "",
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -261,7 +344,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   };
 
 
-  // توابع برای مدیریت تب‌ها
+  // ????? ???? ?????? ?????
   const handleTabClick = (tabId) => {
     if (tabId === "slides") {
       setShowSlidesPanel((prev) => {
@@ -279,16 +362,63 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       const isTogglingSidebar = tabId === "content" && showSidebar;
       const isLeavingSidebar = tabId !== "content";
       if (isTogglingSidebar || isLeavingSidebar) {
-        const confirmLeave = window.confirm(
-          "You have unsaved changes. Do you want to discard them?"
-        );
-        if (!confirmLeave) {
-          return;
-        }
-        setHasSidebarChanges(false);
+        setConfirmDialog({
+          isOpen: true,
+          title: "Unsaved Changes",
+          description: "You have unsaved changes. Do you want to discard them?",
+          onConfirm: () => {
+            setHasSidebarChanges(false);
+            proceedTabChange(tabId);
+          },
+          confirmText: "Discard Changes",
+          cancelText: "Keep Editing",
+        });
+        return;
       }
     }
 
+    if (showAudioPanel && hasAudioChanges) {
+      const isTogglingAudio = tabId === "audio" && showAudioPanel;
+      const isLeavingAudio = tabId !== "audio";
+      if (isTogglingAudio || isLeavingAudio) {
+        setConfirmDialog({
+          isOpen: true,
+          title: "Unsaved Changes",
+          description: "You have unsaved changes. Do you want to discard them?",
+          onConfirm: () => {
+            setHasAudioChanges(false);
+            proceedTabChange(tabId);
+          },
+          confirmText: "Discard Changes",
+          cancelText: "Keep Editing",
+        });
+        return;
+      }
+    }
+
+    if (showDesignPanel && hasDesignChanges) {
+      const isTogglingDesign = tabId === "design" && showDesignPanel;
+      const isLeavingDesign = tabId !== "design";
+      if (isTogglingDesign || isLeavingDesign) {
+        setConfirmDialog({
+          isOpen: true,
+          title: "Unsaved Changes",
+          description: "You have unsaved changes. Do you want to discard them?",
+          onConfirm: () => {
+            setHasDesignChanges(false);
+            proceedTabChange(tabId);
+          },
+          confirmText: "Discard Changes",
+          cancelText: "Keep Editing",
+        });
+        return;
+      }
+    }
+
+    proceedTabChange(tabId);
+  };
+
+  const proceedTabChange = (tabId) => {
     if (tabId === "audio") {
       setShowAudioPanel((prev) => !prev);
       setShowSidebar(false);
@@ -321,6 +451,28 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     }
   };
 
+  const handleConfirm = () => {
+    if (confirmDialog.onConfirm) {
+      confirmDialog.onConfirm();
+    }
+    closeConfirmDialog();
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog({
+      isOpen: false,
+      title: "",
+      description: "",
+      onConfirm: null,
+      confirmText: "",
+      cancelText: "",
+    });
+  };
+
+  const handleCancel = () => {
+    closeConfirmDialog();
+  };
+
   const handleCloseAudioPanel = () => {
     setShowAudioPanel(false);
     setActiveTab(null);
@@ -333,19 +485,25 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
   const handleCloseSidebarPanel = (forceClose = false) => {
     if (!forceClose && hasSidebarChanges) {
-      const confirmClose = window.confirm(
-        "You have unsaved changes. Do you want to discard them?"
-      );
-      if (!confirmClose) {
-        return;
-      }
-      setHasSidebarChanges(false);
+      setConfirmDialog({
+        isOpen: true,
+        title: "Unsaved Changes",
+        description: "You have unsaved changes. Do you want to discard them?",
+        onConfirm: () => {
+          setHasSidebarChanges(false);
+          setShowSidebar(false);
+          setActiveTab(null);
+        },
+        confirmText: "Discard Changes",
+        cancelText: "Keep Editing",
+      });
+      return;
     }
     setShowSidebar(false);
     setActiveTab(null);
   };
 
-  // تابع کمکی برای گرفتن عنوان اسلاید
+  // ???? ???? ???? ????? ????? ??????
   const getSlideTitle = (slide) => {
     if (slide.slide_type === 1 && slide.question) {
       return slide.question.text || "Question Slide";
@@ -356,7 +514,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     return "No Question Yet";
   };
 
-  // ایجاد اسلاید جدید
+  // ????? ?????? ????
   const addNewSlide = async () => {
     try {
       const newSlideData = {
@@ -368,20 +526,20 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         content_image_url: "",
       };
 
-      // ارسال به سرور برای ایجاد اسلاید جدید
+      // ????? ?? ???? ???? ????? ?????? ????
       const createdSlide = await quizService.createSlide(
         quiz.quiz_id,
         newSlideData
       );
 
-      // به‌روزرسانی quiz با اسلاید جدید
+      // ??????????? quiz ?? ?????? ????
       const updatedSlides = [...slides, createdSlide];
       updateQuiz({
         ...quiz,
         slides: updatedSlides,
       });
 
-      // انتخاب اسلاید جدید
+      // ?????? ?????? ????
       setActiveSlideIndex(updatedSlides.length - 1);
     } catch (error) {
       console.error("Failed to create new slide:", error);
@@ -391,13 +549,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
 
 
-  // حذف اسلاید
+  // ??? ??????
   const deleteSlide = async (slideId) => {
     try {
-      // حذف از سرور
+      // ??? ?? ????
       await quizService.deleteSlide(quiz.quiz_id, slideId);
 
-      // به‌روزرسانی state
+      // ??????????? state
       const slideIndex = slides.findIndex((s) => s.slide_id === slideId);
       const updatedSlides = slides.filter((s) => s.slide_id !== slideId);
 
@@ -406,7 +564,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         slides: updatedSlides,
       });
 
-      // تنظیم اسلاید فعال
+      // ????? ?????? ????
       if (updatedSlides.length > 0) {
         if (slideIndex >= updatedSlides.length) {
           setActiveSlideIndex(updatedSlides.length - 1);
@@ -422,17 +580,17 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     }
   };
 
-  // به‌روزرسانی اسلاید فعال
+  // ??????????? ?????? ????
   const updateActiveSlide = async (updatedSlide) => {
     try {
-      // ارسال به سرور
+      // ????? ?? ????
       const savedSlide = await quizService.updateSlide(
         quiz.quiz_id,
         updatedSlide.slide_id,
         updatedSlide
       );
 
-      // به‌روزرسانی state
+      // ??????????? state
       const updatedSlides = slides.map((s) =>
         s.slide_id === updatedSlide.slide_id ? savedSlide : s
       );
@@ -447,21 +605,31 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     }
   };
 
-  // تغییر نوع سوال
+  // ????? ??? ????
   const handleTypeChangeClick = () => {
     if (isSelectingType) {
       return;
     }
     if (hasSidebarChanges) {
-      const confirmDiscard = window.confirm(
-        "You have unsaved changes. Do you want to discard them before changing the question type?"
-      );
-      if (!confirmDiscard) {
-        return;
-      }
-      setHasSidebarChanges(false);
-      handleCloseSidebarPanel(true);
+      setConfirmDialog({
+        isOpen: true,
+        title: "Change Question Type",
+        description:
+          "You have unsaved changes. Do you want to discard them before changing the question type?",
+        onConfirm: () => {
+          setHasSidebarChanges(false);
+          handleCloseSidebarPanel(true);
+          proceedWithTypeChange();
+        },
+        confirmText: "Discard Changes",
+        cancelText: "Keep Editing",
+      });
+      return;
     }
+    proceedWithTypeChange();
+  };
+
+  const proceedWithTypeChange = () => {
     setTypeSelectionError(null);
     setTypeSelectionMode(null);
     setShowSlidesPanel(false);
@@ -496,7 +664,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       let updatedQuestion;
 
       if (!currentQuestion || !currentQuestion.question_id) {
-        // حالت 1: ایجاد سوال جدید
+        // ???? 1: ????? ???? ????
         const questionData = {
           title: "",
           text: "New Question",
@@ -515,25 +683,25 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
           questionData
         );
       } else {
-        // حالت 2: به‌روزرسانی سوال موجود
+        // ???? 2: ??????????? ???? ?????
         
-        // ابتدا type سوال را آپدیت می‌کنیم
+        // ????? type ???? ?? ????? ???????
         const updateData = {
           ...currentQuestion,
           question_type: questionType,
         };
 
       
-        // اگر از multiple به single تغییر می‌کند، آپشن‌ها را جداگانه آپدیت می‌کنیم
+        // ??? ?? multiple ?? single ????? ??????? ??????? ?? ??????? ????? ???????
         if (currentQuestion.question_type === "multiple" && questionType === "single") {
           if (currentQuestion.options && currentQuestion.options.length > 0) {
-            // پیدا کردن اولین گزینه‌ای که قبلاً correct بوده
+            // ???? ???? ????? ???????? ?? ????? correct ????
             const firstCorrectIndex = currentQuestion.options.findIndex(option => option.is_correct);
             
-            // تعیین اندیس گزینه‌ای که باید true بماند
+            // ????? ????? ???????? ?? ???? true ?????
             const indexToKeepTrue = firstCorrectIndex !== -1 ? firstCorrectIndex : 0;
             
-            // آپدیت هر گزینه به صورت جداگانه
+            // ????? ?? ????? ?? ???? ???????
             const updatePromises = currentQuestion.options.map((option, index) => {
               const optionData = {
                 
@@ -550,7 +718,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
               );
             });
             
-            // منتظر می‌مانیم تا همه آپدیت‌ها کامل شوند
+            // ????? ???????? ?? ??? ???????? ???? ????
             await Promise.all(updatePromises);
 
             updatedQuestion = await quizService.updateQuestion(
@@ -559,13 +727,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
               { question_type: questionType }
             );
             
-            // به‌روزرسانی داده‌های محلی گزینه‌ها
+            // ??????????? ???????? ???? ????????
             const updatedOptions = currentQuestion.options.map((option, index) => ({
               ...option,
               is_correct: index === indexToKeepTrue
             }));
             
-            // به‌روزرسانی question با گزینه‌های آپدیت شده
+            // ??????????? question ?? ????????? ????? ???
             updatedQuestion = {
               ...updatedQuestion,
               options: updatedOptions,
@@ -589,13 +757,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         
       }
 
-      // به‌روزرسانی state
+      // ??????????? state
       const updatedSlide = {
         ...activeSlide,
         question: updatedQuestion,
       };
 
-      // به‌روزرسانی در state اصلی
+      // ??????????? ?? state ????
       const updatedSlides = slides.map((s) =>
         s.slide_id === slideId ? updatedSlide : s
       );
@@ -684,9 +852,9 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
 
 
-  // تابع برای به‌روزرسانی اسلاید پس از ذخیره در Sidebar
+  // ???? ???? ??????????? ?????? ?? ?? ????? ?? Sidebar
   const handleSlideUpdated = (updatedSlide) => {
-    // به‌روزرسانی اسلاید در state اصلی
+    // ??????????? ?????? ?? state ????
     const updatedSlides = slides.map((s) =>
       s.slide_id === updatedSlide.slide_id ? updatedSlide : s
     );
@@ -696,7 +864,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       slides: updatedSlides,
     });
 
-    // به‌روزرسانی اسلاید فعال
+    // ??????????? ?????? ????
     setActiveSlideIndex(
       updatedSlides.findIndex((s) => s.slide_id === updatedSlide.slide_id)
     );
@@ -727,7 +895,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const handleLeaderboardDeleted = async (leaderboardSlideId) => {
     try {
       
-      // پیدا کردن اسلاید لیدربردی که حذف شده
+      // ???? ???? ?????? ???????? ?? ??? ???
       const leaderboardSlide = slides.find(s => 
         s.slide_id === leaderboardSlideId && s.slide_type === 3
       );
@@ -736,7 +904,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         return;
       }
 
-      // پیدا کردن اسلاید سوال مرتبط
+      // ???? ???? ?????? ???? ?????
       const questionSlide = slides.find(s => 
         s.slide_type === 1 && s.order === leaderboardSlide.order
       );
@@ -745,14 +913,14 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         return;
       }
 
-      // فقط به‌روزرسانی state محلی - بدون ارسال به سرور
+      // ??? ??????????? state ???? - ???? ????? ?? ????
       const updatedSlides = slides.map(slide => 
         slide.slide_id === questionSlide.slide_id 
           ? { ...slide, show_leaderboard_after: false }
           : slide
       );
 
-      // به‌روزرسانی state اصلی
+      // ??????????? state ????
       updateQuiz({
         ...quiz,
         slides: updatedSlides
@@ -762,11 +930,11 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         activeSlide.show_leaderboard_after = false;
       }
 
-      // رفرش SlidesPanel
+      // ???? SlidesPanel
       //setRefreshTrigger(prev => prev + 1);
       
     } catch (error) {
-      console.error("❌ Error updating UI after leaderboard deletion:", error);
+      console.error("? Error updating UI after leaderboard deletion:", error);
     }
   };
   //////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -777,7 +945,14 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         accessCode={quiz.access_code}
         quizTitle={quiz.title}
         quizId={quiz.quiz_id}
+        setNameSelectionNotice={setNameSelectionNotice}
       />
+
+      {nameSelectionNotice && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg">
+          {nameSelectionNotice}
+        </div>
+      )}
 
       {/* ----- Main Layout ----- */}
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row gap-4 md:gap-4 lg:gap-0">
@@ -787,22 +962,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
             <SlidesPanel
               slides={slides}
               activeSlideId={activeSlide?.slide_id}
-              setActiveSlideId={(id) => {
-                if (hasSidebarChanges && id !== activeSlide?.slide_id) {
-                  const confirmSwitch = window.confirm(
-                    "You have unsaved changes. Do you want to discard them?"
-                  );
-                  if (!confirmSwitch) {
-                    return;
-                  }
-                  setHasSidebarChanges(false);
-                }
-                const slide = slides.find((s) => s.slide_id === id);
-                if (slide) {
-                  const index = slides.indexOf(slide);
-                  setActiveSlideIndex(index);
-                }
-              }}
+              setActiveSlideId={handleSetActiveSlideId}
               setActiveSlideTypeParent={setActiveSlideType}
               addNewSlide={addNewSlide}
               deleteSlide={deleteSlide}
@@ -999,7 +1159,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
           >
             {activeSlideType === 3 ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                {/* ردیف برای دکمه بستن */}
+                {/* ???? ???? ???? ???? */}
                 <div className="w-full flex justify-end mb-4">
                   <button
                     onClick={handleCloseSidebarPanel}
@@ -1009,7 +1169,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                   </button>
                 </div>
                 
-                {/* متن در وسط */}
+                {/* ??? ?? ??? */}
                 <div className="flex-grow flex items-center justify-center">
                   <p className="text-gray-700 font-medium text-2xl mb-30">
                     This slide does not require any additional settings.
@@ -1018,7 +1178,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
               </div>
             ) : (
               (() => {
-                // بررسی اینکه آیا activeSlide.question وجود دارد
+                // ????? ????? ??? activeSlide.question ???? ????
                 if (!activeSlide?.question) {
                   return (
                     <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -1082,7 +1242,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                   );
                 }
 
-                // اگر همه شرایط برقرار بود، کامپوننت Sidebar را رندر کن
+                // ??? ??? ????? ?????? ???? ???????? Sidebar ?? ???? ??
                 return (
                     <Sidebar
                       quizId={quiz.quiz_id}
@@ -1119,8 +1279,16 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                 quiz={quiz}
                 updateQuiz={updateQuiz}
                 onClose={handleCloseDesignPanel}
+                setBackgroundSaveNotice={setBackgroundSaveNotice}
+                onDirtyChange={setHasDesignChanges}
               />
             )}
+          </div>
+        )}
+
+        {backgroundSaveNotice && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg">
+            {backgroundSaveNotice}
           </div>
         )}
 
@@ -1143,8 +1311,16 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                 onClose={handleCloseAudioPanel}
                 quiz={quiz}
                 updateQuiz={updateQuiz}
+                setAudioSaveNotice={setAudioSaveNotice}
+                onDirtyChange={setHasAudioChanges}
               />
             )}
+          </div>
+        )}
+
+        {audioSaveNotice && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg">
+            {audioSaveNotice}
           </div>
         )}
 
@@ -1181,21 +1357,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
               slides={slides}
               activeSlideId={activeSlide?.slide_id}
               setActiveSlideId={(id) => {
-                if (hasSidebarChanges && id !== activeSlide?.slide_id) {
-                  const confirmSwitch = window.confirm(
-                    "You have unsaved changes. Do you want to discard them?"
-                  );
-                  if (!confirmSwitch) {
-                    return;
-                  }
-                  setHasSidebarChanges(false);
-                }
-                const slide = slides.find((s) => s.slide_id === id);
-                if (slide) {
-                  const index = slides.indexOf(slide);
-                  setActiveSlideIndex(index);
-                  setShowSlidesPanel(false);
-                }
+                handleSetActiveSlideIdForMobile(id);
               }}
               setActiveSlideTypeParent={setActiveSlideType}
               addNewSlide={addNewSlide}
@@ -1247,6 +1409,18 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={handleCancel}
+        onConfirm={handleConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        confirmVariant="destructive"
+        isLoading={false}
+      />
     </div>
   );
 }
