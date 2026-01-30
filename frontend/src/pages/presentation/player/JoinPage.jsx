@@ -3,6 +3,8 @@ import EmojiPicker from "emoji-picker-react";
 import { motion as Motion } from "framer-motion";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
+import {ErrorModal} from "../../quiz/manager/ErrorModal";
+
 
 // Animation configurations based on emoji categories
 const getEmojiAnimation = (emoji) => {
@@ -135,6 +137,14 @@ export default function PlayerJoinPage({ roomId, quiz }) {
   const [isAnimating, setIsAnimating] = useState(false);
   const { connect, sendMessage, isConnected, lastMessage } = useWebSocket();
   const { processMessage } = useServerData();
+  const [error, setError] = useState(null);
+  const [errorModalOpen, setErrorModalOpen] = useState(false);
+
+
+  const closeErrorModal = () => {
+    setErrorModalOpen(false);
+  };
+
 
   // const navigate = useNavigate();
 
@@ -152,7 +162,13 @@ export default function PlayerJoinPage({ roomId, quiz }) {
 
   // Adding new player
   const savePlayer = () => {
-    if (!name.trim()) return alert("Please enter your name!");
+    if (!name.trim()) {
+      return alert("Please enter your name!");
+      // setError("Please enter your name");
+      // setErrorModalOpen(true);
+      // return;
+    }
+      
 
     const newPlayer = {
       id: players.length + 1,
@@ -355,6 +371,14 @@ export default function PlayerJoinPage({ roomId, quiz }) {
           start Game
         </button> */}
       </div>
+
+
+      <ErrorModal
+        isOpen={errorModalOpen}
+        onClose={closeErrorModal}
+        message={error}
+      />
+        
     </div>
   );
 }
