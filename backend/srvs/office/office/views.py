@@ -13,6 +13,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -2057,24 +2058,33 @@ class GoogleAuthView(APIView):
         token = serializer.validated_data["token"]
 
         if not settings.GOOGLE_CLIENT_ID:
-            return Response(
-                {"detail": "Google auth is not configured"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return JsonResponse(
+                {
+                    "error_code": "google_auth_not_configured",
+                    "error_text": "Google auth is not configured",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             id_info = decode_google_id_token(token)
         except ValueError:
-            return Response(
-                {"detail": "Invalid Google token"},
+            return JsonResponse(
+                {
+                    "error_code": "invalid_google_token",
+                    "error_text": "Invalid Google token",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         email = id_info.get("email")
         display_name = id_info.get("name", "").strip()
         if not email:
-            return Response(
-                {"detail": "Google token did not include an email"},
+            return JsonResponse(
+                {
+                    "error_code": "google_token_missing_email",
+                    "error_text": "Google token did not include an email",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
