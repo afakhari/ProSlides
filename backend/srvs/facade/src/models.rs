@@ -1,9 +1,12 @@
-use redis::Value;
+use redis::aio::ConnectionManager;
 use serde::{Deserialize, Serialize};
 use actix::*;
 use uuid::Uuid;
 use std::collections::HashSet;
 use std::time::Instant;
+
+// Type alias for Redis connection pool
+pub type RedisPool = ConnectionManager;
 
 
 //
@@ -52,6 +55,7 @@ pub struct PlayerOptionAnswer {
     pub picked: bool,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Clone, Debug)]
 pub struct PlayerAnswer {
     pub r#type: u8,
@@ -61,6 +65,7 @@ pub struct PlayerAnswer {
     pub options_result: Vec<PlayerOptionAnswer>,
 }
 
+#[allow(dead_code)]
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct PlayerAnswerMessage(pub PlayerAnswer);
@@ -80,25 +85,24 @@ pub struct PlayerInfo {
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct SendPlayerList{
+pub struct SendPlayerList {
     pub session_id: String,
     pub new_player: serde_json::Value,
 }
 
+#[allow(dead_code)]
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct QuizSetupMessage(pub QuizSetup);
 
-
-
-
 // ====== Room ======
+#[allow(dead_code)]
 pub struct Room {
     pub players: HashSet<Addr<PlayerSession>>,
     pub manager: Option<Addr<ManagerSession>>,
     pub ok_responses: usize,
     pub last_question: Option<Question>,
-    pub redis_client: redis::Client,
+    pub redis_pool: RedisPool,
     pub session_id: String,
 }
 
@@ -208,7 +212,7 @@ pub struct UnregisterPlayer(pub Addr<PlayerSession>);
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct PlayerOk(pub Addr<PlayerSession>);
+pub struct PlayerOk(#[allow(dead_code)] pub Addr<PlayerSession>);
 
 
 /// Player WebSocket actor
@@ -218,11 +222,12 @@ pub struct PlayerSession {
     pub name: Option<String>,
     pub character: Option<String>,
     pub session_id: String,
-    pub redis_client: redis::Client,
+    pub redis_pool: RedisPool,
     pub quiz_setup: Option<QuizSetup>,
-    pub hb: Instant,  // Add this field
+    pub hb: Instant,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct OptionPick {
     option_id: i64,
@@ -251,9 +256,9 @@ pub struct BroadcastToPlayers(pub String);
 pub struct ManagerSession {
     pub room: Addr<Room>,
     pub session_id: String,
-    pub redis_client: redis::Client,
+    pub redis_pool: RedisPool,
     pub quiz_setup: QuizSetup,
-    pub hb: Instant,  // Add this field
+    pub hb: Instant,
 }
 
 #[derive(Message)]

@@ -47,6 +47,7 @@ function AccessCodeResolver() {
   const { accessCode } = useParams();
   const [status, setStatus] = useState("loading"); // loading | error | success
   const [resolvedData, setResolvedData] = useState(null);
+  const [resolvedMeta, setResolvedMeta] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -66,6 +67,17 @@ function AccessCodeResolver() {
         if (data.quiz_id) {
           // Access code valid - store quiz_id and show player presentation
           setResolvedData(data);
+          setResolvedMeta({
+            quiz_id: data.quiz_id,
+            title: data.title || "",
+            access_code: accessCode,
+            background: {
+              color: data.background_color || "#1e1e2e",
+              image: data.background_image_url || "",
+            },
+            music_url: data.music_url || "",
+            slides: [],
+          });
           setStatus("success");
         } else {
           // Invalid access code
@@ -101,7 +113,7 @@ function AccessCodeResolver() {
           <AppPresentation
             roomId={String(resolvedData.quiz_id)}
             role="player"
-            initialQuizData={resolvedData}
+            initialQuizData={resolvedMeta}
           />
           <WSMessageHandler />
         </WebSocketProvider>
@@ -133,7 +145,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   const [currentSlide, setCurrentSlide] = useState(1);
 
   // Fetch full quiz once at top-level and transform to internal shape
-  const [remoteQuiz, setRemoteQuiz] = useState(null);
+  const [remoteQuiz, setRemoteQuiz] = useState(initialQuizData || null);
 
   // Initialize remoteQuiz with initialQuizData if available (for player)
   useEffect(() => {
@@ -154,7 +166,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
           "",
       };
 
-      setRemoteQuiz({
+      setRemoteQuiz((prev) => prev || {
         quiz_id: initialQuizData.quiz_id,
         title: initialQuizData.title || "",
         access_code: initialQuizData.access_code || "",
@@ -173,7 +185,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
         // If we already have initial data for player, we might skip full fetch or do it in background
         // But if user wants ONLY this API for player, we skip fetch for player
-        if (role === "player" && initialQuizData) {
+        if (role === "player") {
           console.log(
             "[AppPresentation] Skipping full export fetch for player, using initial data"
           );

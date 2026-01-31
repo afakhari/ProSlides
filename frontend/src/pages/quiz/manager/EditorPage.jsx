@@ -70,56 +70,7 @@ export default function EditorPage() {
   }
 
   if (error || !quiz) {
-  
-  const handleSetActiveSlideId = (id) => {
-    if (hasSidebarChanges && id !== activeSlide?.slide_id) {
-      setConfirmDialog({
-        isOpen: true,
-        title: "Unsaved Changes",
-        description: "You have unsaved changes. Do you want to discard them?",
-        onConfirm: () => {
-          setHasSidebarChanges(false);
-          proceedWithSlideChange(id);
-        },
-        confirmText: "Discard Changes",
-        cancelText: "Keep Editing",
-      });
-      return;
-    }
-
-    proceedWithSlideChange(id);
-  };
-
-  const handleSetActiveSlideIdForMobile = (id) => {
-    if (hasSidebarChanges && id !== activeSlide?.slide_id) {
-      setConfirmDialog({
-        isOpen: true,
-        title: "Unsaved Changes",
-        description: "You have unsaved changes. Do you want to discard them?",
-        onConfirm: () => {
-          setHasSidebarChanges(false);
-          proceedWithSlideChange(id);
-          setShowSlidesPanel(false);
-        },
-        confirmText: "Discard Changes",
-        cancelText: "Keep Editing",
-      });
-      return;
-    }
-
-    proceedWithSlideChange(id);
-    setShowSlidesPanel(false);
-  };
-
-  const proceedWithSlideChange = (id) => {
-    const slide = slides.find((s) => s.slide_id === id);
-    if (slide) {
-      const index = slides.indexOf(slide);
-      setActiveSlideIndex(index);
-    }
-  };
-
-  return (
+    return (
       <div className="h-screen flex items-center justify-center">
         <div className="text-xl text-red-500">{error || "Quiz not found"}</div>
       </div>
@@ -206,9 +157,11 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     cancelText: "",
   });
 
+  const hasUnsavedChanges = hasSidebarChanges || hasAudioChanges || hasDesignChanges;
+
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (hasSidebarChanges) {
+    if (hasUnsavedChanges) {
       localStorage.setItem(UNSAVED_CHANGES_KEY, "1");
     } else {
       localStorage.removeItem(UNSAVED_CHANGES_KEY);
@@ -216,7 +169,18 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     return () => {
       localStorage.removeItem(UNSAVED_CHANGES_KEY);
     };
-  }, [hasSidebarChanges]);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleBeforeUnload = (event) => {
+      if (!hasUnsavedChanges) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   useEffect(() => {
     if (!activeSlide) return;
@@ -420,35 +384,44 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
   const proceedTabChange = (tabId) => {
     if (tabId === "audio") {
-      setShowAudioPanel((prev) => !prev);
-      setShowSidebar(false);
-      setShowDesignPanel(false);
-      setShowSlidesPanel(false);
-      if (showAudioPanel) {
-        setActiveTab(null);
-      } else {
-        setActiveTab(tabId);
-      }
-    } else if (tabId === "content") {
-      setShowSidebar(!showSidebar);
-      setShowDesignPanel(false);
-      setShowAudioPanel(false);
-      setShowSlidesPanel(false);
-    } else if (tabId === "design") {
-      setShowDesignPanel(!showDesignPanel);
-      setShowSidebar(false);
-      setShowAudioPanel(false);
-      setShowSlidesPanel(false);
-    } else {
-      setShowSidebar(false);
-      setShowDesignPanel(false);
-      setShowAudioPanel(false);
-      setShowSlidesPanel(false);
+      setShowAudioPanel((prev) => {
+        const next = !prev;
+        setShowSidebar(false);
+        setShowDesignPanel(false);
+        setShowSlidesPanel(false);
+        setActiveTab(next ? tabId : null);
+        return next;
+      });
+      return;
+    }
+    if (tabId === "content") {
+      setShowSidebar((prev) => {
+        const next = !prev;
+        setShowDesignPanel(false);
+        setShowAudioPanel(false);
+        setShowSlidesPanel(false);
+        setActiveTab(next ? tabId : null);
+        return next;
+      });
+      return;
+    }
+    if (tabId === "design") {
+      setShowDesignPanel((prev) => {
+        const next = !prev;
+        setShowSidebar(false);
+        setShowAudioPanel(false);
+        setShowSlidesPanel(false);
+        setActiveTab(next ? tabId : null);
+        return next;
+      });
+      return;
     }
 
-    if (tabId !== "audio" || !showAudioPanel) {
-      setActiveTab(tabId);
-    }
+    setShowSidebar(false);
+    setShowDesignPanel(false);
+    setShowAudioPanel(false);
+    setShowSlidesPanel(false);
+    setActiveTab(null);
   };
 
   const handleConfirm = () => {
@@ -471,6 +444,74 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
   const handleCancel = () => {
     closeConfirmDialog();
+  };
+
+  const handleExitPanel = () => {
+    if (!hasUnsavedChanges) {
+      navigate("/manager/panel");
+      return;
+    }
+    setConfirmDialog({
+      isOpen: true,
+      title: "Leave panel?",
+      description: "You have unsaved changes. Do you want to discard them?",
+      onConfirm: () => {
+        setHasSidebarChanges(false);
+        setHasAudioChanges(false);
+        setHasDesignChanges(false);
+        navigate("/manager/panel");
+      },
+      confirmText: "Discard Changes",
+      cancelText: "Keep Editing",
+    });
+  };
+
+  const proceedWithSlideChange = (id) => {
+    const slide = slides.find((s) => s.slide_id === id);
+    if (slide) {
+      const index = slides.indexOf(slide);
+      setActiveSlideIndex(index);
+    }
+  };
+
+  const handleSetActiveSlideId = (id) => {
+    if (hasSidebarChanges && id !== activeSlide?.slide_id) {
+      setConfirmDialog({
+        isOpen: true,
+        title: "Unsaved Changes",
+        description: "You have unsaved changes. Do you want to discard them?",
+        onConfirm: () => {
+          setHasSidebarChanges(false);
+          proceedWithSlideChange(id);
+        },
+        confirmText: "Discard Changes",
+        cancelText: "Keep Editing",
+      });
+      return;
+    }
+
+    proceedWithSlideChange(id);
+  };
+
+  const handleSetActiveSlideIdForMobile = (id) => {
+    if (hasSidebarChanges && id !== activeSlide?.slide_id) {
+      setConfirmDialog({
+        isOpen: true,
+        title: "Unsaved Changes",
+        description: "You have unsaved changes. Do you want to discard them?",
+        onConfirm: () => {
+          setHasSidebarChanges(false);
+          proceedWithSlideChange(id);
+          setShowSlidesPanel(false);
+        },
+        confirmText: "Discard Changes",
+        cancelText: "Keep Editing",
+      });
+      return;
+    }
+
+    proceedWithSlideChange(id);
+    setShowSlidesPanel(false);
   };
 
   const handleCloseAudioPanel = () => {
@@ -946,6 +987,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         quizTitle={quiz.title}
         quizId={quiz.quiz_id}
         setNameSelectionNotice={setNameSelectionNotice}
+        onBack={handleExitPanel}
       />
 
       {nameSelectionNotice && (

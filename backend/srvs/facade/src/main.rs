@@ -1,20 +1,17 @@
 use actix::*;
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
-use serde_json::json;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Mutex, MutexGuard};
+use parking_lot::Mutex;
 use serde::Serialize;
 use uuid::Uuid;
-use redis::{AsyncCommands};
+use redis::aio::ConnectionManager;
 
 // Local modules
 mod manager;
 mod player;
 mod models;
 mod utils;
-use utils::{
-    get_quiz_setup,
-};
+use utils::get_quiz_setup;
 use models::{
     PlayerSession,
     Room,
@@ -25,33 +22,27 @@ use models::{
     RegisterPlayer,
     UnregisterPlayer,
     BroadcastToPlayers,
-    OptionResult,
     RegisterManager,
     UnregisterManager,
     PlayerText,
     PlayerOk,
-    QuestionResult,
-    Slide,
-    QuizOption,
     ManagerSession,
+    RedisPool,
 };
 use std::time::Instant;
 
-// TODO: Add time_taken field in players
-// TODO: Fix the algorithm of scoring
-
-pub const REDIS_URL: Option<&str> = Some("redis://127.0.0.1/");
+pub const REDIS_URL: &str = "redis://127.0.0.1/";
 
 
 impl Room {
-    pub fn new(session_id: String) -> Self {
+    pub fn new(session_id: String, redis_pool: RedisPool) -> Self {
         Room {
             players: HashSet::new(),
             manager: None,
             ok_responses: 0,
             last_question: None,
-            redis_client: redis::Client::open(REDIS_URL.unwrap()).unwrap(),
-            session_id: session_id,
+            redis_pool,
+            session_id,
         }
     }
 }
@@ -95,42 +86,53 @@ impl Handler<SendPlayerList> for Room {
     fn handle(&mut self, data: SendPlayerList, _: &mut Self::Context) {
         let manager = self.manager.clone();
         let session_id = data.session_id.clone();
-        let client = self.redis_client.clone();
+        let mut con = self.redis_pool.clone();
         let new_player = data.new_player.clone();
 
-        // let redis_client = self.
         actix_rt::spawn(async move {
             if manager.is_none() { return; }
-            if let Ok(mut con) = client.get_multiplexed_async_connection().await {
+            
+            // Get all player keys
+            let pattern = format!("players:{session_id}");
+            let keys: Vec<String> = match redis::cmd("SMEMBERS")
+                .arg(&pattern)
+                .query_async(&mut con)
+                .await {
+                Ok(k) => k,
+                Err(_) => return,
+            };
 
-                // Get all player keys
-                let pattern = format!("players:{session_id}");
-                let keys: Vec<String> = con.smembers(&pattern).await.unwrap();
+            let mut users = Vec::with_capacity(keys.len() + 1);
 
-                let mut users = vec![];
+            // Batch get all player data if keys exist
+            if !keys.is_empty() {
+                let player_jsons: Vec<Option<String>> = match redis::cmd("MGET")
+                    .arg(&keys)
+                    .query_async(&mut con)
+                    .await {
+                    Ok(v) => v,
+                    Err(_) => return,
+                };
 
-                for key in keys {
-                    // Try to get redis string
-                    let json_str: Result<String, _> = con.get(&key).await;
-
-                    if let Ok(json) = json_str {
-                        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json) {
-                            if v.get("user_id").unwrap() != new_player.get("user_id").unwrap() {
-                                users.push(v);
-                            }
+                let new_player_id = new_player.get("user_id");
+                for json_opt in player_jsons.into_iter().flatten() {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json_opt) {
+                        if v.get("user_id") != new_player_id {
+                            users.push(v);
                         }
                     }
                 }
-                // Add new player manually
-                users.push(new_player);
+            }
+            
+            // Add new player
+            users.push(new_player);
 
+            let msg = PlayerListMsg {
+                r#type: 7,
+                users,
+            };
 
-                let msg = PlayerListMsg {
-                    r#type: 7,
-                    users,
-                };
-
-                let payload = serde_json::to_string(&msg).unwrap();
+            if let Ok(payload) = serde_json::to_string(&msg) {
                 manager.unwrap().do_send(ManagerText(payload));
             }
         });
@@ -178,7 +180,7 @@ impl Handler<BroadcastToPlayers> for Room {
 impl Handler<PlayerOk> for Room {
     type Result = ();
 
-    fn handle(&mut self, _: PlayerOk, ctx: &mut Self::Context) {
+    fn handle(&mut self, _: PlayerOk, _ctx: &mut Self::Context) {
         self.ok_responses += 1;
 
         if let Some(manager) = &self.manager {
@@ -190,50 +192,8 @@ impl Handler<PlayerOk> for Room {
         }
 
         // When all players have responded
-        if self.ok_responses == self.players.len() && self.players.len() > 0 {
+        if self.ok_responses == self.players.len() && !self.players.is_empty() {
             println!("✅ All players OK. Starting timer...");
-            /*
-            let players = self.players.clone();
-            let quiz_setup = self.quiz_setup.clone().unwrap();
-            let redis_client = self.redis_client.clone();
-            let session_id = self.session_id.clone();
-            actix_rt::spawn(async move {
-                let slide = quiz_setup.slides[get_slide_index(&redis_client, &session_id).await as usize].clone();
-                if slide.slide_type == 3 { // leaderboard
-                // pass
-            }
-            else if slide.slide_type == 2 { // content
-            // pass
-        }
-        else if slide.slide_type == 1 { // question
-        let question = slide.question.clone().unwrap();
-                    let question_time = question.time_limit.clone();
-
-                    let mut options: Vec<OptionResult> = Vec::new();
-                    for option in question.options {
-                        options.push(
-                            OptionResult {
-                                option_id: option.option_id,
-                                answer: option.is_correct,
-                            }
-                        );
-                    }
-
-                    let result = QuestionResult {
-                        r#type: 3,
-                        question_id: question.question_id,
-                        options_result: options,
-                    };
-
-                    let result_json = serde_json::to_string(&result).unwrap();
-                    tokio::time::sleep(std::time::Duration::from_secs(question_time as u64)).await;
-                    println!("⏰ Sending result after {}s", question_time);
-                    for player in &players {
-                        player.do_send(PlayerText(result_json.clone()));
-                    }
-                }
-            });
-            */
         }
     }
 }
@@ -242,16 +202,7 @@ impl Handler<PlayerOk> for Room {
 // ====== App State ======
 struct AppState {
     rooms: Mutex<HashMap<String, Addr<Room>>>,
-}
-
-fn lock_rooms<T>(mutex: &Mutex<T>) -> MutexGuard<T> {
-    match mutex.lock() {
-        Ok(g) => g,
-        Err(e) => {
-            eprintln!("⚠️ Recovering poisoned mutex");
-            e.into_inner()
-        }
-    }
+    redis_pool: RedisPool,
 }
 
 
@@ -263,39 +214,47 @@ async fn ws_route(
     path: web::Path<(String, String)>, // (session_id, role)
 ) -> Result<HttpResponse, Error> {
     let (session_id, role) = path.into_inner();
-    // let mut rooms = data.rooms.lock().unwrap();
-    let mut rooms = lock_rooms(&data.rooms);
+    let redis_pool = data.redis_pool.clone();
+    
+    let room = {
+        let mut rooms = data.rooms.lock();
+        rooms
+            .entry(session_id.clone())
+            .or_insert_with(|| Room::new(session_id.clone(), redis_pool.clone()).start())
+            .clone()
+    };
 
-
-
-    let room = rooms
-        .entry(session_id.clone())
-        .or_insert_with(|| Room::new(session_id.clone()).start())
-        .clone();
-    let redis_client = redis::Client::open(REDIS_URL.unwrap()).unwrap();
     match role.as_str() {
-        "manager" => actix_web_actors::ws::start(
-            ManagerSession {
-                room: room,
-                session_id: session_id.clone(),
-                redis_client: redis_client,
-                quiz_setup: get_quiz_setup(&session_id).await.unwrap(),
-                hb: Instant::now(),  // Initialize heartbeat
-            }, &req, stream),
+        "manager" => {
+            let quiz_setup = get_quiz_setup(&session_id).await.map_err(|e| {
+                actix_web::error::ErrorInternalServerError(format!("Failed to get quiz: {}", e))
+            })?;
+            actix_web_actors::ws::start(
+                ManagerSession {
+                    room,
+                    session_id: session_id.clone(),
+                    redis_pool: redis_pool.clone(),
+                    quiz_setup,
+                    hb: Instant::now(),
+                },
+                &req,
+                stream,
+            )
+        }
         "player" => actix_web_actors::ws::start(
-                PlayerSession {
-                            id: Uuid::new_v4(),
-                            room: room,
-                            name: None,
-                            character: None,
-                            session_id: session_id,
-                            redis_client: redis_client,
-                            quiz_setup: None,
-                            hb: Instant::now(),  // Initialize heartbeat
-                        },
-                        &req,
-                        stream,
-                    ),
+            PlayerSession {
+                id: Uuid::new_v4(),
+                room,
+                name: None,
+                character: None,
+                session_id,
+                redis_pool: redis_pool.clone(),
+                quiz_setup: None,
+                hb: Instant::now(),
+            },
+            &req,
+            stream,
+        ),
         _ => Ok(HttpResponse::BadRequest().body("role must be 'manager' or 'player'")),
     }
 }
@@ -303,8 +262,16 @@ async fn ws_route(
 // ====== Main ======
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Create Redis connection pool
+    let redis_client = redis::Client::open(REDIS_URL)
+        .expect("Failed to create Redis client");
+    let redis_pool = ConnectionManager::new(redis_client)
+        .await
+        .expect("Failed to create Redis connection pool");
+
     let data = web::Data::new(AppState {
         rooms: Mutex::new(HashMap::new()),
+        redis_pool,
     });
 
     println!("🚀 Server running on http://localhost:8080");
