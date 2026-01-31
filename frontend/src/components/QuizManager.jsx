@@ -542,7 +542,7 @@ export default function QuizManager({ onNewPresentation }) {
       }
 
       navigate(`/manager/presentation/${quizId}/`);
-    } catch (error) {
+    } catch {
       setErrorForModal("Failed to load quiz.");
       setErrorModalOpen(true);
     }

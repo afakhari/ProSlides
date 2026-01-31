@@ -11,6 +11,7 @@ export default function QuizHeader({
   quizTitle = "", 
   quizId,
   setNameSelectionNotice,
+  onBack,
 }) {
 
   const navigate = useNavigate();
@@ -108,7 +109,7 @@ export default function QuizHeader({
       <header className="fixed top-0 left-0 right-0 w-full h-14 bg-pink-300 flex items-center justify-between px-5 z-50">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate("/manager/panel")}
+            onClick={() => (onBack ? onBack() : navigate("/manager/panel"))}
             className="text-white hover:bg-white/20 p-2 rounded-full transition"
             title="Back to Home"
           >

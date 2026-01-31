@@ -137,7 +137,7 @@ export default function PlayerJoinPage({ roomId, quiz }) {
   const [isAnimating, setIsAnimating] = useState(false);
   const { connect, sendMessage, isConnected, lastMessage } = useWebSocket();
   const { processMessage } = useServerData();
-  const [error, setError] = useState(null);
+  const [error, _setError] = useState(null);
   const [errorModalOpen, setErrorModalOpen] = useState(false);
 
 
