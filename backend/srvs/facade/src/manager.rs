@@ -1,11 +1,11 @@
 use actix::*;
-use actix_web::{body::MessageBody, web::Bytes};
 use actix_web_actors::ws;
-use serde_json::{Value, to_string};
-use redis::{AsyncCommands, Client, aio::MultiplexedConnection};
-use chrono::Utc;
+use serde_json::Value;
+use redis::AsyncCommands;
 use serde_json::json;
-use std::{collections::{HashMap, HashSet}, rc::Rc, time::{SystemTime, UNIX_EPOCH}};
+use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
+use crate::models::RedisPool;
 use crate::utils::{
     save_slide_index,
     get_slide_index,
@@ -25,7 +25,6 @@ use crate::models::{
     Slide,
     OptionItem,
     Question,
-    Room,
     ManagerAction,
     NewQuestion,
     OptionResult,
@@ -33,15 +32,11 @@ use crate::models::{
     LeaderboardEntry,
 };
 
-// TODO: Check the result. i think must remove new_points:13
-
 use std::time::{Duration, Instant};
 
 // Heartbeat interval and timeout
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
-
-// ...existing code...
 
 impl ManagerSession {
     /// Sends ping to client every HEARTBEAT_INTERVAL seconds.
@@ -69,20 +64,20 @@ impl Actor for ManagerSession {
 
         let session_id = self.session_id.clone();
         let quiz_setup = self.quiz_setup.clone();
-        let redis_client = self.redis_client.clone();
+        let mut con = self.redis_pool.clone();
         actix_rt::spawn(async move {
-            save_quiz_setup(&session_id, &quiz_setup, &redis_client).await.ok();
+            save_quiz_setup(&session_id, &quiz_setup, &mut con).await.ok();
         });
         self.room.do_send(RegisterManager(ctx.address()));
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
         self.room.do_send(UnregisterManager);
-        let redis_client = self.redis_client.clone();
+        let mut con = self.redis_pool.clone();
         let session_id = self.session_id.clone();
         actix_rt::spawn(async move {
-            save_slide_index(redis_client.clone(), session_id.clone(), -1);
-            cleanup_quiz_redis(&redis_client, &session_id).await;
+            save_slide_index(&mut con, &session_id, -1).await;
+            cleanup_quiz_redis(&mut con, &session_id).await;
         });
     }
 }
@@ -105,24 +100,27 @@ impl Handler<ManagerText> for ManagerSession {
 }
 
 async fn send_leaderbaord(
-    con: &mut MultiplexedConnection,
+    con: &mut RedisPool,
     session_id: String,
     slide: Slide,
     manager_addr: Addr<ManagerSession>,
-    room_clone: Addr<Room>,
+    room_clone: Addr<crate::models::Room>,
 ) {
-    // 1. Batch fetch player keys and values
+    // 1. Batch fetch player keys and values using SCAN instead of KEYS for production
     let pattern = format!("player:{session_id}:*");
     let player_keys: Vec<String> = match con.keys(&pattern).await {
         Ok(keys) => keys,
         Err(_) => return,
     };
 
-    // Batch get all player JSONs
+    // Batch get all player JSONs using MGET
     let player_jsons: Vec<Option<String>> = if player_keys.is_empty() {
         vec![]
     } else {
-        match con.get(player_keys.clone()).await {
+        match redis::cmd("MGET")
+            .arg(&player_keys)
+            .query_async(con)
+            .await {
             Ok(vals) => vals,
             Err(_) => return,
         }
@@ -251,134 +249,149 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                             println!("➡️ Manager requested NEXT");
                             let slides: Vec<Slide> = self.quiz_setup.slides.clone();
                             let session_id = self.session_id.clone();
-                            let redis_client = self.redis_client.clone();
+                            let mut con = self.redis_pool.clone();
                             let room_clone = self.room.clone();
-                            let manager_addr = ctx.address().clone();
+                            let manager_addr = ctx.address();
                             actix_rt::spawn(async move {
-                                let mut slide_index = get_slide_index(&redis_client, &session_id).await;
-                                slide_index = if slide_index+1 < slides.len() as i32 {slide_index+1} else {slides.len() as i32};
+                                let mut slide_index = get_slide_index(&mut con, &session_id).await;
+                                slide_index = if slide_index + 1 < slides.len() as i32 { slide_index + 1 } else { slides.len() as i32 };
                                 if slide_index >= slides.len() as i32 { // end
-                                    cleanup_quiz_redis(&redis_client, &session_id).await;
-                                    save_slide_index(redis_client, session_id, -1);
+                                    cleanup_quiz_redis(&mut con, &session_id).await;
+                                    save_slide_index(&mut con, &session_id, -1).await;
                                     return;
                                 }
-                                save_slide_index(redis_client.clone(), session_id.clone(), slide_index);
-                                let slide: Slide = slides[slide_index as usize].clone();
-
+                                save_slide_index(&mut con, &session_id, slide_index).await;
+                                let slide = &slides[slide_index as usize];
 
                                 if slide.slide_type == 3 { // Leaderboard Slide
-                                    if let Ok(mut con) = redis_client.get_multiplexed_async_connection().await {
-                                        send_leaderbaord(&mut con, session_id.clone(), slide.clone(), manager_addr.clone(), room_clone.clone()).await;
-                                    }
+                                    send_leaderbaord(&mut con, session_id.clone(), slide.clone(), manager_addr.clone(), room_clone.clone()).await;
                                 }
                                 else if slide.slide_type == 2 { // content
-                                    let str_json = serde_json::to_string(&slide).unwrap();
-                                    room_clone.do_send(BroadcastToPlayers(str_json.clone()));
-                                    manager_addr.do_send(ServerMessage(str_json));
+                                    if let Ok(str_json) = serde_json::to_string(&slide) {
+                                        room_clone.do_send(BroadcastToPlayers(str_json.clone()));
+                                        manager_addr.do_send(ServerMessage(str_json));
+                                    }
                                 }
                                 else if slide.slide_type == 1 { // PickAnswerQuestion Slide
-                                    let _question = slide.question.clone().unwrap();
-                                    let mut options: Vec<OptionItem> = Vec::new();
+                                    let _question = match &slide.question {
+                                        Some(q) => q,
+                                        None => return,
+                                    };
+                                    
                                     let mut answer_nums = 0;
-                                    for option in _question.options.clone() {
-                                        options.push(
-                                            OptionItem {
-                                                option_id: option.option_id,
-                                                option_text: option.text,
-                                                image: option.image_url,
-                                            }
-                                        );
-                                        if option.is_correct {
+                                    let options: Vec<OptionItem> = _question.options.iter().map(|opt| {
+                                        if opt.is_correct {
                                             answer_nums += 1;
                                         }
-                                    }
+                                        OptionItem {
+                                            option_id: opt.option_id,
+                                            option_text: opt.text.clone(),
+                                            image: opt.image_url.clone(),
+                                        }
+                                    }).collect();
+                                    
                                     let question = Question {
                                         r#type: 2,
                                         question_id: _question.question_id,
-                                        question_text: _question.text.clone().unwrap(),
+                                        question_text: _question.text.clone().unwrap_or_default(),
                                         question_time: _question.time_limit,
                                         max_point: _question.max_point,
                                         min_point: _question.min_point,
-                                        has_multiple: if answer_nums > 1 {true} else {false},
-                                        options: options,
+                                        has_multiple: answer_nums > 1,
+                                        options,
                                     };
-                                    let json = serde_json::to_string(&question).unwrap();
-
+                                    
+                                    let json = match serde_json::to_string(&question) {
+                                        Ok(j) => j,
+                                        Err(_) => return,
+                                    };
 
                                     room_clone.do_send(NewQuestion(question.clone()));
                                     room_clone.do_send(BroadcastToPlayers(json));
+                                    
                                     let qkey = format!("question:{}:{}", session_id, question.question_id);
-                                    let meta = serde_json::json!({
+                                    let meta = json!({
                                         "question_id": question.question_id,
                                         "question_time": question.question_time,
                                         "max_point": question.max_point,
                                         "min_point": question.min_point,
                                     });
 
+                                    // Store question meta & start timestamp using pipeline
+                                    let now = SystemTime::now()
+                                        .duration_since(UNIX_EPOCH)
+                                        .expect("Time error")
+                                        .as_secs_f64();
 
-                                    if let Ok(mut con) = redis_client.get_multiplexed_async_connection().await {
-                                        // Store question meta & start timestamp
-                                        let now = SystemTime::now()
-                                            .duration_since(UNIX_EPOCH)
-                                            .expect("Time error")
-                                            .as_secs_f64();
+                                    let mut pipe = redis::pipe();
+                                    pipe.atomic()
+                                        .set(format!("{qkey}:meta"), meta.to_string())
+                                        .set(format!("{qkey}:start"), now);
+                                    
+                                    let _: Result<(), _> = pipe.query_async(&mut con).await;
 
+                                    // Wait question_time seconds
+                                    tokio::time::sleep(std::time::Duration::from_secs(question.question_time as u64)).await;
 
-                                        let _: () = con
-                                            .set(format!("{qkey}:meta"), meta.to_string())
+                                    // Batch fetch all option counts
+                                    let option_keys: Vec<String> = question.options.iter()
+                                        .map(|opt| format!("question:{}:{}:option:{}:count", session_id, question.question_id, opt.option_id))
+                                        .collect();
+                                    
+                                    let counts: Vec<Option<u16>> = if option_keys.is_empty() {
+                                        vec![]
+                                    } else {
+                                        redis::cmd("MGET")
+                                            .arg(&option_keys)
+                                            .query_async(&mut con)
                                             .await
-                                            .unwrap();
-                                        let _: () = con
-                                            .set(format!("{qkey}:start"), now)
-                                            .await
-                                            .unwrap();
+                                            .unwrap_or_else(|_| vec![None; option_keys.len()])
+                                    };
 
-                                        // Wait question_time seconds
-                                        tokio::time::sleep(std::time::Duration::from_secs(question.question_time as u64)).await;
-
-                                        // Collect results
-                                        let mut options_result = Vec::new();
-                                        for (i, opt) in question.options.iter().enumerate() {
-                                            let oid = opt.option_id;
-                                            let key = format!("question:{}:{}:option:{}:count", session_id, question.question_id, oid);
-                                            let mut count: u16 = con.get(key).await.unwrap_or(0);
-                                            count += _question.options[i].votes as u16;
-                                            options_result.push(json!({
-                                                "option_id": oid,
+                                    // Build options result
+                                    let options_result: Vec<serde_json::Value> = question.options.iter()
+                                        .enumerate()
+                                        .map(|(i, opt)| {
+                                            let count = counts.get(i).and_then(|c| *c).unwrap_or(0) 
+                                                + _question.options.get(i).map(|o| o.votes as u16).unwrap_or(0);
+                                            json!({
+                                                "option_id": opt.option_id,
                                                 "number_of_submits": count
-                                            }));
-                                        }
+                                            })
+                                        })
+                                        .collect();
 
-                                        let results_json = json!({
-                                            "type": 8,
-                                            "question_id": question.question_id,
-                                            "options": options_result
-                                        });
+                                    let results_json = json!({
+                                        "type": 8,
+                                        "question_id": question.question_id,
+                                        "options": options_result
+                                    });
 
-                                        // Send to manager WebSocket
-                                        manager_addr.do_send(ServerMessage(results_json.to_string()));
-                                        // Send result to Player
-                                        let mut options: Vec<OptionResult> = Vec::new();
-                                        for option in _question.options {
-                                            options.push(
-                                                OptionResult {
-                                                    option_id: option.option_id,
-                                                    answer: option.is_correct,
-                                                }
-                                            );
-                                        }
+                                    // Send to manager WebSocket
+                                    manager_addr.do_send(ServerMessage(results_json.to_string()));
+                                    
+                                    // Send result to Player
+                                    let options: Vec<OptionResult> = _question.options.iter()
+                                        .map(|opt| OptionResult {
+                                            option_id: opt.option_id,
+                                            answer: opt.is_correct,
+                                        })
+                                        .collect();
 
-                                        let result = QuestionResult {
-                                            r#type: 3,
-                                            question_id: question.question_id,
-                                            options_result: options,
-                                        };
+                                    let result = QuestionResult {
+                                        r#type: 3,
+                                        question_id: question.question_id,
+                                        options_result: options,
+                                    };
 
-                                        let result_json = serde_json::to_string(&result).unwrap();
+                                    if let Ok(result_json) = serde_json::to_string(&result) {
                                         room_clone.do_send(BroadcastToPlayers(result_json));
-                                        // Send leaderboard to manager
-                                        send_leaderbaord(&mut con, session_id.clone(), slide.clone(), manager_addr.clone(), room_clone.clone()).await;
-                                        post_options_result(&session_id, slide.slide_id, options_result).await.ok().expect("ERROR in backend: post results");
+                                    }
+                                    
+                                    // Send leaderboard to manager
+                                    send_leaderbaord(&mut con, session_id.clone(), slide.clone(), manager_addr.clone(), room_clone.clone()).await;
+                                    if let Err(e) = post_options_result(&session_id, slide.slide_id, options_result).await {
+                                        eprintln!("ERROR in backend: post results: {}", e);
                                     }
                                 }
                             });
@@ -393,11 +406,11 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                         }
 
                         "end" => {
-                            let redis_client = self.redis_client.clone();
+                            let mut con = self.redis_pool.clone();
                             let session_id = self.session_id.clone();
                             actix_rt::spawn(async move {
-                                cleanup_quiz_redis(&redis_client, &session_id).await;
-                                save_slide_index(redis_client, session_id, -1);
+                                cleanup_quiz_redis(&mut con, &session_id).await;
+                                save_slide_index(&mut con, &session_id, -1).await;
                             });
                         }
 

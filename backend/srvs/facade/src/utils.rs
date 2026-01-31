@@ -2,106 +2,91 @@ use crate::models::{
     QuizSetup,
     LeaderboardEntry,
     LeaderboardUpdate,
-    Room,
+    RedisPool,
 };
-use redis::{AsyncCommands, aio::MultiplexedConnection};
+use redis::AsyncCommands;
 use reqwest::Client;
 use serde_json::json;
-use actix_rt;
-use std::env;
-use reqwest::header::{HeaderMap, HeaderValue};
+
+const API_TOKEN: &str = "Salam-Amin-Bidad1";
 
 pub async fn save_quiz_setup(
     session_id: &str,
     setup: &QuizSetup,
-    redis: &redis::Client,
+    con: &mut RedisPool,
 ) -> redis::RedisResult<()> {
     let quiz_key = format!("quiz:{session_id}");
     let json = serde_json::to_string(setup).unwrap();
-
-    let mut con = redis.get_multiplexed_async_connection().await?;
     con.set(quiz_key, json).await
 }
 
 pub async fn load_quiz_setup(
     session_id: &str,
-    redis: &redis::Client,
+    con: &mut RedisPool,
 ) -> Option<QuizSetup> {
     let key = format!("quiz:{session_id}");
-    let mut con = redis.get_multiplexed_async_connection().await.ok()?;
     let data: Option<String> = con.get(key).await.ok()?;
     data.and_then(|json| serde_json::from_str(&json).ok())
 }
 
-
-pub fn save_slide_index(
-    redis: redis::Client,
-    session_id: String,
+pub async fn save_slide_index(
+    con: &mut RedisPool,
+    session_id: &str,
     index: i32,
 ) {
-    actix_rt::spawn(async move {
-        let mut con = match redis.get_multiplexed_async_connection().await {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-
-        let key = format!("quiz:{}:slide_index", session_id);
-        let _ : () = con.set(key, index).await.unwrap_or(());
-    });
+    let key = format!("quiz:{}:slide_index", session_id);
+    let _: Result<(), _> = con.set(key, index).await;
 }
 
 pub async fn get_slide_index(
-    redis: &redis::Client,
+    con: &mut RedisPool,
     session_id: &str
 ) -> i32 {
-    let mut con = redis.get_multiplexed_async_connection().await.unwrap();
     let key = format!("quiz:{}:slide_index", session_id);
-
     con.get::<_, i32>(key).await.unwrap_or(-1)
 }
 
 pub async fn get_quiz_setup(session_id: &str) -> Result<QuizSetup, Box<dyn std::error::Error>> {
-    let url = build_api_url(&format!("/quizzes/{}/export/", session_id));
-    let client = build_api_client();
+    let url = format!("http://87.107.165.177:8000/api/quizzes/{}/export/", session_id);
+
+    let client = Client::new();
 
     let response = client
         .get(&url)
+        .header("X-Export-Token", API_TOKEN)        
         .send()
         .await?
-        .error_for_status()?; // fail on 4xx/5xx automatically
+        .error_for_status()?;
 
     let quiz_setup: QuizSetup = response.json().await?;
 
     Ok(quiz_setup)
 }
+
 pub async fn post_question_leaderboard(
     session_id: &str,
     slide_pk: u64,
     leaderboard: Vec<LeaderboardEntry>,
 ) -> anyhow::Result<()> {
-
-    let url = build_api_url(&format!(
-        "/quizzes/{}/slides/{}/question/leaderboard/",
+    let url = format!(
+        "http://87.107.165.177:8000/api/quizzes/{}/slides/{}/question/leaderboard/",
         session_id, slide_pk
-    ));
+    );
 
     let payload = LeaderboardUpdate { leaderboard };
-
-    let client = build_api_client();
+    let client = reqwest::Client::new();
 
     let response = client
         .post(&url)
+        .header("X-Export-Token", API_TOKEN)        
         .json(&payload)
         .send()
         .await?;
+    
     let status = response.status();
-    if !response.status().is_success() {
+    if !status.is_success() {
         let text = response.text().await?;
-        anyhow::bail!(
-            "Failed to send leaderboard (HTTP {}): {}",
-            status,
-            text
-        );
+        anyhow::bail!("Failed to send leaderboard (HTTP {}): {}", status, text);
     }
 
     Ok(())
@@ -112,126 +97,86 @@ pub async fn post_options_result(
     slide_id: u64,
     options_result: Vec<serde_json::Value>,
 ) -> anyhow::Result<()> {
-    let url = build_api_url(&format!(
-        "/quizzes/{}/slides/{}/question/results/",
+    let url = format!(
+        "http://87.107.165.177:8000/api/quizzes/{}/slides/{}/question/results/",
         session_id, slide_id
-    ));
+    );
 
-    let client = build_api_client();
-
-    let data = json!({
-        "options": options_result,
-    });
+    let client = reqwest::Client::new();
+    let data = json!({ "options": options_result });
 
     let response = client
         .post(&url)
+        .header("X-Export-Token", API_TOKEN)
         .json(&data)
         .send()
         .await?;
+    
     let status = response.status();
-    if !response.status().is_success() {
+    if !status.is_success() {
         let text = response.text().await?;
-        anyhow::bail!(
-            "Failed to send options result (HTTP {}): {}",
-            status,
-            text
-        );
+        anyhow::bail!("Failed to send options result (HTTP {}): {}", status, text);
     }
 
     Ok(())
 }
 
-fn build_api_client() -> Client {
-    let mut headers = HeaderMap::new();
-    if let Ok(token) = env::var("EXPORT_SERVICE_TOKEN") {
-        let trimmed = token.trim();
-        if !trimmed.is_empty() {
-            if let Ok(value) = HeaderValue::from_str(trimmed) {
-                headers.insert("X-Export-Token", value);
-            }
+pub async fn cleanup_quiz_redis(
+    con: &mut RedisPool,
+    session_id: &str,
+) {
+    // Collect all keys to delete in batches
+    let patterns = [
+        format!("player:{session_id}:*"),
+        format!("question:{}:*:option:*:count", session_id),
+        format!("question:{}:*:submits", session_id),
+        format!("question:{}:*:start", session_id),
+        format!("question:{}:*:meta", session_id),
+    ];
+
+    let mut all_keys: Vec<String> = Vec::new();
+    
+    for pattern in &patterns {
+        if let Ok(keys) = con.keys::<_, Vec<String>>(pattern).await {
+            all_keys.extend(keys);
         }
     }
 
-    Client::builder()
-        .default_headers(headers)
-        .build()
-        .expect("Failed to build HTTP client")
-}
+    // Add static keys
+    all_keys.push(format!("players:{}", session_id));
+    all_keys.push(format!("leaderboard:{session_id}"));
+    all_keys.push(format!("new_points:{session_id}"));
 
-fn build_api_url(path: &str) -> String {
-    let base = env::var("DJANGO_API_BASE_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:8000/api".to_string());
-    let base = base.trim_end_matches('/');
-    let path = path.trim_start_matches('/');
-    format!("{}/{}", base, path)
-}
-
-pub async fn cleanup_quiz_redis(
-    redis: &redis::Client,
-    session_id: &str,
-) {
-    if let Ok(mut con) = redis.get_multiplexed_async_connection().await {
-
-        // 1️⃣ Remove user quiz locks
-        let pattern = format!("player:{session_id}:*");
-        let keys: Vec<String> = con.keys(&pattern).await.unwrap();
-        // let mut players = Vec::new();
-
-        for pkey in keys {
-            let _: () = con.del(pkey.clone()).await.unwrap_or(());
+    // Delete all keys in a single pipeline
+    if !all_keys.is_empty() {
+        let mut pipe = redis::pipe();
+        pipe.atomic();
+        for key in &all_keys {
+            pipe.del(key);
         }
-
-        // 2️⃣ Remove players list
-        let key = format!("players:{}", session_id);
-        let _: () = con.del(key).await.unwrap_or(());
-
-        let leaderboard_key = format!("leaderboard:{session_id}");
-        let _: () = con.del(leaderboard_key).await.unwrap_or(());
-        
-        // 4️⃣ Remove question submits
-        let count_keys = format!("question:{}:*:option:*:count", session_id);
-        let submit_keys= format!("question:{}:*:submits", session_id);
-        let start_keys= format!("question:{}:*:start", session_id);
-        let meta_keys= format!("question:{}:*:meta", session_id);
-        let keys: Vec<String> = con.keys(&count_keys).await.unwrap();
-        for key in keys {
-            let _ = con.del(key).await.unwrap_or(());
-        }
-        let keys: Vec<String> = con.keys(&submit_keys).await.unwrap();
-        for key in keys {
-            let _ = con.del(key).await.unwrap_or(());
-        }
-        let keys: Vec<String> = con.keys(&start_keys).await.unwrap();
-        for key in keys {
-            let _ = con.del(key).await.unwrap_or(());
-        }
-        let keys: Vec<String> = con.keys(&meta_keys).await.unwrap();
-        for key in keys {
-            let _ = con.del(key).await.unwrap_or(());
-        }
-        /*
-        // 5️⃣ Remove slide index & setup cache
-        let _: () = con.del(format!("quiz:{}:slide_index", session_id)).await.unwrap_or(());
-        let _: () = con.del(format!("quiz:{}:setup", session_id)).await.unwrap_or(());
-        */
+        let _: Result<(), _> = pipe.query_async(con).await;
     }
 }
 
 pub async fn add_scores_batch(
-    con: &mut MultiplexedConnection,
+    con: &mut RedisPool,
     session_id: &str,
     updates: Vec<LeaderboardEntry>,
 ) {
-    let key = &format!("leaderboard:{session_id}");
+    if updates.is_empty() {
+        return;
+    }
+
+    let key = format!("leaderboard:{session_id}");
     let new_points_key = format!("new_points:{session_id}");
 
     let mut pipe = redis::pipe();
     pipe.atomic();
 
     for update in updates {
-        pipe.zincr(key, update.rust_session_id.clone(), update.score);
-        pipe.hset(new_points_key.clone(), update.rust_session_id, update.score);
+        pipe.zincr(&key, &update.rust_session_id, update.score);
+        pipe.hset(&new_points_key, &update.rust_session_id, update.score);
     }
 
-    let _: () = pipe.query_async(con).await.expect("Erorr");
+    let _: Result<(), _> = pipe.query_async(con).await;
 }
