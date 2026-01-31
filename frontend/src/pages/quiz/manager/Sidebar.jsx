@@ -1,4 +1,4 @@
-﻿import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   GripVertical,
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { quizService } from "../../../services/quizService"; 
+import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 
 
 export default function Sidebar({
@@ -24,13 +25,21 @@ export default function Sidebar({
   onDirtyChange,
   onNotify
 }) {
-  // Stateهای مدیریت تغییرات
+  // State??? ?????? ???????
   const [localSlide, setLocalSlide] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [originalSlide, setOriginalSlide] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [originalOptions, setOriginalOptions] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: null,
+    confirmText: "",
+    cancelText: "",
+  });
   const [modalState, setModalState] = useState({
     isOpen: false,
     type: "",
@@ -50,16 +59,16 @@ export default function Sidebar({
     [onNotify]
   );
 
-  // تنظیم مقادیر اولیه هنگام بارگذاری
+  // ????? ?????? ????? ????? ????????
   useEffect(() => {
     if (slide) {
-      // ساخت داده محلی از slide
+      // ???? ???? ???? ?? slide
       const slideData = {
         ...slide,
         
         question: slide.question ? {
           ...slide.question,
-          // نگاشت فیلدها به نام‌های مورد استفاده در کامپوننت
+          // ????? ?????? ?? ??????? ???? ??????? ?? ????????
           question_text: slide.question.text || "",
           question_image: slide.question.image_url || "",
           question_type: slide.question.question_type || "single",
@@ -87,7 +96,7 @@ export default function Sidebar({
       const sourceIndex = result.source.index;
       const destinationIndex = result.destination.index;
       
-      // اگر جایگاه تغییر نکرده باشد، کاری نکن
+      // ??? ?????? ????? ????? ????? ???? ???
       if (sourceIndex === destinationIndex) return;
       
       const options = localSlide.question.options || [];
@@ -95,7 +104,7 @@ export default function Sidebar({
       const [movedOption] = newOptions.splice(sourceIndex, 1);
       newOptions.splice(destinationIndex, 0, movedOption);
       
-      // آپدیت استیت لوکال
+      // ????? ????? ?????
       setLocalSlide({ 
         ...localSlide,
         question: {
@@ -104,11 +113,11 @@ export default function Sidebar({
         }
       });
       
-      // محاسبه order جدید (ایندکس + 1)
+      // ?????? order ???? (?????? + 1)
       const newOrder = destinationIndex + 1;
       
       try {
-        // ارسال به بک‌اند
+        // ????? ?? ??????
         await quizService.updateOption(
           quizId,
           localSlide.slide_id,
@@ -119,13 +128,13 @@ export default function Sidebar({
           }
         );
         
-        // در صورت نیاز می‌توانید داده‌ها را رفرش کنید
+        // ?? ???? ???? ????????? ??????? ?? ???? ????
         // refreshSlideData();
         
       } catch (error) {
         console.error('Failed to update option order:', error);
         
-        // برگرداندن به حالت قبلی در صورت خطا
+        // ????????? ?? ???? ???? ?? ???? ???
         const revertedOptions = Array.from(options);
         revertedOptions.splice(destinationIndex, 1);
         revertedOptions.splice(sourceIndex, 0, movedOption);
@@ -144,12 +153,12 @@ export default function Sidebar({
     [localSlide, quizId, notify]
   );
 
-  // تشخیص تغییرات
+  // ????? ???????
   useEffect(() => {
     if (!localSlide || !originalSlide) return;
 
     const hasChanged = () => {
-      // مقایسه فیلدهای اصلی slide
+      // ?????? ??????? ???? slide
       const slideFields = ['show_leaderboard_after'];
       
       for (const field of slideFields) {
@@ -158,7 +167,7 @@ export default function Sidebar({
         }
       }
 
-      // مقایسه فیلدهای question
+      // ?????? ??????? question
       if (localSlide.question && originalSlide.question) {
         const questionFields = [
           'question_text',
@@ -177,7 +186,7 @@ export default function Sidebar({
           }
         }
 
-        // مقایسه options
+        // ?????? options
         const currentOptions = localSlide.question.options || [];
         const originalOpts = originalOptions;
 
@@ -211,7 +220,7 @@ export default function Sidebar({
   }, [hasChanges, onDirtyChange]);
 
 
-  // Effect برای اطمینان از حداقل یک گزینه صحیح در سوالات multiple
+  // Effect ???? ??????? ?? ????? ?? ????? ???? ?? ?????? multiple
   useEffect(() => {
     if (!localSlide || !localSlide.question) return;
     
@@ -276,12 +285,12 @@ export default function Sidebar({
     }
   }, [slide, localSlide, question, isSaving]);
 
-  // اگر slide وجود ندارد، کامپوننت را رندر نکن
+  // ??? slide ???? ?????? ???????? ?? ???? ???
   if (!slide || !localSlide) {
     return <div className="h-full overflow-y-auto p-4">No Slide Selected</div>;
   }
 
-  // تغییر متن سوال
+  // ????? ??? ????
   const handleQuestionChange = (value) => {
     setLocalSlide({
       ...safeSlide,
@@ -292,7 +301,7 @@ export default function Sidebar({
     });
   };
 
-  // اضافه کردن گزینه جدید
+  // ????? ???? ????? ????
   const handleAddOption = async () => {
     const newId = options.length > 0
       ? Math.max(...options.map(o => o.option_id || 0)) + 1
@@ -315,14 +324,14 @@ export default function Sidebar({
     });
   };
 
-  // حذف گزینه
+  // ??? ?????
   const handleDeleteOption = async (id) => {
     if (!quizId || !slide.slide_id) return;
 
     const remainingOptions = options.filter((opt) => opt.option_id !== id);
     const hasCorrectAnswer = remainingOptions.some(opt => opt.is_correct);
     
-    // اگر هیچ گزینه صحیحی باقی نمانده و سوال multiple است، اولین گزینه را صحیح می‌کنیم
+    // ??? ??? ????? ????? ???? ?????? ? ???? multiple ???? ????? ????? ?? ???? ???????
     let updatedOptions = remainingOptions;
     if (!hasCorrectAnswer && questionType === "multiple" && remainingOptions.length > 0) {
       updatedOptions = remainingOptions.map((opt, index) => 
@@ -339,7 +348,7 @@ export default function Sidebar({
     });
   };
 
-  // تغییر مقدار گزینه
+  // ????? ????? ?????
   const handleOptionChange = (id, field, value) => {
     setLocalSlide({
       ...safeSlide,
@@ -352,10 +361,10 @@ export default function Sidebar({
     });
   };
 
-  // انتخاب گزینه درست
+  // ?????? ????? ????
   const handleSelectCorrect = (id) => {
     if (questionType === "single") {
-      // برای Single Choice: فقط یک گزینه می‌تواند درست باشد
+      // ???? Single Choice: ??? ?? ????? ???????? ???? ????
       setLocalSlide({
         ...safeSlide,
         question: {
@@ -367,12 +376,12 @@ export default function Sidebar({
         }
       });
     } else if (questionType === "multiple") {
-      // برای Multiple Choice: می‌توان چند گزینه را انتخاب کرد
+      // ???? Multiple Choice: ??????? ??? ????? ?? ?????? ???
       const clickedOption = options.find(opt => opt.option_id === id);
       const isCurrentlyCorrect = clickedOption?.is_correct;
       const correctOptionsCount = options.filter(opt => opt.is_correct).length;
       
-      // اگر کاربر می‌خواهد آخرین گزینه صحیح را غیرفعال کند، اجازه نمی‌دهیم
+      // ??? ????? ???????? ????? ????? ???? ?? ??????? ???? ????? ????????
       if (isCurrentlyCorrect && correctOptionsCount === 1) {
         return;
       }
@@ -389,7 +398,7 @@ export default function Sidebar({
     }
   };
 
-  // تابع برای handle لینک تصویر
+  // ???? ???? handle ???? ?????
   const handleImageLink = (link, type, id = null) => {
     if (type === "question") {
       setLocalSlide({
@@ -404,7 +413,7 @@ export default function Sidebar({
     }
   };
 
-  // باز کردن Modal
+  // ??? ???? Modal
   const openImageLinkModal = (type, id = null) => {
     setModalState({
       isOpen: true,
@@ -413,7 +422,7 @@ export default function Sidebar({
     });
   };
 
-  // بستن Modal
+  // ???? Modal
   const closeImageLinkModal = () => {
     setModalState({
       isOpen: false,
@@ -422,7 +431,7 @@ export default function Sidebar({
     });
   };
 
-  // حذف تصویر
+  // ??? ?????
   const handleRemoveImage = (type, id = null) => {
     if (type === "question") {
       setLocalSlide({
@@ -438,7 +447,7 @@ export default function Sidebar({
   };
 
 
-  // مدیریت تغییرات فیلدها
+  // ?????? ??????? ??????
   const handleFieldChange = (field, value) => {
     setLocalSlide({
       ...safeSlide,
@@ -451,8 +460,8 @@ export default function Sidebar({
 
   const normalizeDigits = (value) => (
     value
-      .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
-      .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+      .replace(/[?-?]/g, (digit) => String("??????????".indexOf(digit)))
+      .replace(/[?-?]/g, (digit) => String("??????????".indexOf(digit)))
   );
 
   const parseIntegerInput = (value) => {
@@ -471,7 +480,7 @@ export default function Sidebar({
     return Math.max(minValue, value);
   };
 
-  // مدیریت تغییرات slide fields
+  // ?????? ??????? slide fields
   const handleSlideFieldChange = (field, value) => {
     setLocalSlide({
       ...safeSlide,
@@ -480,16 +489,16 @@ export default function Sidebar({
   };
 
 
-  // ذخیره تغییرات به بک‌اند
+  // ????? ??????? ?? ??????
   const handleSubmit = async () => {
     if (!hasChanges || !slide || !quizId || isSaving) return;
 
     setIsSaving(true);
     try {
-      // 1. به‌روزرسانی سوال
+      // 1. ??????????? ????
       if (safeSlide.question) {
         const questionData = {
-          title: "", // همیشه خالی
+          title: "", // ????? ????
           text: safeSlide.question.question_text || "",
           question_type: safeSlide.question.question_type,
           min_point: safeSlide.question.min_point || 0,
@@ -502,14 +511,14 @@ export default function Sidebar({
 
         let updatedQuestion;
         if (originalSlide.question) {
-          // سوال از قبل وجود دارد - update
+          // ???? ?? ??? ???? ???? - update
           updatedQuestion = await quizService.updateQuestion(
             quizId,
             slide.slide_id,
             questionData
           );
         } else {
-          // سوال جدید - create
+          // ???? ???? - create
           updatedQuestion = await quizService.createQuestion(
             quizId,
             slide.slide_id,
@@ -517,10 +526,10 @@ export default function Sidebar({
           );
         }
 
-        // 2. به‌روزرسانی گزینه‌ها
+        // 2. ??????????? ????????
         const currentOptions = safeSlide.question.options || [];
         
-        // حذف گزینه‌هایی که در original بودند اما در current نیستند
+        // ??? ?????????? ?? ?? original ????? ??? ?? current ??????
         for (const originalOption of originalOptions) {
           if (!currentOptions.find(opt => opt.option_id === originalOption.option_id)) {
             await quizService.deleteOption(
@@ -531,7 +540,7 @@ export default function Sidebar({
           }
         }
 
-        // ایجاد یا به‌روزرسانی گزینه‌ها
+        // ????? ?? ??????????? ????????
         for (const option of currentOptions) {
           const optionData = {
             text: option.text,
@@ -539,7 +548,7 @@ export default function Sidebar({
             image_url: option.image_url || ""
           };
 
-          // اگر گزینه در original وجود داشت، update کن
+          // ??? ????? ?? original ???? ????? update ??
           const originalOption = originalOptions.find(opt => opt.option_id === option.option_id);
           if (originalOption) {
             await quizService.updateOption(
@@ -549,7 +558,7 @@ export default function Sidebar({
               optionData
             );
           } else {
-            // گزینه جدید
+            // ????? ????
             await quizService.createOption(
               quizId,
               slide.slide_id,
@@ -558,13 +567,13 @@ export default function Sidebar({
           }
         }
 
-        // 3. به‌روزرسانی show_leaderboard_after در اسلاید
+        // 3. ??????????? show_leaderboard_after ?? ??????
         await quizService.updateSlide(quizId, slide.slide_id, {
           show_leaderboard_after: safeSlide.show_leaderboard_after || false,
           slide_type: 1
         });
 
-        // به‌روزرسانی state اصلی
+        // ??????????? state ????
         const updatedSlide = {
           ...slide,
           show_leaderboard_after: safeSlide.show_leaderboard_after,
@@ -577,7 +586,7 @@ export default function Sidebar({
         setOriginalSlide(safeSlide);
         setOriginalOptions([...currentOptions]);
 
-        // اطلاع به parent component
+        // ????? ?? parent component
         if (onSlideUpdated) {
           onSlideUpdated(updatedSlide);
         }
@@ -590,7 +599,7 @@ export default function Sidebar({
         console.log("Changes saved successfully");
       }
 
-      // بستن پنل
+      // ???? ???
       setLastSavedAt(new Date());
       setHasChanges(false);
       if (onDirtyChange) {
@@ -605,16 +614,26 @@ export default function Sidebar({
     }
   };
 
-  // لغو تغییرات
+  // ??? ???????
   const handleCancel = () => {
     if (hasChanges) {
-      const confirmCancel = window.confirm(
-        "You have unsaved changes. Are you sure you want to cancel?"
-      );
-      if (!confirmCancel) return;
+      setConfirmDialog({
+        isOpen: true,
+        title: "Unsaved Changes",
+        description: "You have unsaved changes. Are you sure you want to cancel?",
+        onConfirm: () => {
+          resetToOriginal();
+        },
+        confirmText: "Discard Changes",
+        cancelText: "Keep Editing",
+      });
+      return;
     }
     
-    // برگرداندن به حالت اولیه
+    resetToOriginal();
+  };
+
+  const resetToOriginal = () => {
     setLocalSlide(originalSlide);
     setHasChanges(false);
     if (onDirtyChange) {
@@ -623,8 +642,30 @@ export default function Sidebar({
     onClose(true);
   };
 
+  const handleConfirm = () => {
+    if (confirmDialog.onConfirm) {
+      confirmDialog.onConfirm();
+    }
+    closeConfirmDialog();
+  };
 
-  // Modal برای ورود لینک تصویر
+  const closeConfirmDialog = () => {
+    setConfirmDialog({
+      isOpen: false,
+      title: "",
+      description: "",
+      onConfirm: null,
+      confirmText: "",
+      cancelText: "",
+    });
+  };
+
+  const handleCancelForModal = () => {
+    closeConfirmDialog();
+  };
+
+
+  // Modal ???? ???? ???? ?????
   const ImageLinkModal = ({ isOpen, onClose, onConfirm, type, id = null }) => {
     const [link, setLink] = useState("");
     const [preview, setPreview] = useState(null);
@@ -633,7 +674,7 @@ export default function Sidebar({
 
     const handlePreview = async () => {
       if (!link.trim()) {
-        setError("لطفا لینک را وارد کنید");
+        setError("???? ???? ?? ???? ????");
         return;
       }
 
@@ -652,7 +693,7 @@ export default function Sidebar({
           setLoading(false);
         };
         img.onerror = () => {
-          setError("لینک تصویر نامعتبر است یا قابل بارگیری نیست");
+          setError("???? ????? ??????? ??? ?? ???? ??????? ????");
           setPreview(null);
           setLoading(false);
         };
@@ -660,12 +701,12 @@ export default function Sidebar({
 
         setTimeout(() => {
           if (!img.complete) {
-            setError("بارگیری تصویر زمان‌بر شد. لطفا لینک دیگری را امتحان کنید");
+            setError("??????? ????? ??????? ??. ???? ???? ????? ?? ?????? ????");
             setLoading(false);
           }
         }, 5000);
       } catch {
-        setError("خطا در بررسی لینک");
+        setError("??? ?? ????? ????");
         setLoading(false);
       }
     };
@@ -733,7 +774,7 @@ export default function Sidebar({
                     src={preview}
                     alt="Preview"
                     className="w-full h-48 object-contain rounded-lg bg-gray-50"
-                    onError={() => setError("خطا در نمایش تصویر")}
+                    onError={() => setError("??? ?? ????? ?????")}
                   />
                 </div>
               </div>
@@ -761,9 +802,10 @@ export default function Sidebar({
   };
 
   return (
-    <div className="h-full overflow-y-auto">
+    <>
+      <div className="h-full overflow-y-auto">
       <div className="p-4 pb-6">
-      {/* هدر */}
+      {/* ??? */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div>
@@ -826,7 +868,7 @@ export default function Sidebar({
                 <button
                   onClick={() => openImageLinkModal("question")}
                   className="p-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors border border-gray-200 flex items-center justify-center"
-                  title="افزودن لینک تصویر"
+                  title="?????? ???? ?????"
                   disabled={isSaving}
                 >
                   <ImageIcon className="w-4 h-4 text-gray-600" />
@@ -965,7 +1007,7 @@ export default function Sidebar({
                             <button
                               onClick={() => openImageLinkModal("option", opt.option_id)}
                               className="p-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors border border-gray-200"
-                              title="افزودن لینک تصویر"
+                              title="?????? ???? ?????"
                               disabled={isSaving}
                             >
                               <ImageIcon className="w-4 h-4 text-gray-600" />
@@ -1025,7 +1067,7 @@ export default function Sidebar({
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9۰-۹٠-٩]*"
+                pattern="[0-9?-??-?]*"
                 min="1"
                 value={question.question_time ?? 10}
                 onChange={(e) =>
@@ -1054,7 +1096,7 @@ export default function Sidebar({
                 <input
                   type="text"
                   inputMode="numeric"
-                  pattern="[0-9۰-۹٠-٩]*"
+                  pattern="[0-9?-??-?]*"
                   min="0"
                   value={question.max_point ?? 0}
                   onChange={(e) =>
@@ -1073,7 +1115,7 @@ export default function Sidebar({
                 <input
                   type="text"
                   inputMode="numeric"
-                  pattern="[0-9۰-۹٠-٩]*"
+                  pattern="[0-9?-??-?]*"
                   min="0"
                   value={question.min_point ?? 0}
                   onChange={(e) =>
@@ -1274,6 +1316,19 @@ export default function Sidebar({
         </div>
       )}
 
-    </div>
+      </div>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={handleCancelForModal}
+        onConfirm={handleConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        confirmVariant="destructive"
+        isLoading={false}
+      />
+    </>
   );
 }

@@ -4,9 +4,8 @@ import {
   Route,
   useParams,
   useNavigate,
-  useLocation,
 } from "react-router-dom";
-import { lazy, Suspense, useState, useEffect, useRef, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import SiteHeader from "./components/SiteHeader";
 import LandingPage from "./pages/landing/LandingPage";
 import { apiFetch } from "./utils/apiFetch";
@@ -19,11 +18,6 @@ import notFoundIllustration from "./assets/404.svg";
 import accessDeniedIllustration from "./assets/access_denied.png";
 import SiteFooter from "./components/SiteFooter";
 import { QuizSetup } from "./data/mockData";
-import {
-  APP_NOTICE_EVENT,
-  AUTH_EXPIRED_EVENT,
-  AUTH_EXPIRED_STORAGE_KEY,
-} from "./utils/auth";
 
 import ManagerJoinPage from "./pages/presentation/manager/JoinPage";
 import ManagerPickAnswerQuestion from "./pages/presentation/manager/PickAnswerQuestion";
@@ -49,8 +43,6 @@ function RouteFallback() {
 export default function App() {
   return (
     <Router>
-      <GlobalNoticeHost />
-      <AuthSessionListener />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
@@ -86,6 +78,7 @@ export default function App() {
     const { accessCode } = useParams();
     const [status, setStatus] = useState("loading"); // loading | error | success
     const [resolvedQuizId, setResolvedQuizId] = useState(null);
+    const [resolvedMeta, setResolvedMeta] = useState(null);
 
     useEffect(() => {
       let mounted = true;
@@ -104,6 +97,17 @@ export default function App() {
           if (data.quiz_id) {
             // Access code valid - store quiz_id and show player presentation
             setResolvedQuizId(data.quiz_id);
+            setResolvedMeta({
+              quiz_id: data.quiz_id,
+              title: data.title || "",
+              access_code: accessCode,
+              background: {
+                color: data.background_color || "#1e1e2e",
+                image: data.background_image_url || "",
+              },
+              music_url: data.music_url || "",
+              slides: [],
+            });
             setStatus("success");
           } else {
             // Invalid access code
@@ -137,7 +141,11 @@ export default function App() {
         <AudioProvider>
           <ServerDataProvider>
             <WebSocketProvider role="player">
-              <AppPresentation roomId={String(resolvedQuizId)} role="player" />
+              <AppPresentation
+                roomId={String(resolvedQuizId)}
+                role="player"
+                initialQuiz={resolvedMeta}
+              />
               <WSMessageHandler />
             </WebSocketProvider>
           </ServerDataProvider>
@@ -335,16 +343,22 @@ export default function App() {
   }
 
   /* ------------------------ Main Flow ------------------------ */
-  function AppPresentation({ roomId, role }) {
+  function AppPresentation({ roomId, role, initialQuiz = null }) {
     const [data, setData] = useState({ type: "ManagerJoinPage" });
     const [currentSlide, setCurrentSlide] = useState(1);
 
     // Fetch full quiz once at top-level and transform to internal shape
-    const [remoteQuiz, setRemoteQuiz] = useState(null);
+    const [remoteQuiz, setRemoteQuiz] = useState(initialQuiz);
+    useEffect(() => {
+      if (initialQuiz && !remoteQuiz) {
+        setRemoteQuiz(initialQuiz);
+      }
+    }, [initialQuiz, remoteQuiz]);
     useEffect(() => {
       let mounted = true;
       const fetchQuiz = async () => {
         try {
+          if (role === "player") return;
           if (!roomId) return;
           const res = await apiFetch(`/quizzes/${roomId}/export/`);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -416,7 +430,7 @@ export default function App() {
       return () => {
         mounted = false;
       };
-    }, [roomId]);
+    }, [roomId, role]);
 
     const quiz = remoteQuiz ?? QuizSetup;
     const isRemoteReady = !!quiz; // Always ready (remote or fallback)
@@ -575,136 +589,6 @@ export default function App() {
       if (!lastMessage) return;
       processMessage(lastMessage);
     }, [lastMessage, processMessage]);
-
-    return null;
-  }
-
-  function GlobalNoticeHost() {
-    const [notice, setNotice] = useState(null);
-    const timeoutRef = useRef(null);
-
-    useEffect(() => {
-      if (typeof window === "undefined") return undefined;
-      const handler = (event) => {
-        const { code, tone = "info" } = event?.detail || {};
-        if (!code) return;
-        const message = getNoticeMessage(code);
-        if (!message) return;
-        setNotice({ message, tone });
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-        }
-        timeoutRef.current = setTimeout(() => {
-          setNotice(null);
-        }, 2600);
-      };
-      window.addEventListener(APP_NOTICE_EVENT, handler);
-      return () => {
-        window.removeEventListener(APP_NOTICE_EVENT, handler);
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-        }
-      };
-    }, []);
-
-    if (!notice) return null;
-    const toneStyles = {
-      error: "bg-red-50 text-red-700 border-red-200",
-      warning: "bg-amber-50 text-amber-800 border-amber-200",
-      success: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      info: "bg-blue-50 text-blue-700 border-blue-200",
-    };
-    const classes = toneStyles[notice.tone] || toneStyles.info;
-
-    return (
-      <div className="fixed top-4 left-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2">
-        <div
-          className={`rounded-2xl border px-4 py-3 text-sm font-semibold shadow-[0_16px_32px_rgba(15,23,42,0.12)] ${classes}`}
-          role={notice.tone === "error" ? "alert" : "status"}
-          aria-live={notice.tone === "error" ? "assertive" : "polite"}
-        >
-          {notice.message}
-        </div>
-      </div>
-    );
-  }
-
-  function getNoticeMessage(code) {
-    switch (code) {
-      case "session-expired":
-        return "نشست شما منقضی شده است. لطفا دوباره وارد شوید.";
-      case "session-revoked":
-        return "دسترسی شما لغو شده است. لطفا دوباره وارد شوید.";
-      case "auth-required":
-        return "برای ادامه لازم است وارد حساب خود شوید.";
-      case "access-denied":
-        return "شما دسترسی کافی برای این عملیات را ندارید.";
-      case "rate-limit":
-        return "تعداد درخواست‌ها زیاد است. لطفا کمی بعد دوباره تلاش کنید.";
-      default:
-        return "";
-    }
-  }
-
-  function AuthSessionListener() {
-    const navigate = useNavigate();
-    const location = useLocation();
-    const redirectRef = useRef(false);
-
-    const handleRedirect = useCallback(
-      (reason) => {
-        const pathname = location.pathname;
-        const isAuthRoute =
-          pathname.startsWith("/auth") ||
-          pathname === "/login" ||
-          pathname === "/signup" ||
-          pathname === "/reset-password";
-        if (isAuthRoute) return;
-        if (redirectRef.current) return;
-        redirectRef.current = true;
-        const params = new URLSearchParams();
-        params.set("reason", reason || "session-expired");
-        const next = `${pathname}${location.search || ""}`;
-        if (
-          next &&
-          !next.startsWith("/auth") &&
-          !next.startsWith("/login") &&
-          !next.startsWith("/signup") &&
-          !next.startsWith("/reset-password")
-        ) {
-          params.set("next", next);
-        }
-        navigate(`/auth?${params.toString()}`, { replace: true });
-      },
-      [location.pathname, location.search, navigate]
-    );
-
-    useEffect(() => {
-      redirectRef.current = false;
-    }, [location.pathname]);
-
-    useEffect(() => {
-      if (typeof window === "undefined") return undefined;
-      const handler = (event) => {
-        const reason = event?.detail?.reason || "session-expired";
-        handleRedirect(reason);
-      };
-      const storageHandler = (event) => {
-        if (event.key !== AUTH_EXPIRED_STORAGE_KEY || !event.newValue) return;
-        try {
-          const payload = JSON.parse(event.newValue);
-          handleRedirect(payload?.reason || "session-expired");
-        } catch {
-          handleRedirect("session-expired");
-        }
-      };
-      window.addEventListener(AUTH_EXPIRED_EVENT, handler);
-      window.addEventListener("storage", storageHandler);
-      return () => {
-        window.removeEventListener(AUTH_EXPIRED_EVENT, handler);
-        window.removeEventListener("storage", storageHandler);
-      };
-    }, [handleRedirect]);
 
     return null;
   }

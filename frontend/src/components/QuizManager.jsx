@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/confirm-dialog";
+import { ErrorModal } from "../pages/quiz/manager/ErrorModal";
+import { quizService } from "../services/quizService";
 import {
   Search,
   MoreVertical,
@@ -44,6 +46,12 @@ export default function QuizManager({ onNewPresentation }) {
   const [passwordPromptVisible, setPasswordPromptVisible] = useState(false);
   const [passwordPromptStatus, setPasswordPromptStatus] = useState(null);
   const [passwordPromptLoading, setPasswordPromptLoading] = useState(false);
+  const [errorForModal, setErrorForModal] = useState(null);
+  const [errorModalOpen, setErrorModalOpen] = useState(false);
+
+  const closeErrorModal = () => {
+    setErrorModalOpen(false);
+  };
 
   // Load quizzes from API on mount
   const [quizzes, setQuizzes] = useState([]);
@@ -505,8 +513,39 @@ export default function QuizManager({ onNewPresentation }) {
   };
 
   // Handle present click
-  const handlePresent = (quizId) => {
-    navigate(`/manager/presentation/${quizId}/`);
+  const handlePresent = async (quizId) => {
+    try {
+      const quiz = await quizService.getQuiz(quizId);
+
+      if (!quiz.slides || quiz.slides.length === 0) {
+        setErrorForModal("Quiz has no slides.");
+        setErrorModalOpen(true);
+        return;
+      }
+
+      const allQuestionSlidesHaveQuestions = quiz.slides.every((slide) => {
+        if (slide.slide_type !== 1) {
+          return true;
+        }
+        return (
+          slide.question &&
+          typeof slide.question === "object" &&
+          slide.question !== null &&
+          Object.keys(slide.question).length > 0
+        );
+      });
+
+      if (!allQuestionSlidesHaveQuestions) {
+        setErrorForModal("All question slides must have one question.");
+        setErrorModalOpen(true);
+        return;
+      }
+
+      navigate(`/manager/presentation/${quizId}/`);
+    } catch (error) {
+      setErrorForModal("Failed to load quiz.");
+      setErrorModalOpen(true);
+    }
   };
   // Handle edit click
   const handleEdit = (quizId) => {
@@ -1561,6 +1600,12 @@ export default function QuizManager({ onNewPresentation }) {
         cancelText={confirmDialog.cancelText}
         confirmVariant={confirmDialog.confirmVariant}
         isLoading={confirmDialog.isLoading}
+      />
+
+      <ErrorModal
+        isOpen={errorModalOpen}
+        onClose={closeErrorModal}
+        message={errorForModal}
       />
     </div>
   );

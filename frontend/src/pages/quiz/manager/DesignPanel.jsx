@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { X, Trash2, Save, Link } from "lucide-react";
-import { quizService } from "../../../services/quizService"; 
+import { quizService } from "../../../services/quizService";
+import { ErrorModal } from "./ErrorModal";
+import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 
 
-export default function DesignPanel({ quiz, updateQuiz, onClose }) {
+export default function DesignPanel({
+  quiz,
+  updateQuiz,
+  onClose,
+  setBackgroundSaveNotice,
+  onDirtyChange,
+}) {
 
   const [activeTab, setActiveTab] = useState("color");
   const [localQuiz, setLocalQuiz] = useState({ ...quiz });
@@ -14,6 +22,16 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [errorForModal, setErrorForModal] = useState(null);
+  const [errorModalOpen, setErrorModalOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: null,
+    confirmText: "",
+    cancelText: "",
+  });
 
 
   // Setting the initial value when loading the component
@@ -36,6 +54,15 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
     setHasChanges(hasBgColorChanged || hasBgImageChanged);
   }, [localQuiz, originalQuiz]);
 
+  useEffect(() => {
+    if (onDirtyChange) {
+      onDirtyChange(hasChanges);
+    }
+  }, [hasChanges, onDirtyChange]);
+
+  const closeErrorModal = () => {
+    setErrorModalOpen(false);
+  };
 
   // Image link testing and preview
   const testImageLoad = () => {
@@ -200,10 +227,23 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
       
       setSaving(false);
       onClose();
+
+      if (setBackgroundSaveNotice) {
+        setBackgroundSaveNotice("Quiz background changed successfully.");
+        setTimeout(() => {
+          setBackgroundSaveNotice(null);
+        }, 2500);
+      }
+
+      setHasChanges(false);
+      if (onDirtyChange) {
+        onDirtyChange(false);
+      }
       
     } catch {
       setSaving(false);
-      alert("Failed to save changes. Please try again.");
+      setErrorForModal("Failed to save changes. Please try again.");
+      setErrorModalOpen(true);
     }
   };
 
@@ -211,12 +251,23 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
   // Cancel changes
   const handleCancel = () => {
     if (hasChanges) {
-      const confirmCancel = window.confirm(
-        "You have unsaved changes. Are you sure you want to cancel?"
-      );
-      if (!confirmCancel) return;
+      setConfirmDialog({
+        isOpen: true,
+        title: "Unsaved Changes",
+        description: "You have unsaved changes. Are you sure you want to cancel?",
+        onConfirm: () => {
+          resetToOriginal();
+        },
+        confirmText: "Discard Changes",
+        cancelText: "Keep Editing",
+      });
+      return;
     }
     
+    resetToOriginal();
+  };
+
+  const resetToOriginal = () => {
     setLocalQuiz({ ...originalQuiz });
     if (originalQuiz.background_image_url) {
       setImageUrl(originalQuiz.background_image_url);
@@ -228,6 +279,28 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
     setError("");
     
     onClose();
+  };
+
+  const handleConfirm = () => {
+    if (confirmDialog.onConfirm) {
+      confirmDialog.onConfirm();
+    }
+    closeConfirmDialog();
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog({
+      isOpen: false,
+      title: "",
+      description: "",
+      onConfirm: null,
+      confirmText: "",
+      cancelText: "",
+    });
+  };
+
+  const handleCancelForModal = () => {
+    closeConfirmDialog();
   };
 
 
@@ -486,6 +559,24 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
           }
         </p>
       </div>
+
+      <ErrorModal
+        isOpen={errorModalOpen}
+        onClose={closeErrorModal}
+        message={errorForModal}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={handleCancelForModal}
+        onConfirm={handleConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        confirmVariant="destructive"
+        isLoading={false}
+      />
     </div>
   );
 }

@@ -10,6 +10,7 @@ export default function QuizHeader({
   accessCode = "ABC123",
   quizTitle = "", 
   quizId,
+  setNameSelectionNotice,
 }) {
 
   const navigate = useNavigate();
@@ -57,7 +58,14 @@ export default function QuizHeader({
       );
 
       if (response.status === 200) {
-        alert("Quiz name changed successfully.");
+        if (setNameSelectionNotice) {
+          setNameSelectionNotice("Quiz name changed successfully.");
+          setTimeout(() => {
+            setNameSelectionNotice(null);
+          }, 2500);
+        } else {
+          alert("Quiz name changed successfully.");
+        }
       }
     } catch (error) {
       // Return to previous name
