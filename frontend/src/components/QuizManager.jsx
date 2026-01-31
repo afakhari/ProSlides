@@ -678,7 +678,7 @@ export default function QuizManager({ onNewPresentation }) {
           <div className="md:hidden">
             {/* Single Row: Logo + Icons */}
             <div className="flex items-center justify-between px-4 py-2.5">
-              <div className="text-black font-semibold text-lg flex items-center gap-1.5 before:content-['?'] before:text-xl">
+              <div className="text-black font-semibold text-lg flex items-center gap-1.5 before:content-['✱'] before:text-xl">
                 ProSlides
               </div>
               <div className="flex items-center gap-1">
@@ -703,7 +703,7 @@ export default function QuizManager({ onNewPresentation }) {
                   aria-label="Notifications"
                   title="Notifications"
                 >
-                  <span className="text-lg">??</span>
+                  <span className="text-lg">🔔</span>
                 </button>
                 <button className="px-3 py-1.5 bg-teal-500 text-white text-sm rounded-lg hover:bg-teal-600 transition font-medium">
                   Upgrade
@@ -760,7 +760,7 @@ export default function QuizManager({ onNewPresentation }) {
 
           {/* Desktop Header */}
           <div className="hidden md:flex items-center justify-between px-6 py-3">
-            <div className="text-black font-semibold text-lg flex items-center gap-1.5 before:content-['?'] before:text-xl">
+            <div className="text-black font-semibold text-lg flex items-center gap-1.5 before:content-['✱'] before:text-xl">
               ProSlides
             </div>
 
@@ -781,14 +781,14 @@ export default function QuizManager({ onNewPresentation }) {
                 aria-label="Language"
                 title="Language"
               >
-                <span className="text-xl">??</span>
+                <span className="text-xl">🌐</span>
               </button>
               <button
                 className="p-2 hover:bg-gray-100 rounded-lg transition relative"
                 aria-label="Notifications"
                 title="Notifications"
               >
-                <span className="text-xl">??</span>
+                <span className="text-xl">🔔</span>
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
               </button>
               <button
@@ -796,7 +796,7 @@ export default function QuizManager({ onNewPresentation }) {
                 aria-label="Help"
                 title="Help"
               >
-                <span className="text-xl">?</span>
+                <span className="text-xl">❓</span>
               </button>
               <button className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition font-medium">
                 Upgrade
@@ -904,7 +904,7 @@ export default function QuizManager({ onNewPresentation }) {
                 >
                   {creatingQuiz ? (
                     <>
-                      <span className="animate-spin">?</span> Creating...
+                      <span className="animate-spin">⏳</span> Creating...
                     </>
                   ) : (
                     <>
@@ -1035,7 +1035,7 @@ export default function QuizManager({ onNewPresentation }) {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-16 h-12 bg-gradient-to-br from-purple-500 to-blue-600 rounded flex items-center justify-center text-white text-2xl">
-                            ??
+                            🎯
                           </div>
                           <div>
                             {renamingQuiz === quiz.id ? (
@@ -1079,7 +1079,7 @@ export default function QuizManager({ onNewPresentation }) {
                                 className="relative inline-flex items-center gap-1 group/tooltip"
                                 aria-label={`Slides: ${quiz.slides}`}
                               >
-                                <span aria-hidden="true">??</span>
+                                <span aria-hidden="true">📄</span>
                                 {quiz.slides}
                                 <span
                                   role="tooltip"
@@ -1092,7 +1092,7 @@ export default function QuizManager({ onNewPresentation }) {
                                 className="relative inline-flex items-center gap-1 group/tooltip"
                                 aria-label={`Participants: ${quiz.participants}`}
                               >
-                                <span aria-hidden="true">??</span>
+                                <span aria-hidden="true">👥</span>
                                 {quiz.participants}
                                 <span
                                   role="tooltip"
@@ -1265,11 +1265,11 @@ export default function QuizManager({ onNewPresentation }) {
                                   }}
                                   className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3"
                                 >
-                                  <span className="w-4 h-4 pb-5">??</span>
+                                  <span className="w-4 h-4 pb-5">🔗</span>
                                   Share
                                 </button>
                                 {/* <button className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3">
-                                  <span className="w-4 h-4">??</span>
+                                  <span className="w-4 h-4">📁</span>
                                   Move to
                                 </button> */}
                                 <button
@@ -1310,7 +1310,7 @@ export default function QuizManager({ onNewPresentation }) {
                         onChange={() => handleQuizSelect(quiz.id)}
                       />
                       <div className="w-12 h-12 min-w-12 bg-gradient-to-br from-purple-500 to-blue-600 rounded-lg flex items-center justify-center text-white text-xl shadow-sm">
-                        ??
+                        🎯
                       </div>
                       <div className="truncate min-w-0 flex-1">
                         {renamingQuiz === quiz.id ? (
@@ -1347,7 +1347,7 @@ export default function QuizManager({ onNewPresentation }) {
                             className="relative inline-flex items-center gap-1 group/tooltip"
                             aria-label={`Slides: ${quiz.slides}`}
                           >
-                            <span aria-hidden="true">??</span>
+                            <span aria-hidden="true">📄</span>
                             {quiz.slides}
                             <span
                               role="tooltip"
@@ -1360,7 +1360,7 @@ export default function QuizManager({ onNewPresentation }) {
                             className="relative inline-flex items-center gap-1 group/tooltip"
                             aria-label={`Participants: ${quiz.participants}`}
                           >
-                            <span aria-hidden="true">??</span>
+                            <span aria-hidden="true">👥</span>
                             {quiz.participants}
                             <span
                               role="tooltip"
@@ -1413,7 +1413,7 @@ export default function QuizManager({ onNewPresentation }) {
                             className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
                           >
                             <span className="w-4 h-4 flex items-center justify-center">
-                              ??
+                              🔗
                             </span>{" "}
                             Share
                           </button>
@@ -1551,7 +1551,7 @@ export default function QuizManager({ onNewPresentation }) {
                   onClick={handleBottomBarSelectAll}
                   className="text-sm hover:text-gray-300 transition flex items-center gap-2"
                 >
-                  <span className="text-lg">?</span>
+                  <span className="text-lg">⚡</span>
                   Select all
                 </button>
               )}

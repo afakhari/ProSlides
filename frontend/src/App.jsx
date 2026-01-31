@@ -78,6 +78,7 @@ export default function App() {
     const { accessCode } = useParams();
     const [status, setStatus] = useState("loading"); // loading | error | success
     const [resolvedQuizId, setResolvedQuizId] = useState(null);
+    const [resolvedMeta, setResolvedMeta] = useState(null);
 
     useEffect(() => {
       let mounted = true;
@@ -96,6 +97,17 @@ export default function App() {
           if (data.quiz_id) {
             // Access code valid - store quiz_id and show player presentation
             setResolvedQuizId(data.quiz_id);
+            setResolvedMeta({
+              quiz_id: data.quiz_id,
+              title: data.title || "",
+              access_code: accessCode,
+              background: {
+                color: data.background_color || "#1e1e2e",
+                image: data.background_image_url || "",
+              },
+              music_url: data.music_url || "",
+              slides: [],
+            });
             setStatus("success");
           } else {
             // Invalid access code
@@ -129,7 +141,11 @@ export default function App() {
         <AudioProvider>
           <ServerDataProvider>
             <WebSocketProvider role="player">
-              <AppPresentation roomId={String(resolvedQuizId)} role="player" />
+              <AppPresentation
+                roomId={String(resolvedQuizId)}
+                role="player"
+                initialQuiz={resolvedMeta}
+              />
               <WSMessageHandler />
             </WebSocketProvider>
           </ServerDataProvider>
@@ -327,16 +343,22 @@ export default function App() {
   }
 
   /* ------------------------ Main Flow ------------------------ */
-  function AppPresentation({ roomId, role }) {
+  function AppPresentation({ roomId, role, initialQuiz = null }) {
     const [data, setData] = useState({ type: "ManagerJoinPage" });
     const [currentSlide, setCurrentSlide] = useState(1);
 
     // Fetch full quiz once at top-level and transform to internal shape
-    const [remoteQuiz, setRemoteQuiz] = useState(null);
+    const [remoteQuiz, setRemoteQuiz] = useState(initialQuiz);
+    useEffect(() => {
+      if (initialQuiz && !remoteQuiz) {
+        setRemoteQuiz(initialQuiz);
+      }
+    }, [initialQuiz, remoteQuiz]);
     useEffect(() => {
       let mounted = true;
       const fetchQuiz = async () => {
         try {
+          if (role === "player") return;
           if (!roomId) return;
           const res = await apiFetch(`/quizzes/${roomId}/export/`);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -408,7 +430,7 @@ export default function App() {
       return () => {
         mounted = false;
       };
-    }, [roomId]);
+    }, [roomId, role]);
 
     const quiz = remoteQuiz ?? QuizSetup;
     const isRemoteReady = !!quiz; // Always ready (remote or fallback)

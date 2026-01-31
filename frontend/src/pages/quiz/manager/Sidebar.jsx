@@ -802,7 +802,8 @@ export default function Sidebar({
   };
 
   return (
-    <div className="h-full overflow-y-auto">
+    <>
+      <div className="h-full overflow-y-auto">
       <div className="p-4 pb-6">
       {/* ??? */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
@@ -1315,18 +1316,19 @@ export default function Sidebar({
         </div>
       )}
 
-    </div>
+      </div>
 
-    <ConfirmDialog
-      isOpen={confirmDialog.isOpen}
-      onClose={handleCancelForModal}
-      onConfirm={handleConfirm}
-      title={confirmDialog.title}
-      description={confirmDialog.description}
-      confirmText={confirmDialog.confirmText}
-      cancelText={confirmDialog.cancelText}
-      confirmVariant="destructive"
-      isLoading={false}
-    />
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={handleCancelForModal}
+        onConfirm={handleConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        confirmVariant="destructive"
+        isLoading={false}
+      />
+    </>
   );
 }
