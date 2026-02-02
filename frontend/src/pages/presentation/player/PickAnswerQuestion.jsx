@@ -9,7 +9,7 @@ export default function PlayerPickAnswerQuestion({
 }) {
   // همه hooks باید قبل از conditional return باشن
   const { questionResults, partialQuestionResults } = useServerData();
-  const { sendMessage, isConnected } = useWebSocket();
+  const { sendMessage, isConnected, connectionError } = useWebSocket();
 
   const questionId = question?.question_id;
   const questionTime = question?.question_time ?? 0;
@@ -65,7 +65,7 @@ export default function PlayerPickAnswerQuestion({
   }, [question, questionId, questionTime]);
 
   const handleSelect = (option) => {
-    if (submitted || timeLeft <= -1) return;
+    if (submitted || timeLeft <= 0) return;
 
     // اگر has_multiple فالس باشد، فقط یک گزینه مجاز است
     if (question.has_multiple === false) {
@@ -128,7 +128,7 @@ export default function PlayerPickAnswerQuestion({
 
   // Auto-submit when time runs out
   useEffect(() => {
-    if (timeLeft <= -1 && !submitted) {
+    if (timeLeft <= 0 && !submitted) {
       handleSubmit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,7 +137,8 @@ export default function PlayerPickAnswerQuestion({
   const progressPercent =
     timeLeft >= 0 && questionTime > 0 ? (timeLeft / questionTime) * 100 : 0;
   // نمایش جواب‌ها اگر تایمر تمام شد یا داده result رسید
-  const showResults = timeLeft <= -1 || !!result;
+  const showResults = timeLeft <= 0 || !!result;
+  const waitingForResults = timeLeft <= 0 && !result;
   const options = question?.options || [];
 
   // Calculate dynamic background style from quiz data
@@ -162,7 +163,33 @@ export default function PlayerPickAnswerQuestion({
           </div>
         </div>
       </header>
+      <div className="fixed top-4 right-4 z-40 flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-xs text-white/90">
+        <span
+          className={`h-2 w-2 rounded-full ${
+            isConnected ? "bg-green-400" : "bg-red-400"
+          }`}
+        ></span>
+        <span aria-live="polite">
+          {isConnected ? "متصل" : "قطع ارتباط"}
+        </span>
+      </div>
+      {connectionError && (
+        <div className="fixed top-12 right-4 z-40 rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-100">
+          خطای اتصال
+        </div>
+      )}
       <div className="flex flex-col items-center justify-between">
+        {waitingForResults && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-4 rounded-2xl bg-white/10 px-10 py-8 text-center shadow-2xl">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/30 border-t-white"></div>
+              <div className="text-lg font-semibold">در حال پردازش نتایج…</div>
+              <div className="text-sm text-white/70">
+                لطفاً چند ثانیه صبر کنید
+              </div>
+            </div>
+          </div>
+        )}
         {/* <h1 className="text-center text-xl p-1 bg-transparent rounded-xl text-white font-medium ">
           PROSLIDES
         </h1> */}
@@ -183,8 +210,11 @@ export default function PlayerPickAnswerQuestion({
           {/* Progress Bar */}
           <div className="min-h-auto max-w-2xl">
             <div className="m-2.5 flex flex-col items-stretch gap-[0.5vh]">
-              <div className="flex justify-between items-center text-xl font-semibold text-white px-2 mt-3 opacity-90">
+              <div className="flex items-center justify-between text-xl font-semibold text-white px-2 mt-3 opacity-90">
                 <span>{question.min_point}p</span>
+                <span className="text-sm text-white/70">
+                  {Math.ceil(timeLeft)}s
+                </span>
                 <span>{question.max_point}p</span>
               </div>
 
@@ -280,11 +310,16 @@ export default function PlayerPickAnswerQuestion({
               className="mt-[25px] mx-3 w-[calc(100%-20px)] p-4 border-none rounded-[10px]  font-bold cursor-pointer transition-all duration-300 text-2xl bg-white text-[#6c2bd9] disabled:opacity-60 disabled:cursor-not-allowed"
               onClick={handleSubmit}
               disabled={
-                selectedOptions.length === 0 || timeLeft <= -1 || submitted
+                selectedOptions.length === 0 || timeLeft <= 0 || submitted
               }
             >
               {submitted ? "Submitted ✅" : "Submit"}
             </button>
+            {submitted && (
+              <div className="mt-3 text-center text-sm text-white/80">
+                پاسخ شما ثبت شد
+              </div>
+            )}
           </div>
         </div>
       </div>

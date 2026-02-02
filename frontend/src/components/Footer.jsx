@@ -9,6 +9,7 @@ import ReactionEffects from "./ReactionEffects";
 
 export default function Footer({
   currentSlide = 1,
+  totalSlides = null,
   onQRToggle = null,
   isQROpen = false,
   onShowLeaderboard = null,
@@ -69,19 +70,25 @@ export default function Footer({
             </button> */}
           </div>
 
-          <button
+          {/* <button
             onClick={() => onPrevious && onPrevious()}
             className="w-8 h-8 hover:bg-white/30 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors"
           >
             {"<"}
-          </button>
+          </button> */}
 
           <div className="px-4 bg-white/40 rounded text-white font-semibold">
             {currentSlide}
           </div>
 
           <button
-            onClick={() => onNext && onNext()}
+            onClick={() => {
+              if (onEnd && totalSlides && currentSlide >= totalSlides) {
+                onEnd();
+                return;
+              }
+              onNext && onNext();
+            }}
             className="w-8 h-8 hover:bg-white/20 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors"
           >
             {">"}

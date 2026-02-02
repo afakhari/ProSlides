@@ -143,9 +143,14 @@ function PlayerLeaderBoard({ players, quiz }) {
             className="mt-6 flex-1 overflow-auto w-full min-h-0 no-scrollbar"
             style={{ maxHeight: "calc(100vh - 220px)" }}
           >
-            <ul className="space-y-4 w-full flex flex-col items-stretch py-2">
-              <AnimatePresence>
-                {displayedPlayers.map((p, index) => {
+            {displayedPlayers.length === 0 ? (
+              <div className="text-center text-white/80 py-10">
+                منتظر نتایج لیدربورد...
+              </div>
+            ) : (
+              <ul className="space-y-4 w-full flex flex-col items-stretch py-2">
+                <AnimatePresence>
+                  {displayedPlayers.map((p, index) => {
                   const scoreVal = parseFloat(p.total_points) || 0;
                   const hasScore = scoreVal > 0;
                   const widthPercent = hasScore ? calcPercent(scoreVal) : 0;
@@ -281,9 +286,10 @@ function PlayerLeaderBoard({ players, quiz }) {
                       </div>
                     </Motion.li>
                   );
-                })}
-              </AnimatePresence>
-            </ul>
+                  })}
+                </AnimatePresence>
+              </ul>
+            )}
           </div>
         </section>
       </div>

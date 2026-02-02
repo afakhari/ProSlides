@@ -135,7 +135,9 @@ export default function PlayerJoinPage({ roomId, quiz }) {
   const [joined, setJoined] = useState(false);
   const [joinSent, setJoinSent] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const { connect, sendMessage, isConnected, lastMessage } = useWebSocket();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const { connect, sendMessage, isConnected, lastMessage, connectionError } =
+    useWebSocket();
   const { processMessage } = useServerData();
   const [error, _setError] = useState(null);
   const [errorModalOpen, setErrorModalOpen] = useState(false);
@@ -144,6 +146,16 @@ export default function PlayerJoinPage({ roomId, quiz }) {
   const closeErrorModal = () => {
     setErrorModalOpen(false);
   };
+
+  useEffect(() => {
+    if (isConnected) {
+      setIsConnecting(false);
+      return;
+    }
+    if (connectionError) {
+      setIsConnecting(false);
+    }
+  }, [isConnected, connectionError]);
 
 
   // const navigate = useNavigate();
@@ -186,6 +198,7 @@ export default function PlayerJoinPage({ roomId, quiz }) {
         console.error("Missing roomId for WebSocket connection");
         return;
       }
+      setIsConnecting(true);
       connect(roomId);
     } catch (err) {
       console.error("Failed to connect WebSocket:", err);
@@ -254,6 +267,25 @@ export default function PlayerJoinPage({ roomId, quiz }) {
             </div>
           </div>
         </header>
+        <div className="mt-2 flex items-center gap-2 text-sm text-white/80">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              isConnected ? "bg-green-400" : "bg-red-400"
+            }`}
+          ></span>
+          <span aria-live="polite">
+            {isConnected
+              ? "اتصال برقرار است"
+              : isConnecting
+                ? "در حال اتصال..."
+                : "اتصال قطع است"}
+          </span>
+        </div>
+        {connectionError && (
+          <div className="mt-2 rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-100">
+            خطای اتصال. لطفاً دوباره تلاش کنید.
+          </div>
+        )}
         <div className="flex flex-col items-center mt-7 justify-around w-4/5 max-w-2xl">
           {/* Set name */}
           <div className="w-full">
@@ -318,9 +350,10 @@ export default function PlayerJoinPage({ roomId, quiz }) {
           {/*Join Button */}
           <button
             onClick={savePlayer}
-            className="mt-12 bg-purple-700 w-full text-white px-10 py-3 rounded-lg hover:bg-purple-800 transition"
+            className="mt-12 bg-purple-700 w-full text-white px-10 py-3 rounded-lg hover:bg-purple-800 transition disabled:opacity-70 disabled:cursor-not-allowed"
+            disabled={isConnecting}
           >
-            Join the game!
+            {isConnecting ? "در حال اتصال..." : "Join the game!"}
           </button>
         </div>
       </div>
@@ -334,6 +367,27 @@ export default function PlayerJoinPage({ roomId, quiz }) {
           </div>
         </div>
       </header>
+      <div className="flex items-center justify-center gap-2 text-sm text-white/80">
+        <span
+          className={`h-2 w-2 rounded-full ${
+            isConnected ? "bg-green-400" : "bg-red-400"
+          }`}
+        ></span>
+        <span aria-live="polite">
+          {isConnected
+            ? "اتصال برقرار است"
+            : isConnecting
+              ? "در حال اتصال..."
+              : "اتصال قطع است"}
+        </span>
+      </div>
+      {connectionError && (
+        <div className="mt-2 flex justify-center">
+          <div className="rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-100">
+            خطای اتصال. لطفاً دوباره تلاش کنید.
+          </div>
+        </div>
+      )}
       <div className="flex flex-col items-center justify-center h-full">
         <div className="flex items-center space-x-4 px-6 py-3 rounded-2xl m-4">
           <Motion.span
