@@ -1085,6 +1085,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                       slide={activeSlide}
                       quizBackground={quiz.background_color}
                       quizBackgroundImage={quiz.background_image_url}
+                      textColor={quiz.text_color}
                       isFullSize={
                         !showSidebar && !showDesignPanel && !showAudioPanel
                       }
@@ -1100,6 +1101,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                     slide={activeSlide}
                     quizBackground={quiz.background_color}
                     quizBackgroundImage={quiz.background_image_url}
+                    textColor={quiz.text_color}
                     isFullSize={
                       !showSidebar && !showDesignPanel && !showAudioPanel
                     }

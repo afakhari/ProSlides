@@ -36,8 +36,12 @@ export default function DesignPanel({
 
   // Setting the initial value when loading the component
   useEffect(() => {
-    setOriginalQuiz({ ...quiz });
-    setLocalQuiz({ ...quiz });
+    const normalizedQuiz = {
+      ...quiz,
+      text_color: quiz.text_color || "#111827",
+    };
+    setOriginalQuiz({ ...normalizedQuiz });
+    setLocalQuiz({ ...normalizedQuiz });
     
     if (quiz.background_image_url) {
       setImageUrl(quiz.background_image_url);
@@ -233,9 +237,10 @@ export default function DesignPanel({
       );
       
       // Updating the quiz in the parent component(EditorPage)
-      updateQuiz(updatedQuiz);
+      const mergedQuiz = { ...updatedQuiz, ...updateData };
+      updateQuiz(mergedQuiz);
       
-      setOriginalQuiz({ ...localQuiz });
+      setOriginalQuiz({ ...mergedQuiz });
       
       setSaving(false);
       onClose();
@@ -460,12 +465,23 @@ export default function DesignPanel({
                 className="w-8 h-8 rounded border border-gray-300"
                 style={getBackgroundStyle()}
               />
+              <div className="w-8 h-8 rounded border border-gray-300 bg-white flex items-center justify-center">
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: localQuiz.text_color || "#111827" }}
+                >
+                  Aa
+                </span>
+              </div>
               <div>
                 <span className="text-sm font-mono text-gray-700 block">
                   {localQuiz.background_image_url 
                     ? "Image URL" 
                     : localQuiz.background_color || "#ffffff"
                   }
+                </span>
+                <span className="text-xs text-gray-500 block">
+                  Text: {localQuiz.text_color || "#111827"}
                 </span>
                 <span
                   className="mt-1 inline-block text-xs"
