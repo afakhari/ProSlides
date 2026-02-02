@@ -1,5 +1,5 @@
+import { useLayoutEffect } from "react";
 import SiteHeader from "../../components/SiteHeader";
-import SiteFooter from "../../components/SiteFooter";
 import Seo from "../../components/Seo";
 import dotGrid from "../../assets/patterns/dot-grid.svg";
 import amiraliFakhari from "../../assets/avatars/AmiraliFakhari.jpg";
@@ -155,6 +155,10 @@ function TeamSection({ id, title, description, members, gridClassName }) {
 }
 
 export default function TeamPage() {
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
     <main
       className="relative min-h-screen overflow-x-hidden text-slate-900"
@@ -204,7 +208,6 @@ export default function TeamPage() {
           gridClassName="grid gap-8 md:grid-cols-2 lg:grid-cols-3"
         />
       </div>
-      <SiteFooter />
     </main>
   );
 }

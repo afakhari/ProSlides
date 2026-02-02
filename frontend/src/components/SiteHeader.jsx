@@ -22,49 +22,12 @@ export default function SiteHeader({ className = "" }) {
     <header className={headerClassName}>
       <div className="mx-auto flex max-w-6xl items-center justify-between px-3 py-4">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#e5e7eb] text-[#111827] transition hover:border-[#cbd5f5] md:hidden"
-            aria-expanded={isMenuOpen}
-            aria-controls="site-nav"
-            onClick={() => setIsMenuOpen((prev) => !prev)}
-          >
-            <span className="sr-only">باز و بسته کردن منو</span>
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
-              <path
-                d="M4 7h16M4 12h16M4 17h16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
           <LogoMark />
         </div>
-        <nav className="hidden items-center gap-6 text-sm font-semibold text-[#6b7280] md:flex">
-          <span className="flex items-center gap-2 text-[#94a3b8]">
-            ویژگی‌ها
-            <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-              به‌زودی
-            </span>
-          </span>
-          <span className="flex items-center gap-2 text-[#94a3b8]">
-            کاربردها
-            <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-              به‌زودی
-            </span>
-          </span>
-          <span className="flex items-center gap-2 text-[#94a3b8]">
-            قیمت‌گذاری
-            <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-              به‌زودی
-            </span>
-          </span>
-          <Link to="/team" className="transition hover:text-[#111827]">
-            تیم ما
-          </Link>
-        </nav>
+        <nav
+          className="hidden items-center gap-6 text-sm font-semibold text-[#6b7280] md:flex"
+          aria-label="ناوبری"
+        />
         <div className="flex items-center gap-2 text-xs font-semibold sm:gap-3 sm:text-sm">
           <Link
             to="/login"
@@ -80,40 +43,6 @@ export default function SiteHeader({ className = "" }) {
           </Link>
         </div>
       </div>
-      {isMenuOpen && (
-        <div
-          id="site-nav"
-          className="border-t border-[#e5e7eb] bg-white px-4 pb-5 pt-4 md:hidden"
-        >
-          <div className="flex flex-col gap-4 text-sm font-semibold text-[#6b7280]">
-            <span className="flex items-center gap-2 text-[#94a3b8]">
-              ویژگی‌ها
-              <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-                به‌زودی
-              </span>
-            </span>
-            <span className="flex items-center gap-2 text-[#94a3b8]">
-              کاربردها
-              <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-                به‌زودی
-              </span>
-            </span>
-            <span className="flex items-center gap-2 text-[#94a3b8]">
-              قیمت‌گذاری
-              <span className="rounded-full bg-[#eef2f7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
-                به‌زودی
-              </span>
-            </span>
-            <Link
-              to="/team"
-              className="text-[#111827]"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              تیم ما
-            </Link>
-          </div>
-        </div>
-      )}
     </header>
   );
 }
