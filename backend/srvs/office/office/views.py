@@ -314,6 +314,7 @@ class QuizViewSet(viewsets.ModelViewSet):
                     "quiz_id": openapi.Schema(type=openapi.TYPE_INTEGER),
                     "background_color": openapi.Schema(type=openapi.TYPE_STRING),
                     "background_image_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                    "text_color": openapi.Schema(type=openapi.TYPE_STRING),
                     "music_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
                 },
             ),
@@ -339,7 +340,7 @@ class QuizViewSet(viewsets.ModelViewSet):
         quiz = (
             Quiz.objects
             .filter(access_code=access_code)
-            .values("id", "background_color", "background_image_url", "music_url")
+            .values("id", "background_color", "background_image_url", "text_color", "music_url")
             .first()
         )
         if not quiz:
@@ -352,6 +353,7 @@ class QuizViewSet(viewsets.ModelViewSet):
                 "quiz_id": quiz["id"],
                 "background_color": quiz["background_color"],
                 "background_image_url": quiz["background_image_url"],
+                "text_color": quiz["text_color"],
                 "music_url": quiz["music_url"],
             }
         )

@@ -168,6 +168,10 @@ export const quizService = {
       if (backgroundData.background_image_url !== undefined) {
         payload.background_image_url = backgroundData.background_image_url;
       }
+
+      if (backgroundData.text_color !== undefined) {
+        payload.text_color = backgroundData.text_color;
+      }
       
       const response = await api.patch(
         `/quizzes/${quizId}/`,

@@ -149,6 +149,12 @@ export default function PlayerPickAnswerQuestion({
       : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
+  const textColor =
+    quiz?.text_color || quiz?.background?.text_color || "#111827";
+  const textMutedColor =
+    textColor.toLowerCase() === "#111827"
+      ? "rgba(17, 24, 39, 0.7)"
+      : "rgba(255, 255, 255, 0.7)";
   const needsOverlay =
     !!quiz?.background?.image ||
     isLightColor(quiz?.background?.color || "#1e1e2e");
@@ -157,21 +163,25 @@ export default function PlayerPickAnswerQuestion({
 
   return (
     <div
-      className="relative text-white h-screen w-screen bg-cover bg-center bg-no-repeat font-poppins"
-      style={backgroundStyle}
+      className="relative h-screen w-screen bg-cover bg-center bg-no-repeat font-poppins text-[color:var(--quiz-text)]"
+      style={{
+        ...backgroundStyle,
+        "--quiz-text": textColor,
+        "--quiz-text-muted": textMutedColor,
+      }}
     >
       {needsOverlay && (
         <div className="pointer-events-none absolute inset-0 bg-black/45" />
       )}
       <div className="relative z-10 h-full w-full">
       <header>
-        <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
+        <div className="flex items-center justify-center text-[color:var(--quiz-text)] px-6 py-7 rounded-t-xl placeholder-gray-500">
           <div className="shrink-0">
             <p className="text-3xl">Proslides</p>
           </div>
         </div>
       </header>
-      <div className="fixed top-4 right-4 z-40 flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-xs text-white/90">
+      <div className="fixed top-4 right-4 z-40 flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-xs text-[color:var(--quiz-text-muted)]">
         <span
           className={`h-2 w-2 rounded-full ${
             isConnected ? "bg-green-400" : "bg-red-400"
@@ -192,7 +202,7 @@ export default function PlayerPickAnswerQuestion({
             <div className="flex flex-col items-center gap-4 rounded-2xl bg-white/10 px-10 py-8 text-center shadow-2xl">
               <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/30 border-t-white"></div>
               <div className="text-lg font-semibold">در حال پردازش نتایج…</div>
-              <div className="text-sm text-white/70">
+              <div className="text-sm text-[color:var(--quiz-text-muted)]">
                 لطفاً چند ثانیه صبر کنید
               </div>
             </div>
@@ -218,15 +228,15 @@ export default function PlayerPickAnswerQuestion({
           {/* Progress Bar */}
           <div className="min-h-auto max-w-2xl">
             <div className="m-2.5 flex flex-col items-stretch gap-[0.5vh]">
-              <div className="flex items-center justify-between text-xl font-semibold text-white px-2 mt-3 opacity-90">
+              <div className="flex items-center justify-between text-xl font-semibold text-[color:var(--quiz-text)] px-2 mt-3 opacity-90">
                 <span>{question.min_point}p</span>
-                <span className="text-sm text-white/70">
+                <span className="text-sm text-[color:var(--quiz-text-muted)]">
                   {Math.ceil(timeLeft)}s
                 </span>
                 <span>{question.max_point}p</span>
               </div>
 
-              <div className="border-white border-2 bg-[rgba(255,255,255,0.3)] h-2 rounded-[5px] mt-3 mb-5 overflow-hidden">
+              <div className="border-2 border-[color:var(--quiz-text)] bg-[rgba(255,255,255,0.3)] h-2 rounded-[5px] mt-3 mb-5 overflow-hidden">
                 <div
                   className="h-full bg-purple-600"
                   style={{
@@ -287,15 +297,15 @@ export default function PlayerPickAnswerQuestion({
                                   text-[clamp(1rem,2.3vw,1.4rem)] 
                                   transition-all duration-300 
                                   mx-3 
-                                  border-solid border-white border-2 hover:bg-black/30 ${optionClass}`}
+                                  border-solid border-2 border-[color:var(--quiz-text)] hover:bg-black/30 ${optionClass}`}
                     onClick={() => handleSelect(goz)}
                   >
-                    <span className="w-6 h-6 border-2 border-white rounded-full inline-flex shrink-0 items-center justify-center relative">
+                    <span className="w-6 h-6 border-2 border-[color:var(--quiz-text)] rounded-full inline-flex shrink-0 items-center justify-center relative">
                       {selectedOptions.includes(goz) && !showResults && (
                         <span className="w-[22px] h-[22px] bg-[#393e3a] rounded-full"></span>
                       )}
                       {icon && (
-                        <span className="text-sm text-white absolute">
+                        <span className="text-sm text-[color:var(--quiz-text)] absolute">
                           {icon}
                         </span>
                       )}
@@ -324,7 +334,7 @@ export default function PlayerPickAnswerQuestion({
               {submitted ? "Submitted ✅" : "Submit"}
             </button>
             {submitted && (
-              <div className="mt-3 text-center text-sm text-white/80">
+              <div className="mt-3 text-center text-sm text-[color:var(--quiz-text-muted)]">
                 پاسخ شما ثبت شد
               </div>
             )}

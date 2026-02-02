@@ -114,21 +114,31 @@ function PlayerLeaderBoard({ players, quiz }) {
       : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
+  const textColor =
+    quiz?.text_color || quiz?.background?.text_color || "#111827";
+  const textMutedColor =
+    textColor.toLowerCase() === "#111827"
+      ? "rgba(17, 24, 39, 0.7)"
+      : "rgba(255, 255, 255, 0.7)";
   const needsOverlay =
     !!quiz?.background?.image ||
     isLightColor(quiz?.background?.color || "#1e1e2e");
 
   return (
     <div
-      className="relative h-screen overflow-hidden bg-cover bg-center bg-no-repeat"
-      style={backgroundStyle}
+      className="relative h-screen overflow-hidden bg-cover bg-center bg-no-repeat text-[color:var(--quiz-text)]"
+      style={{
+        ...backgroundStyle,
+        "--quiz-text": textColor,
+        "--quiz-text-muted": textMutedColor,
+      }}
     >
       {needsOverlay && (
         <div className="pointer-events-none absolute inset-0 bg-black/45" />
       )}
       <div className="relative z-10 h-full">
       <header>
-        <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
+        <div className="flex items-center justify-center text-[color:var(--quiz-text)] px-6 py-7 rounded-t-xl placeholder-gray-500">
           <div className="shrink-0">
             <p className="text-3xl">Proslides</p>
           </div>
@@ -139,8 +149,8 @@ function PlayerLeaderBoard({ players, quiz }) {
         <section className="flex-1 flex flex-col min-h-0">
           {/* Title and player count */}
           <div className="text-center">
-            <h1 className="text-white px-4 text-5xl font-bold">Leaderboard</h1>
-            <p className="text-white/70 text-lg mt-2">
+            <h1 className="px-4 text-5xl font-bold text-[color:var(--quiz-text)]">Leaderboard</h1>
+            <p className="text-[color:var(--quiz-text-muted)] text-lg mt-2">
               {validPlayers.length} players
             </p>
           </div>
@@ -151,7 +161,7 @@ function PlayerLeaderBoard({ players, quiz }) {
             style={{ maxHeight: "calc(100vh - 220px)" }}
           >
             {displayedPlayers.length === 0 ? (
-              <div className="text-center text-white/80 py-10">
+              <div className="text-center text-[color:var(--quiz-text-muted)] py-10">
                 منتظر نتایج لیدربورد...
               </div>
             ) : (
@@ -266,18 +276,16 @@ function PlayerLeaderBoard({ players, quiz }) {
                           </div>
 
                           <div className="flex items-center space-x-3">
-                            <div
-                              className={`font-medium transition-all duration-200 ${
-                                isCurrentUser
-                                  ? "text-white text-lg font-bold"
-                                  : "text-white"
-                              }`}
-                            >
-                              {p.name}
-                              {isCurrentUser && (
-                                <span className="ml-2 text-yellow-400 text-sm animate-pulse">
-                                  ← You
-                                </span>
+                                <div
+                                  className={`font-medium transition-all duration-200 text-[color:var(--quiz-text)] ${
+                                    isCurrentUser ? "text-lg font-bold" : ""
+                                  }`}
+                                >
+                                  {p.name}
+                                  {isCurrentUser && (
+                                    <span className="ml-2 text-yellow-400 text-sm animate-pulse">
+                                      ← You
+                                    </span>
                               )}
                             </div>
                           </div>
@@ -285,9 +293,9 @@ function PlayerLeaderBoard({ players, quiz }) {
                       </div>
 
                       {/* Score */}
-                      <div className="relative w-[15%] font-semibold ml-3 text-white">
+                      <div className="relative w-[15%] font-semibold ml-3 text-[color:var(--quiz-text)]">
                         {Math.round(p.total_points)}p{" "}
-                        <span className="text-sm text-white/60">
+                        <span className="text-sm text-[color:var(--quiz-text-muted)]">
                           +{Math.round(p.new_points)}
                         </span>
                       </div>

@@ -97,7 +97,7 @@ class QuizSerializer(serializers.ModelSerializer):
             'quiz_id', 'title', 'created_at', 'updated_at', 'owner_name',
             'owner_full_name',
             'access_code', 'participants_count', 'music_url',
-            'background_color', 'background_image_url', 'slides'
+            'background_color', 'background_image_url', 'text_color', 'slides'
         ]
         read_only_fields = ['quiz_id', 'created_at', 'updated_at', 'participants_count']
 
@@ -157,7 +157,8 @@ class ExportSerializer(serializers.ModelSerializer):
     def get_background(self, obj):
         return {
             'color': obj.background_color,
-            'image': obj.background_image_url
+            'image': obj.background_image_url,
+            'text_color': obj.text_color,
         }
 
     def get_slides(self, obj):
@@ -208,6 +209,7 @@ class EditorQuizSerializer(serializers.ModelSerializer):
             'access_code',
             'background_color',
             'background_image_url',
+            'text_color',
             'music_url',
             'updated_at',
             'slides',

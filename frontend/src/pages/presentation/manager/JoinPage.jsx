@@ -267,6 +267,13 @@ export default function ManagerJoinPage({
       : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
+  const textColor =
+    quiz?.text_color || quiz?.background?.text_color || "#111827";
+  const isTextDark = textColor.toLowerCase() === "#111827";
+  const textMutedColor =
+    textColor.toLowerCase() === "#111827"
+      ? "rgba(17, 24, 39, 0.7)"
+      : "rgba(255, 255, 255, 0.7)";
   const needsOverlay =
     !!quiz?.background?.image ||
     isLightColor(quiz?.background?.color || "#1e1e2e");
@@ -274,7 +281,11 @@ export default function ManagerJoinPage({
   return (
     <div
       className="relative min-h-screen bg-cover bg-center bg-no-repeat"
-      style={backgroundStyle}
+      style={{
+        ...backgroundStyle,
+        "--quiz-text": textColor,
+        "--quiz-text-muted": textMutedColor,
+      }}
     >
       {needsOverlay && (
         <div className="pointer-events-none absolute inset-0 bg-black/45" />
@@ -296,7 +307,9 @@ export default function ManagerJoinPage({
         <main
           className={`${
             showQRModal ? "w-[78%] mr-4" : "w-[88%]"
-          } max-w-[2000px] bg-gray-800 rounded-2xl lg:rounded-2xl md:rounded-xl sm:rounded-xl pt-4! pb-20! md:pt-8 md:pb-12 lg:pb-18 px-4 sm:px-4 md:px-16 lg:px-72! text-white shadow-2xl relative transition-all duration-300`}
+          } max-w-[2000px] ${
+            isTextDark ? "bg-white/85 text-gray-900" : "bg-gray-800 text-white"
+          } rounded-2xl lg:rounded-2xl md:rounded-xl sm:rounded-xl pt-4! pb-20! md:pt-8 md:pb-12 lg:pb-18 px-4 sm:px-4 md:px-16 lg:px-72! shadow-2xl relative transition-all duration-300`}
         >
           {/* WebSocket Connection Status */}
           <div className="absolute top-2 right-2 flex items-center gap-2 text-xs">
@@ -305,7 +318,7 @@ export default function ManagerJoinPage({
                 isConnected ? "bg-green-500" : "bg-red-500"
               }`}
             ></div>
-            <span className="text-white/60">
+            <span className="text-[color:var(--quiz-text-muted)]">
               {isConnected ? "Connected" : "Disconnected"}
             </span>
           </div>
@@ -316,7 +329,7 @@ export default function ManagerJoinPage({
                 ? `Quiz question ${questionNumber} of ${totalQuestions}`
                 : "Quiz"}
             </div> */}
-            <div className="text-xs md:text-sm text-white/60">
+            <div className="text-xs md:text-sm text-[color:var(--quiz-text-muted)]">
               {playersReady} players ready
             </div>
           </div>
@@ -326,7 +339,7 @@ export default function ManagerJoinPage({
               <div className="w-full">
                 {displayUsers.length === 0 && (
                   <div
-                    className="text-xl md:text-2xl lg:text-3xl text-white/92 text-center animate-custom-pulse"
+                    className="text-xl md:text-2xl lg:text-3xl text-[color:var(--quiz-text)] text-center animate-custom-pulse"
                     style={{
                       marginTop: "190px",
                       marginBottom: "190px",
@@ -425,6 +438,7 @@ export default function ManagerJoinPage({
           isQROpen={showQRModal}
           onNext={handleNext}
           onEnd={handleEnd}
+          textColor={textColor}
           // onPrevious=null
         />
 
