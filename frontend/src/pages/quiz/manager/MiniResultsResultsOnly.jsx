@@ -5,6 +5,7 @@ export default function MiniResultsResultsOnly({
   slide,
   quizBackground,
   quizBackgroundImage,
+  textColor = "#111827",
   isFullSize = true,
 }) {
 
@@ -48,6 +49,7 @@ export default function MiniResultsResultsOnly({
   const voteTextSize = isFullSize ? "text-xl" : "text-sm";
   const imageWidth = isFullSize ? "w-1/4" : "w-1/5";
   const optionImageHeight = isFullSize ? "max-h-32" : "max-h-20";
+  const textStyle = { color: textColor || "#111827" };
 
 
   return (
@@ -57,7 +59,8 @@ export default function MiniResultsResultsOnly({
     >
       {/* --------------- Title Section --------------- */}
       <h2
-        className={`${titleSize} font-bold text-white mb-4 mt-15 text-center px-4 shrink-0`}
+        className={`${titleSize} font-bold mb-4 mt-15 text-center px-4 shrink-0`}
+        style={textStyle}
       >
         {question.question_text || question.text || question.title}
       </h2>
@@ -98,7 +101,8 @@ export default function MiniResultsResultsOnly({
                 {/* --------------- Vote Count --------------- */}
                 {hasVotes && (
                   <div
-                    className={`mb-1 text-center text-white font-semibold ${voteTextSize}`}
+                    className={`mb-1 text-center font-semibold ${voteTextSize}`}
+                    style={textStyle}
                   >
                     {votes}
                   </div>
@@ -132,7 +136,8 @@ export default function MiniResultsResultsOnly({
 
                 {/* --------------- Option Text --------------- */}
                 <p
-                  className={`mt-2 text-white font-semibold text-center ${optionTextSize}`}
+                  className={`mt-2 font-semibold text-center ${optionTextSize}`}
+                  style={textStyle}
                 >
                   {opt.option_text || opt.text}
                 </p>

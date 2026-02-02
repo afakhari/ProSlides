@@ -1067,7 +1067,7 @@ export default function Sidebar({
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9?-??-?]*"
+                pattern="[0-9]*"
                 min="1"
                 value={question.question_time ?? 10}
                 onChange={(e) =>
@@ -1096,7 +1096,7 @@ export default function Sidebar({
                 <input
                   type="text"
                   inputMode="numeric"
-                  pattern="[0-9?-??-?]*"
+                  pattern="[0-9]*"
                   min="0"
                   value={question.max_point ?? 0}
                   onChange={(e) =>
@@ -1115,7 +1115,7 @@ export default function Sidebar({
                 <input
                   type="text"
                   inputMode="numeric"
-                  pattern="[0-9?-??-?]*"
+                  pattern="[0-9]*"
                   min="0"
                   value={question.min_point ?? 0}
                   onChange={(e) =>

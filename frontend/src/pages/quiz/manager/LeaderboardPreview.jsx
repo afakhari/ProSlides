@@ -7,6 +7,7 @@ export default function LeaderboardPreview({
   slide,
   quizBackground,
   quizBackgroundImage,
+  textColor = "#111827",
   isFullSize = true,
   customLeaderboard = null,
 }) {
@@ -78,6 +79,13 @@ export default function LeaderboardPreview({
   const nameSize = isFullSize ? "text-base" : "text-sm";
   const scoreSize = isFullSize ? "text-base" : "text-sm";
   const scoreWidth = isFullSize ? "w-16" : "w-12";
+  const textStyle = { color: textColor || "#111827" };
+  const mutedStyle = {
+    color:
+      (textColor || "#111827").toLowerCase() === "#111827"
+        ? "rgba(17, 24, 39, 0.7)"
+        : "rgba(255, 255, 255, 0.7)",
+  };
 
 
   return (
@@ -88,10 +96,10 @@ export default function LeaderboardPreview({
       <div className="flex flex-col items-center justify-center w-full h-full px-4 py-6 overflow-y-auto no-scrollbar">
         {/* --------------- Title Section --------------- */}
         <div className="text-center w-full mb-6 mt-15">
-          <h2 className={`${titleSize} text-white font-bold mb-2`}>
+          <h2 className={`${titleSize} font-bold mb-2`} style={textStyle}>
             {slide?.leaderboard_title || "Leaderboard"}
           </h2>
-          <p className={`text-white/70 ${subtitleSize}`}>
+          <p className={`${subtitleSize}`} style={mutedStyle}>
             {players.length} {players.length === 1 ? "player" : "players"}
           </p>
         </div>
@@ -99,7 +107,9 @@ export default function LeaderboardPreview({
         {/* --------------- Players List --------------- */}
         <div className="w-full max-w-3xl flex-1">
           {players.length === 0 ? (
-            <div className="text-white/80 text-center py-6">No results yet</div>
+            <div className="text-center py-6" style={mutedStyle}>
+              No results yet
+            </div>
           ) : (
             <ul className="space-y-4 w-full flex flex-col items-stretch py-2">
               <AnimatePresence>
@@ -163,7 +173,8 @@ export default function LeaderboardPreview({
                             {p.character}
                           </div>
                           <div
-                            className={`font-medium text-white truncate ${nameSize}`}
+                            className={`font-medium truncate ${nameSize}`}
+                            style={textStyle}
                           >
                             {p.name}
                           </div>
@@ -172,7 +183,8 @@ export default function LeaderboardPreview({
 
                       {/* --------------- Score --------------- */}
                       <div
-                        className={`${scoreWidth} font-semibold text-white text-right shrink-0 ${scoreSize}`}
+                        className={`${scoreWidth} font-semibold text-right shrink-0 ${scoreSize}`}
+                        style={textStyle}
                       >
                         {Math.round(p.total_points)}
                       </div>
