@@ -397,6 +397,7 @@ export default function ManagerPickAnswerQuestion({
       )}
       <div className="relative z-10 flex min-h-screen w-full flex-col items-center justify-around">
       <TopBar
+        isConnected={isConnected}
         accessCode={quiz?.access_code}
         showQRButton={true}
         onQRToggle={setShowQRModal}
@@ -415,17 +416,6 @@ export default function ManagerPickAnswerQuestion({
         }`}
       >
         {/* WebSocket Connection Status */}
-        <div className="absolute top-20 right-4 flex items-center gap-2 text-xs z-50">
-          <div
-            className={`w-2 h-2 rounded-full ${
-              isConnected ? "bg-green-500" : "bg-red-500"
-            }`}
-          ></div>
-          <span className="text-[color:var(--quiz-text-muted)]">
-            {isConnected ? "Connected" : "Disconnected"}
-          </span>
-        </div>
-
         {isRemoteReady ? (
           <>
             {/* صورت سوال - بالا با فاصله بیشتر */}

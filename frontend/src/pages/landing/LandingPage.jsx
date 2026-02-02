@@ -125,10 +125,11 @@ function SectionHeader({ title, description }) {
 }
 
 function FeatureCard({ title, description, Icon }) {
+  const IconElement = Icon ? <Icon /> : null;
   return (
     <div className="group flex h-full flex-col gap-4 rounded-3xl border border-[#e2e8f0] bg-white p-6 shadow-[0_18px_36px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 hover:border-[#c7d2fe]">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f46e5]">
-        <Icon />
+        {IconElement}
       </div>
       <div className="space-y-2">
         <h3 className="text-lg font-semibold text-[#0f172a]">{title}</h3>
@@ -231,20 +232,22 @@ export default function LandingPage() {
               onSubmit={handleJoin}
               className="flex items-center gap-2 rounded-full border border-[#e2e8f0] bg-white px-3 py-1.5 shadow-[0_8px_18px_rgba(15,23,42,0.06)]"
             >
-              <span className="pl-2 text-[11px] font-semibold tracking-[0.14em] text-[#94a3b8]">
-                proslides.ir/
-              </span>
-              <input
-                type="text"
-                value={accessCode}
-                onChange={(event) => setAccessCode(event.target.value)}
-                placeholder="کد را وارد کنید"
-                className="w-28 border-none bg-transparent text-sm text-[#111827] placeholder:text-[#94a3b8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366f1]/30"
-                autoComplete="off"
-                spellCheck="false"
-                aria-label="کد ورود"
-                dir="ltr"
-              />
+              <div className="flex items-center gap-2" dir="ltr">
+                <span className="text-[11px] font-semibold tracking-[0.14em] text-[#94a3b8]">
+                  proslides.ir/
+                </span>
+                <input
+                  type="text"
+                  value={accessCode}
+                  onChange={(event) => setAccessCode(event.target.value)}
+                  placeholder="کد را وارد کنید"
+                  className="w-28 border-none bg-transparent text-center text-sm text-[#111827] placeholder:text-[#94a3b8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366f1]/30"
+                  autoComplete="off"
+                  spellCheck="false"
+                  aria-label="کد ورود"
+                  dir="rtl"
+                />
+              </div>
               <button
                 type="submit"
                 className="rounded-full bg-[#111827] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-[#0f172a]"

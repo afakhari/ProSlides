@@ -6,66 +6,75 @@ export const WebSocketContext = createContext(null);
 export const WebSocketProvider = ({ children, role = "manager" }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
-  const [type8Message, setType8Message] = useState(null); // مخصوص type:8 که گم نشه
+  const [type8Message, setType8Message] = useState(null); // type:8 message stash
   const [connectionError, setConnectionError] = useState(null);
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const [sessionId, setSessionId] = useState(null);
+  const sessionIdRef = useRef(null);
 
-  // Connect to WebSocket
   const connect = (sessionIdInput) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      console.log("Already connected");
+      console.log("[WS] Already connected");
       return;
     }
+    if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+      console.log("[WS] Already connecting");
+      return;
+    }
+
+    sessionIdRef.current = sessionIdInput;
 
     try {
       // const wsUrl = `ws://localhost:8080/ws/${sessionIdInput}/${role}`;
       const wsUrl = `wss://present.proslides.ir/ws/${sessionIdInput}/${role}`;
-      console.log(`🔌 Connecting to: ${wsUrl}`);
+      console.log(`[WS] Connecting to: ${wsUrl}`);
 
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log("✅ WebSocket Connected as", role);
+        console.log("[WS] Connected as", role);
         setIsConnected(true);
         setConnectionError(null);
         setSessionId(sessionIdInput);
       };
 
-      ws.onclose = () => {
-        console.log("❌ WebSocket Disconnected");
+      ws.onclose = (event) => {
+        const reason = event?.reason ? `: ${event.reason}` : "";
+        console.log(`[WS] Disconnected (${event?.code ?? "unknown"}${reason})`);
         setIsConnected(false);
+        wsRef.current = null;
 
-        // Auto-reconnect after 3 seconds
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+        }
+
         reconnectTimeoutRef.current = setTimeout(() => {
-          if (sessionId) {
-            console.log("🔄 Attempting to reconnect...");
-            connect(sessionId);
+          const idToUse = sessionIdRef.current || sessionId;
+          if (idToUse) {
+            console.log("[WS] Attempting to reconnect...");
+            connect(idToUse);
           }
         }, 3000);
       };
 
       ws.onerror = (error) => {
-        console.error("⚠️ WebSocket Error:", error);
-        setConnectionError("Connection error occurred");
+        console.error("[WS] Error:", error);
+        setConnectionError("\u062e\u0637\u0627\u06cc \u0627\u062a\u0635\u0627\u0644 \u0648\u0628\u200c\u0633\u0648\u06a9\u062a");
       };
 
       ws.onmessage = (event) => {
-        console.log("📩 Received:", event.data);
+        console.log("[WS] Received:", event.data);
 
         try {
           const data = JSON.parse(event.data);
           setLastMessage(data);
-          // ذخیره جداگانه type:8 تا با پیام‌های دیگه گم نشه
           if (data.type === 8) {
-            console.log("📩 Type 8 stored separately");
+            console.log("[WS] Type 8 stored separately");
             setType8Message({ ...data, _timestamp: Date.now() });
           }
         } catch {
-          // Handle non-JSON messages (like "OK count: X")
-          console.log("📩 Text message:", event.data);
-          // Ignore "OK count" messages to prevent overwriting important JSON messages
+          console.log("[WS] Text message:", event.data);
           if (!event.data.startsWith("OK")) {
             setLastMessage({ type: "text", content: event.data });
           }
@@ -74,12 +83,11 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
 
       wsRef.current = ws;
     } catch (error) {
-      console.error("Failed to create WebSocket:", error);
+      console.error("[WS] Failed to create WebSocket:", error);
       setConnectionError(error.message);
     }
   };
 
-  // Disconnect WebSocket
   const disconnect = () => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
@@ -92,32 +100,30 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
 
     setIsConnected(false);
     setSessionId(null);
+    sessionIdRef.current = null;
   };
 
-  // Send message
   const sendMessage = (message) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       const messageStr =
         typeof message === "string" ? message : JSON.stringify(message);
       wsRef.current.send(messageStr);
-      console.log("📤 Sent:", messageStr);
+      console.log("[WS] Sent:", messageStr);
       return true;
-    } else {
-      console.error("⚠️ WebSocket is not connected");
-      return false;
     }
+
+    console.error("[WS] WebSocket is not connected");
+    return false;
   };
 
-  // Send navigation command (for manager)
   const sendNavigation = (action) => {
     const msg = {
       type: 9,
-      action: action, // "next" or "previous"
+      action: action,
     };
     return sendMessage(msg);
   };
 
-  // Send end command (for manager)
   const sendEnd = () => {
     const msg = {
       type: 9,
@@ -126,7 +132,6 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
     return sendMessage(msg);
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (reconnectTimeoutRef.current) {
@@ -141,7 +146,7 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
   const value = {
     isConnected,
     lastMessage,
-    type8Message, // پیام type:8 جداگانه
+    type8Message,
     connectionError,
     sessionId,
     connect,
