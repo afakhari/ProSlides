@@ -65,20 +65,54 @@ impl Actor for ManagerSession {
         let session_id = self.session_id.clone();
         let quiz_setup = self.quiz_setup.clone();
         let mut con = self.redis_pool.clone();
+        let manager_addr = ctx.address();
         actix_rt::spawn(async move {
             save_quiz_setup(&session_id, &quiz_setup, &mut con).await.ok();
+
+            // Send current players list to manager on connect (resync after reconnect)
+            let pattern = format!("players:{session_id}");
+            let keys: Vec<String> = match redis::cmd("SMEMBERS")
+                .arg(&pattern)
+                .query_async(&mut con)
+                .await
+            {
+                Ok(k) => k,
+                Err(_) => return,
+            };
+
+            let mut users: Vec<serde_json::Value> = Vec::new();
+            if !keys.is_empty() {
+                let player_jsons: Vec<Option<String>> = match redis::cmd("MGET")
+                    .arg(&keys)
+                    .query_async(&mut con)
+                    .await
+                {
+                    Ok(v) => v,
+                    Err(_) => return,
+                };
+
+                for json_opt in player_jsons.into_iter().flatten() {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json_opt) {
+                        users.push(v);
+                    }
+                }
+            }
+
+            let payload = json!({
+                "type": 7,
+                "users": users,
+            });
+
+            if let Ok(text) = serde_json::to_string(&payload) {
+                manager_addr.do_send(ManagerText(text));
+            }
         });
         self.room.do_send(RegisterManager(ctx.address()));
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
         self.room.do_send(UnregisterManager);
-        let mut con = self.redis_pool.clone();
-        let session_id = self.session_id.clone();
-        actix_rt::spawn(async move {
-            save_slide_index(&mut con, &session_id, -1).await;
-            cleanup_quiz_redis(&mut con, &session_id).await;
-        });
+        // Keep quiz state on temporary disconnects; cleanup happens only on explicit "end".
     }
 }
 

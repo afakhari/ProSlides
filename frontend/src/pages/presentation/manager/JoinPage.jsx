@@ -297,6 +297,7 @@ export default function ManagerJoinPage({
       >
         {/* Top bar */}
         <TopBar
+          isConnected={isConnected}
           accessCode={quiz?.access_code}
           showQRButton={true}
           onQRToggle={setShowQRModal}
@@ -311,18 +312,6 @@ export default function ManagerJoinPage({
             isTextDark ? "bg-white/85 text-gray-900" : "bg-gray-800 text-white"
           } rounded-2xl lg:rounded-2xl md:rounded-xl sm:rounded-xl pt-4! pb-20! md:pt-8 md:pb-12 lg:pb-18 px-4 sm:px-4 md:px-16 lg:px-72! shadow-2xl relative transition-all duration-300`}
         >
-          {/* WebSocket Connection Status */}
-          <div className="absolute top-2 right-2 flex items-center gap-2 text-xs">
-            <div
-              className={`w-2 h-2 rounded-full ${
-                isConnected ? "bg-green-500" : "bg-red-500"
-              }`}
-            ></div>
-            <span className="text-[color:var(--quiz-text-muted)]">
-              {isConnected ? "Connected" : "Disconnected"}
-            </span>
-          </div>
-
           <div className="flex flex-col items-center gap-1.5">
             {/* <div className="text-xl md:text-2xl lg:text-3xl font-semibold">
               {page === "lobby"

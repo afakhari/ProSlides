@@ -16,7 +16,6 @@ import { ServerDataProvider } from "./contexts/ServerDataContext";
 import { useServerData } from "./hooks/useServerData";
 import notFoundIllustration from "./assets/404.svg";
 import accessDeniedIllustration from "./assets/access_denied.png";
-import SiteFooter from "./components/SiteFooter";
 import { QuizSetup } from "./data/mockData";
 
 import ManagerJoinPage from "./pages/presentation/manager/JoinPage";
@@ -237,7 +236,6 @@ export default function App() {
             </button>
           </div>
         </main>
-      <SiteFooter />
       </div>
     );
   }
@@ -322,7 +320,6 @@ export default function App() {
             </button>
           </div>
         </main>
-      <SiteFooter />
       </div>
     );
   }

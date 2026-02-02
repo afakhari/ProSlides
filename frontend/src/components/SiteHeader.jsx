@@ -1,5 +1,4 @@
-﻿import { useState } from "react";
-import { Link } from "react-router-dom";
+﻿import { Link } from "react-router-dom";
 
 function LogoMark() {
   return (
@@ -13,7 +12,6 @@ function LogoMark() {
 }
 
 export default function SiteHeader({ className = "" }) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const headerClassName = ["border-b border-[#e5e7eb] bg-white", className]
     .filter(Boolean)
     .join(" ");

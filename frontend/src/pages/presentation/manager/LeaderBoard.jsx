@@ -214,6 +214,7 @@ function ManagerLeaderBoard({
       )}
       <div className="relative z-10 flex min-h-screen w-full flex-col items-center justify-around">
       <TopBar
+        isConnected={isConnected}
         accessCode={quiz?.access_code}
         showQRButton={true}
         onQRToggle={setShowQRModal}
@@ -234,17 +235,6 @@ function ManagerLeaderBoard({
         <main className="flex-1 w-full overflow-hidden min-h-0 pb-16">
           <section className="flex-1 w-full flex flex-col items-center min-h-0 px-4">
             {/* WebSocket Connection Status */}
-            <div className="absolute top-20 right-4 flex items-center gap-2 text-xs z-50">
-              <div
-                className={`w-2 h-2 rounded-full ${
-                  isConnected ? "bg-green-500" : "bg-red-500"
-                }`}
-              ></div>
-              <span className="text-[color:var(--quiz-text-muted)]">
-                {isConnected ? "Connected" : "Disconnected"}
-              </span>
-            </div>
-
             {/* Title and player count */}
             <div className="text-center w-full">
               <h2 className="text-6xl text-[color:var(--quiz-text)] font-bold mb-4">
