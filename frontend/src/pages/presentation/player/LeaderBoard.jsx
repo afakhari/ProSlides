@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { getColorForUser } from "../../../lib/colorUtils";
+import { getColorForUser, isLightColor } from "../../../lib/colorUtils";
 
 // const players = [
 //   {
@@ -114,12 +114,19 @@ function PlayerLeaderBoard({ players, quiz }) {
       : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
+  const needsOverlay =
+    !!quiz?.background?.image ||
+    isLightColor(quiz?.background?.color || "#1e1e2e");
 
   return (
     <div
-      className="h-screen overflow-hidden bg-cover bg-center bg-no-repeat"
+      className="relative h-screen overflow-hidden bg-cover bg-center bg-no-repeat"
       style={backgroundStyle}
     >
+      {needsOverlay && (
+        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
+      <div className="relative z-10 h-full">
       <header>
         <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
           <div className="shrink-0">
@@ -292,6 +299,7 @@ function PlayerLeaderBoard({ players, quiz }) {
             )}
           </div>
         </section>
+      </div>
       </div>
     </div>
   );

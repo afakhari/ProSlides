@@ -70,4 +70,33 @@ export function getPlayerColor(userId, serverColor) {
   return getColorForUser(userId);
 }
 
+function normalizeHex(input) {
+  if (!input) return null;
+  const value = String(input).trim();
+  if (!value.startsWith("#")) return null;
+  if (value.length === 4) {
+    const r = value[1];
+    const g = value[2];
+    const b = value[3];
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  if (value.length === 7) return value;
+  return null;
+}
+
+export function isLightColor(hex) {
+  const normalized = normalizeHex(hex);
+  if (!normalized) return false;
+  const r = parseInt(normalized.slice(1, 3), 16);
+  const g = parseInt(normalized.slice(3, 5), 16);
+  const b = parseInt(normalized.slice(5, 7), 16);
+  // Relative luminance (sRGB)
+  const srgb = [r, g, b].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  const luminance = 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+  return luminance > 0.6;
+}
+
 export default getColorForUser;

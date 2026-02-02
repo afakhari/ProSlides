@@ -5,6 +5,7 @@ import Footer from "../../../components/Footer";
 // LeaderboardModal was removed; modal UI now lives on Manager LeaderBoard page
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
+import { isLightColor } from "../../../lib/colorUtils";
 import {
   User_adding,
   createNextPrevious,
@@ -266,14 +267,20 @@ export default function ManagerJoinPage({
       : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
+  const needsOverlay =
+    !!quiz?.background?.image ||
+    isLightColor(quiz?.background?.color || "#1e1e2e");
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-no-repeat "
+      className="relative min-h-screen bg-cover bg-center bg-no-repeat"
       style={backgroundStyle}
     >
+      {needsOverlay && (
+        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
       <div
-        className={`w-full pt-16! sm:pt-36 md:pt-40 pb-24 px-4 sm:px-3 flex ${
+        className={`relative z-10 w-full pt-16! sm:pt-36 md:pt-40 pb-24 px-4 sm:px-3 flex ${
           showQRModal ? "justify-end" : "justify-center"
         } transition-all duration-300`}
       >

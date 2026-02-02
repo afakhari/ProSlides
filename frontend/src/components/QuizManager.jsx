@@ -147,6 +147,8 @@ export default function QuizManager({ onNewPresentation }) {
         method: "POST",
         json: {
           title: "Untitled Presentation",
+          background_color: "#1e1e2e",
+          background_image_url: "/bg.jpg",
         },
       });
 

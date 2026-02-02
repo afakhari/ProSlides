@@ -4,6 +4,7 @@ import { motion as Motion } from "framer-motion";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 import {ErrorModal} from "../../quiz/manager/ErrorModal";
+import { isLightColor } from "../../../lib/colorUtils";
 
 
 // Animation configurations based on emoji categories
@@ -255,10 +256,17 @@ export default function PlayerJoinPage({ roomId, quiz }) {
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
   };
+  const needsOverlay =
+    !!quiz?.background?.image ||
+    isLightColor(quiz?.background?.color || "#1e1e2e");
 
   // Stay on "Get ready to play!" until server sends next command (no auto-exit)
   return !joined ? (
-    <div className="min-h-screen w-full" style={backgroundStyle}>
+    <div className="relative min-h-screen w-full" style={backgroundStyle}>
+      {needsOverlay && (
+        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
+      <div className="relative z-10">
       <div className="flex flex-col items-center justify-center">
         <header>
           <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
@@ -357,9 +365,14 @@ export default function PlayerJoinPage({ roomId, quiz }) {
           </button>
         </div>
       </div>
+      </div>
     </div>
   ) : (
-    <div className="min-h-screen w-full" style={backgroundStyle}>
+    <div className="relative min-h-screen w-full" style={backgroundStyle}>
+      {needsOverlay && (
+        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
+      <div className="relative z-10">
       <header>
         <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl">
           <div className="shrink-0">
@@ -432,7 +445,8 @@ export default function PlayerJoinPage({ roomId, quiz }) {
         onClose={closeErrorModal}
         message={error}
       />
-        
+
+    </div>
     </div>
   );
 }

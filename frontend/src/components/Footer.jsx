@@ -14,7 +14,6 @@ export default function Footer({
   isQROpen = false,
   onShowLeaderboard = null,
   onNext = null,
-  onPrevious = null,
   onEnd = null,
 }) {
   const [showMenu, setShowMenu] = useState(false);

@@ -5,6 +5,7 @@ import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { DefaultFooterStats } from "../../../data/mockData";
+import { isLightColor } from "../../../lib/colorUtils";
 
 function ManagerPlayerLeaderBoard({
   onNext,
@@ -73,12 +74,19 @@ function ManagerPlayerLeaderBoard({
       : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
+  const needsOverlay =
+    !!quiz?.background?.image ||
+    isLightColor(quiz?.background?.color || "#1e1e2e");
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
+      className="relative min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
       style={backgroundStyle}
     >
+      {needsOverlay && (
+        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
+      <div className="relative z-10 flex min-h-screen w-full flex-col items-center justify-around">
       <TopBar
         accessCode={accessCode}
         showQRButton={true}
@@ -248,6 +256,7 @@ function ManagerPlayerLeaderBoard({
           onNext={onNext}
           onPrevious={onPrevious}
         />
+      </div>
       </div>
     </div>
   );

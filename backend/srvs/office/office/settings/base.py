@@ -1,10 +1,12 @@
 from pathlib import Path
 from email.utils import formataddr
+import logging
 
 from environs import Env
 
 env = Env()
 env.read_env()
+logger = logging.getLogger(__name__)
 
 # Base paths
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -17,9 +19,21 @@ DEBUG = env.bool("DEBUG", False)
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
 EXPORT_SERVICE_TOKEN = env.str("EXPORT_SERVICE_TOKEN", default="")
 GOOGLE_CLIENT_ID = env.str("GOOGLE_CLIENT_ID", default="")
+GOOGLE_CLIENT_SECRET = env.str("GOOGLE_CLIENT_SECRET", default="")
 GOOGLE_OAUTH_CERTS_URL = env.str(
     "GOOGLE_OAUTH_CERTS_URL",
     default="https://www.googleapis.com/oauth2/v3/certs",
+)
+
+logger.info(
+    "GOOGLE_CLIENT_ID loaded? %s (len=%s)",
+    bool(GOOGLE_CLIENT_ID),
+    len(GOOGLE_CLIENT_ID) if GOOGLE_CLIENT_ID else 0,
+)
+logger.info(
+    "GOOGLE_CLIENT_SECRET loaded? %s (len=%s)",
+    bool(GOOGLE_CLIENT_SECRET),
+    len(GOOGLE_CLIENT_SECRET) if GOOGLE_CLIENT_SECRET else 0,
 )
 
 # Application definition

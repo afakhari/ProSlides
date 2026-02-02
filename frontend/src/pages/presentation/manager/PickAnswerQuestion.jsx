@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
-import { getColorForUser } from "../../../lib/colorUtils";
+import { getColorForUser, isLightColor } from "../../../lib/colorUtils";
 // LeaderboardModal was removed; modal UI now lives on Manager LeaderBoard page
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
@@ -373,12 +373,19 @@ export default function ManagerPickAnswerQuestion({
       : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
+  const needsOverlay =
+    !!quiz?.background?.image ||
+    isLightColor(quiz?.background?.color || "#1e1e2e");
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
+      className="relative min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
       style={backgroundStyle}
     >
+      {needsOverlay && (
+        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
+      <div className="relative z-10 flex min-h-screen w-full flex-col items-center justify-around">
       <TopBar
         accessCode={quiz?.access_code}
         showQRButton={true}
@@ -650,6 +657,7 @@ export default function ManagerPickAnswerQuestion({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
