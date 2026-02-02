@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
-import { getColorForUser } from "../../../lib/colorUtils";
+import { getColorForUser, isLightColor } from "../../../lib/colorUtils";
 // LeaderboardModal was removed; modal UI now lives on Manager LeaderBoard page
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
@@ -373,12 +373,29 @@ export default function ManagerPickAnswerQuestion({
       : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
+  const textColor =
+    quiz?.text_color || quiz?.background?.text_color || "#111827";
+  const textMutedColor =
+    textColor.toLowerCase() === "#111827"
+      ? "rgba(17, 24, 39, 0.7)"
+      : "rgba(255, 255, 255, 0.7)";
+  const needsOverlay =
+    !!quiz?.background?.image ||
+    isLightColor(quiz?.background?.color || "#1e1e2e");
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
-      style={backgroundStyle}
+      className="relative min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
+      style={{
+        ...backgroundStyle,
+        "--quiz-text": textColor,
+        "--quiz-text-muted": textMutedColor,
+      }}
     >
+      {needsOverlay && (
+        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
+      <div className="relative z-10 flex min-h-screen w-full flex-col items-center justify-around">
       <TopBar
         accessCode={quiz?.access_code}
         showQRButton={true}
@@ -404,7 +421,7 @@ export default function ManagerPickAnswerQuestion({
               isConnected ? "bg-green-500" : "bg-red-500"
             }`}
           ></div>
-          <span className="text-white/80">
+          <span className="text-[color:var(--quiz-text-muted)]">
             {isConnected ? "Connected" : "Disconnected"}
           </span>
         </div>
@@ -412,13 +429,13 @@ export default function ManagerPickAnswerQuestion({
         {isRemoteReady ? (
           <>
             {/* صورت سوال - بالا با فاصله بیشتر */}
-            <h2 className="text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-4 mt-8 text-center px-4 shrink-0">
+            <h2 className="text-4xl lg:text-5xl xl:text-6xl font-bold text-[color:var(--quiz-text)] mb-4 mt-8 text-center px-4 shrink-0">
               {currentQuestion.question_text}
             </h2>
 
             {/* تایمر */}
             {!showResults && timer > 0 && (
-              <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-white pointer-events-none z-10">
+              <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-[color:var(--quiz-text)] pointer-events-none z-10">
                 {timer}
               </div>
             )}
@@ -460,7 +477,7 @@ export default function ManagerPickAnswerQuestion({
                     >
                       {/* تعداد رای - فقط بعد از دریافت نتایج */}
                       {hasReceivedResults && (
-                        <div className="mb-1 text-center text-2xl lg:text-4xl text-white font-semibold">
+                        <div className="mb-1 text-center text-2xl lg:text-4xl text-[color:var(--quiz-text)] font-semibold">
                           {votes[index]}
                         </div>
                       )}
@@ -498,7 +515,7 @@ export default function ManagerPickAnswerQuestion({
                       ></div>
 
                       {/* متن گزینه */}
-                      <p className="mt-2 text-white text-xl lg:text-2xl font-semibold text-center">
+                      <p className="mt-2 text-[color:var(--quiz-text)] text-xl lg:text-2xl font-semibold text-center">
                         {opt.option_text}
                       </p>
                     </div>
@@ -509,7 +526,7 @@ export default function ManagerPickAnswerQuestion({
           </>
         ) : (
           <div className="flex items-center justify-center w-full flex-1 min-h-0 mb-4 px-4">
-            <div className="text-white/80 text-2xl">Loading quiz…</div>
+          <div className="text-[color:var(--quiz-text-muted)] text-2xl">Loading quiz…</div>
           </div>
         )}
 
@@ -546,6 +563,7 @@ export default function ManagerPickAnswerQuestion({
         onNext={handleNext}
         onPrevious={handlePrevious}
         onEnd={handleEnd}
+        textColor={textColor}
       />
 
       {/* Leaderboard Modal using type 12 data */}
@@ -650,6 +668,7 @@ export default function ManagerPickAnswerQuestion({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

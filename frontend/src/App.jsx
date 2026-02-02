@@ -104,9 +104,11 @@ export default function App() {
               background: {
                 color: data.background_color || "#1e1e2e",
                 image: data.background_image_url || "",
+                text_color: data.text_color || "#111827",
               },
               music_url: data.music_url || "",
               slides: [],
+              text_color: data.text_color || "#111827",
             });
             setStatus("success");
           } else {
@@ -414,9 +416,10 @@ export default function App() {
               quiz_id: data.quiz_id,
               title: data.title,
               access_code: data.access_code || "",
-              background: data.background || { color: "#1e1e2e", image: "" },
+              background: data.background || { color: "#1e1e2e", image: "", text_color: "#111827" },
               music_url: data.music_url || "",
               slides: mappedSlides,
+              text_color: data.text_color || data.background?.text_color || "#111827",
             };
 
             setRemoteQuiz(quizData);

@@ -41,7 +41,8 @@ class Quiz(models.Model):
     participants_count = models.PositiveIntegerField(default=0)
     music_url = models.URLField(
         max_length=500, blank=True, null=True)
-    background_color = models.CharField(max_length=7, default='#FFFFFF')
+    background_color = models.CharField(max_length=7, default='#f7f7fb')
+    text_color = models.CharField(max_length=7, default='#111827')
     background_image_url = models.URLField(
         max_length=500, blank=True, null=True)
 

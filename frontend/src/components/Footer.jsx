@@ -9,12 +9,13 @@ import ReactionEffects from "./ReactionEffects";
 
 export default function Footer({
   currentSlide = 1,
+  totalSlides = null,
   onQRToggle = null,
   isQROpen = false,
   onShowLeaderboard = null,
   onNext = null,
-  onPrevious = null,
   onEnd = null,
+  textColor = "#ffffff",
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -28,6 +29,13 @@ export default function Footer({
   const reactions = Reactions;
 
   const qrOpen = onQRToggle ? isQROpen : false;
+  const isTextDark =
+    typeof textColor === "string" &&
+    ["#111827", "#000000"].includes(textColor.toLowerCase());
+  const panelBackground = isTextDark ? "bg-white/70" : "bg-black/40";
+  const iconHover = isTextDark ? "hover:bg-black/10" : "hover:bg-white/30";
+  const iconHoverSoft = isTextDark ? "hover:bg-black/10" : "hover:bg-white/20";
+  const numberBackground = isTextDark ? "bg-black/10" : "bg-white/40";
 
   // Handle reaction click
   const handleReactionClick = (reactionLabel) => {
@@ -52,10 +60,12 @@ export default function Footer({
       <div
         className={`fixed ${
           qrOpen ? "left-[20%] right-0" : "left-0 right-0"
-        } bottom-0 h-16 flex items-center justify-between px-6 z-50`}
+        } bottom-0 h-16 flex items-center justify-between px-6 z-50 text-[color:var(--quiz-text)]`}
       >
         {/* Left section - Menu and Navigation */}
-        <div className="flex items-center gap-2 bg-black/40 rounded-full pb-1 pl-2 pr-2 mb-2">
+        <div
+          className={`flex items-center gap-2 ${panelBackground} rounded-full pb-1 pl-2 pr-2 mb-2`}
+        >
           <div
             className="relative"
             onMouseEnter={() => setShowMenu(true)}
@@ -69,27 +79,35 @@ export default function Footer({
             </button> */}
           </div>
 
-          <button
+          {/* <button
             onClick={() => onPrevious && onPrevious()}
             className="w-8 h-8 hover:bg-white/30 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors"
           >
             {"<"}
-          </button>
+          </button> */}
 
-          <div className="px-4 bg-white/40 rounded text-white font-semibold">
+          <div
+            className={`px-4 ${numberBackground} rounded text-current font-semibold`}
+          >
             {currentSlide}
           </div>
 
           <button
-            onClick={() => onNext && onNext()}
-            className="w-8 h-8 hover:bg-white/20 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors"
+            onClick={() => {
+              if (onEnd && totalSlides && currentSlide >= totalSlides) {
+                onEnd();
+                return;
+              }
+              onNext && onNext();
+            }}
+            className={`w-8 h-8 ${iconHoverSoft} rounded-full flex items-center justify-center text-current cursor-pointer border-none transition-colors`}
           >
             {">"}
           </button>
 
           <button
             onClick={() => setShowShortcuts(!showShortcuts)}
-            className="w-10 h-10 hover:bg-white/30 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors text-lg font-bold"
+            className={`w-10 h-10 ${iconHover} rounded-full flex items-center justify-center text-current cursor-pointer border-none transition-colors text-lg font-bold`}
           >
             K
           </button>
@@ -99,14 +117,14 @@ export default function Footer({
             onMouseEnter={() => setShowReactions(true)}
             onMouseLeave={() => setShowReactions(false)}
           >
-            <button className="w-10 h-10 hover:bg-white/30 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors text-lg">
+            <button className={`w-10 h-10 ${iconHover} rounded-full flex items-center justify-center text-current cursor-pointer border-none transition-colors text-lg`}>
               🎉
             </button>
           </div>
 
           <button
             onClick={() => onShowLeaderboard && onShowLeaderboard()}
-            className="w-10 h-10 hover:bg-white/30 rounded-full flex items-center justify-center text-white cursor-pointer border-none transition-colors text-lg"
+            className={`w-10 h-10 ${iconHover} rounded-full flex items-center justify-center text-current cursor-pointer border-none transition-colors text-lg`}
           >
             🏆
           </button>
@@ -271,3 +289,4 @@ export default function Footer({
     </>
   );
 }
+

@@ -50,8 +50,9 @@ export default function DesignPanel({
   useEffect(() => {
     const hasBgColorChanged = localQuiz.background_color !== originalQuiz.background_color;
     const hasBgImageChanged = localQuiz.background_image_url !== originalQuiz.background_image_url;
+    const hasTextColorChanged = localQuiz.text_color !== originalQuiz.text_color;
     
-    setHasChanges(hasBgColorChanged || hasBgImageChanged);
+    setHasChanges(hasBgColorChanged || hasBgImageChanged || hasTextColorChanged);
   }, [localQuiz, originalQuiz]);
 
   useEffect(() => {
@@ -178,6 +179,13 @@ export default function DesignPanel({
     }
   };
 
+  const handleTextColorChange = (color) => {
+    setLocalQuiz({
+      ...localQuiz,
+      text_color: color,
+    });
+  };
+
 
   /*  
     Temporarily remove image from the front end only; To completely remove image from the back and front, 
@@ -212,6 +220,10 @@ export default function DesignPanel({
       
       if (localQuiz.background_image_url !== originalQuiz.background_image_url) {
         updateData.background_image_url = localQuiz.background_image_url;
+      }
+
+      if (localQuiz.text_color !== originalQuiz.text_color) {
+        updateData.text_color = localQuiz.text_color || "#111827";
       }
 
       // Send a request to the back end to update the background
@@ -412,6 +424,34 @@ export default function DesignPanel({
           </div>
 
           <div className="pt-4 border-t border-gray-200">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">
+              Text Color :
+            </h3>
+            <div className="flex items-center gap-3">
+              {[
+                { label: "Black", value: "#111827" },
+                { label: "White", value: "#ffffff" },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => handleTextColorChange(opt.value)}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                    localQuiz.text_color === opt.value
+                      ? "border-pink-500 ring-2 ring-pink-200"
+                      : "border-gray-300 hover:border-gray-400"
+                  }`}
+                >
+                  <span
+                    className="h-4 w-4 rounded-full border border-gray-300"
+                    style={{ backgroundColor: opt.value }}
+                  />
+                  <span className="text-gray-700">{opt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-gray-200">
             <h3 className="text-sm font-medium text-gray-700 mb-2">
               Current Color :
             </h3>
@@ -426,6 +466,12 @@ export default function DesignPanel({
                     ? "Image URL" 
                     : localQuiz.background_color || "#ffffff"
                   }
+                </span>
+                <span
+                  className="mt-1 inline-block text-xs"
+                  style={{ color: localQuiz.text_color || "#111827" }}
+                >
+                  Sample text preview
                 </span>
               </div>
             </div>

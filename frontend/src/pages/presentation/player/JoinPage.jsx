@@ -4,6 +4,7 @@ import { motion as Motion } from "framer-motion";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 import {ErrorModal} from "../../quiz/manager/ErrorModal";
+import { isLightColor } from "../../../lib/colorUtils";
 
 
 // Animation configurations based on emoji categories
@@ -135,7 +136,9 @@ export default function PlayerJoinPage({ roomId, quiz }) {
   const [joined, setJoined] = useState(false);
   const [joinSent, setJoinSent] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const { connect, sendMessage, isConnected, lastMessage } = useWebSocket();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const { connect, sendMessage, isConnected, lastMessage, connectionError } =
+    useWebSocket();
   const { processMessage } = useServerData();
   const [error, _setError] = useState(null);
   const [errorModalOpen, setErrorModalOpen] = useState(false);
@@ -144,6 +147,16 @@ export default function PlayerJoinPage({ roomId, quiz }) {
   const closeErrorModal = () => {
     setErrorModalOpen(false);
   };
+
+  useEffect(() => {
+    if (isConnected) {
+      setIsConnecting(false);
+      return;
+    }
+    if (connectionError) {
+      setIsConnecting(false);
+    }
+  }, [isConnected, connectionError]);
 
 
   // const navigate = useNavigate();
@@ -186,6 +199,7 @@ export default function PlayerJoinPage({ roomId, quiz }) {
         console.error("Missing roomId for WebSocket connection");
         return;
       }
+      setIsConnecting(true);
       connect(roomId);
     } catch (err) {
       console.error("Failed to connect WebSocket:", err);
@@ -242,27 +256,66 @@ export default function PlayerJoinPage({ roomId, quiz }) {
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
   };
+  const textColor =
+    quiz?.text_color || quiz?.background?.text_color || "#111827";
+  const textMutedColor =
+    textColor.toLowerCase() === "#111827"
+      ? "rgba(17, 24, 39, 0.7)"
+      : "rgba(255, 255, 255, 0.7)";
+  const needsOverlay =
+    !!quiz?.background?.image ||
+    isLightColor(quiz?.background?.color || "#1e1e2e");
 
   // Stay on "Get ready to play!" until server sends next command (no auto-exit)
   return !joined ? (
-    <div className="min-h-screen w-full" style={backgroundStyle}>
+    <div
+      className="relative min-h-screen w-full"
+      style={{
+        ...backgroundStyle,
+        "--quiz-text": textColor,
+        "--quiz-text-muted": textMutedColor,
+      }}
+    >
+      {needsOverlay && (
+        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
+      <div className="relative z-10">
       <div className="flex flex-col items-center justify-center">
         <header>
-          <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
+          <div className="flex items-center justify-center text-[color:var(--quiz-text)] px-6 py-7 rounded-t-xl placeholder-gray-500">
             <div className="shrink-0">
               <p className="text-3xl">Proslides</p>
             </div>
           </div>
         </header>
-        <div className="flex flex-col items-center mt-7 justify-around w-4/5 max-w-2xl">
+        <div className="mt-2 flex items-center gap-2 text-sm text-[color:var(--quiz-text-muted)]">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              isConnected ? "bg-green-400" : "bg-red-400"
+            }`}
+          ></span>
+          <span aria-live="polite">
+            {isConnected
+              ? "اتصال برقرار است"
+              : isConnecting
+                ? "در حال اتصال..."
+                : "اتصال قطع است"}
+          </span>
+        </div>
+        {connectionError && (
+          <div className="mt-2 rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-100">
+            خطای اتصال. لطفاً دوباره تلاش کنید.
+          </div>
+        )}
+        <div className="flex flex-col items-center mt-7 justify-around w-4/5 max-w-2xl text-[color:var(--quiz-text)]">
           {/* Set name */}
           <div className="w-full">
-            <h1 className="text-white text-left text-2xl font-extrabold">
+            <h1 className="text-left text-2xl font-extrabold">
               Enter your name
             </h1>
           </div>
           <input
-            className="bg-white px-4 py-2 w-full rounded text-center text-lg font-bold placeholder-gray-400"
+            className="bg-white px-4 py-2 w-full rounded text-center text-lg font-bold placeholder-gray-400 text-gray-900"
             // placeholder="Enter your name"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -270,7 +323,7 @@ export default function PlayerJoinPage({ roomId, quiz }) {
 
           {/* Choosing Avatar */}
           <div className="mt-12 w-full">
-            <h1 className="text-white text-left text-2xl font-extrabold">
+            <h1 className="text-left text-2xl font-extrabold">
               Choose an avatar
             </h1>
           </div>
@@ -293,7 +346,7 @@ export default function PlayerJoinPage({ roomId, quiz }) {
             </Motion.div>
             <button
               onClick={() => setShowPicker(!showPicker)}
-              className="text-white font-medium underline hover:text-purple-900 text-2xl"
+              className="font-medium underline hover:text-purple-900 text-2xl"
             >
               Change Avatar
             </button>
@@ -318,24 +371,58 @@ export default function PlayerJoinPage({ roomId, quiz }) {
           {/*Join Button */}
           <button
             onClick={savePlayer}
-            className="mt-12 bg-purple-700 w-full text-white px-10 py-3 rounded-lg hover:bg-purple-800 transition"
+            className="mt-12 bg-purple-700 w-full text-white px-10 py-3 rounded-lg hover:bg-purple-800 transition disabled:opacity-70 disabled:cursor-not-allowed"
+            disabled={isConnecting}
           >
-            Join the game!
+            {isConnecting ? "در حال اتصال..." : "Join the game!"}
           </button>
         </div>
       </div>
+      </div>
     </div>
   ) : (
-    <div className="min-h-screen w-full" style={backgroundStyle}>
+    <div
+      className="relative min-h-screen w-full"
+      style={{
+        ...backgroundStyle,
+        "--quiz-text": textColor,
+        "--quiz-text-muted": textMutedColor,
+      }}
+    >
+      {needsOverlay && (
+        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
+      <div className="relative z-10">
       <header>
-        <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl">
+        <div className="flex items-center justify-center text-[color:var(--quiz-text)] px-6 py-7 rounded-t-xl">
           <div className="shrink-0">
             <p className="text-3xl">Proslides</p>
           </div>
         </div>
       </header>
+      <div className="flex items-center justify-center gap-2 text-sm text-[color:var(--quiz-text-muted)]">
+        <span
+          className={`h-2 w-2 rounded-full ${
+            isConnected ? "bg-green-400" : "bg-red-400"
+          }`}
+        ></span>
+        <span aria-live="polite">
+          {isConnected
+            ? "اتصال برقرار است"
+            : isConnecting
+              ? "در حال اتصال..."
+              : "اتصال قطع است"}
+        </span>
+      </div>
+      {connectionError && (
+        <div className="mt-2 flex justify-center">
+          <div className="rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-100">
+            خطای اتصال. لطفاً دوباره تلاش کنید.
+          </div>
+        </div>
+      )}
       <div className="flex flex-col items-center justify-center h-full">
-        <div className="flex items-center space-x-4 px-6 py-3 rounded-2xl m-4">
+        <div className="flex items-center space-x-4 px-6 py-3 rounded-2xl m-4 text-[color:var(--quiz-text)]">
           <Motion.span
             className="text-5xl cursor-pointer select-none"
             onClick={() => {
@@ -358,11 +445,13 @@ export default function PlayerJoinPage({ roomId, quiz }) {
         <br />
         <br />
 
-        <h4 className="text-3xl text-center text-white mb-6 m-8">
+        <h4 className="text-3xl text-center mb-6 m-8 text-[color:var(--quiz-text)]">
           Get ready to play!
         </h4>
 
-        <h3 className="text-white mb-6">the quiz will start soon.</h3>
+        <h3 className="mb-6 text-[color:var(--quiz-text-muted)]">
+          the quiz will start soon.
+        </h3>
 
         {/* <button
           className="mt-6 bg-purple-700 text-white px-8 py-3 rounded-lg hover:bg-purple-800 transition"
@@ -378,7 +467,8 @@ export default function PlayerJoinPage({ roomId, quiz }) {
         onClose={closeErrorModal}
         message={error}
       />
-        
+
+    </div>
     </div>
   );
 }

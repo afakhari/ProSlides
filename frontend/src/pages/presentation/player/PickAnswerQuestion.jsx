@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
+import { isLightColor } from "../../../lib/colorUtils";
 
 export default function PlayerPickAnswerQuestion({
   question,
@@ -9,7 +10,7 @@ export default function PlayerPickAnswerQuestion({
 }) {
   // همه hooks باید قبل از conditional return باشن
   const { questionResults, partialQuestionResults } = useServerData();
-  const { sendMessage, isConnected } = useWebSocket();
+  const { sendMessage, isConnected, connectionError } = useWebSocket();
 
   const questionId = question?.question_id;
   const questionTime = question?.question_time ?? 0;
@@ -65,7 +66,7 @@ export default function PlayerPickAnswerQuestion({
   }, [question, questionId, questionTime]);
 
   const handleSelect = (option) => {
-    if (submitted || timeLeft <= -1) return;
+    if (submitted || timeLeft <= 0) return;
 
     // اگر has_multiple فالس باشد، فقط یک گزینه مجاز است
     if (question.has_multiple === false) {
@@ -128,7 +129,7 @@ export default function PlayerPickAnswerQuestion({
 
   // Auto-submit when time runs out
   useEffect(() => {
-    if (timeLeft <= -1 && !submitted) {
+    if (timeLeft <= 0 && !submitted) {
       handleSubmit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,7 +138,8 @@ export default function PlayerPickAnswerQuestion({
   const progressPercent =
     timeLeft >= 0 && questionTime > 0 ? (timeLeft / questionTime) * 100 : 0;
   // نمایش جواب‌ها اگر تایمر تمام شد یا داده result رسید
-  const showResults = timeLeft <= -1 || !!result;
+  const showResults = timeLeft <= 0 || !!result;
+  const waitingForResults = timeLeft <= 0 && !result;
   const options = question?.options || [];
 
   // Calculate dynamic background style from quiz data
@@ -147,22 +149,65 @@ export default function PlayerPickAnswerQuestion({
       : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
+  const textColor =
+    quiz?.text_color || quiz?.background?.text_color || "#111827";
+  const textMutedColor =
+    textColor.toLowerCase() === "#111827"
+      ? "rgba(17, 24, 39, 0.7)"
+      : "rgba(255, 255, 255, 0.7)";
+  const needsOverlay =
+    !!quiz?.background?.image ||
+    isLightColor(quiz?.background?.color || "#1e1e2e");
 
   if (!question) return null;
 
   return (
     <div
-      className="text-white h-screen w-screen bg-cover bg-center bg-no-repeat font-poppins"
-      style={backgroundStyle}
+      className="relative h-screen w-screen bg-cover bg-center bg-no-repeat font-poppins text-[color:var(--quiz-text)]"
+      style={{
+        ...backgroundStyle,
+        "--quiz-text": textColor,
+        "--quiz-text-muted": textMutedColor,
+      }}
     >
+      {needsOverlay && (
+        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
+      <div className="relative z-10 h-full w-full">
       <header>
-        <div className="flex items-center justify-center text-white px-6 py-7 rounded-t-xl placeholder-gray-500">
+        <div className="flex items-center justify-center text-[color:var(--quiz-text)] px-6 py-7 rounded-t-xl placeholder-gray-500">
           <div className="shrink-0">
             <p className="text-3xl">Proslides</p>
           </div>
         </div>
       </header>
+      <div className="fixed top-4 right-4 z-40 flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-xs text-[color:var(--quiz-text-muted)]">
+        <span
+          className={`h-2 w-2 rounded-full ${
+            isConnected ? "bg-green-400" : "bg-red-400"
+          }`}
+        ></span>
+        <span aria-live="polite">
+          {isConnected ? "متصل" : "قطع ارتباط"}
+        </span>
+      </div>
+      {connectionError && (
+        <div className="fixed top-12 right-4 z-40 rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-100">
+          خطای اتصال
+        </div>
+      )}
       <div className="flex flex-col items-center justify-between">
+        {waitingForResults && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-4 rounded-2xl bg-white/10 px-10 py-8 text-center shadow-2xl">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/30 border-t-white"></div>
+              <div className="text-lg font-semibold">در حال پردازش نتایج…</div>
+              <div className="text-sm text-[color:var(--quiz-text-muted)]">
+                لطفاً چند ثانیه صبر کنید
+              </div>
+            </div>
+          </div>
+        )}
         {/* <h1 className="text-center text-xl p-1 bg-transparent rounded-xl text-white font-medium ">
           PROSLIDES
         </h1> */}
@@ -183,12 +228,15 @@ export default function PlayerPickAnswerQuestion({
           {/* Progress Bar */}
           <div className="min-h-auto max-w-2xl">
             <div className="m-2.5 flex flex-col items-stretch gap-[0.5vh]">
-              <div className="flex justify-between items-center text-xl font-semibold text-white px-2 mt-3 opacity-90">
+              <div className="flex items-center justify-between text-xl font-semibold text-[color:var(--quiz-text)] px-2 mt-3 opacity-90">
                 <span>{question.min_point}p</span>
+                <span className="text-sm text-[color:var(--quiz-text-muted)]">
+                  {Math.ceil(timeLeft)}s
+                </span>
                 <span>{question.max_point}p</span>
               </div>
 
-              <div className="border-white border-2 bg-[rgba(255,255,255,0.3)] h-2 rounded-[5px] mt-3 mb-5 overflow-hidden">
+              <div className="border-2 border-[color:var(--quiz-text)] bg-[rgba(255,255,255,0.3)] h-2 rounded-[5px] mt-3 mb-5 overflow-hidden">
                 <div
                   className="h-full bg-purple-600"
                   style={{
@@ -249,15 +297,15 @@ export default function PlayerPickAnswerQuestion({
                                   text-[clamp(1rem,2.3vw,1.4rem)] 
                                   transition-all duration-300 
                                   mx-3 
-                                  border-solid border-white border-2 hover:bg-black/30 ${optionClass}`}
+                                  border-solid border-2 border-[color:var(--quiz-text)] hover:bg-black/30 ${optionClass}`}
                     onClick={() => handleSelect(goz)}
                   >
-                    <span className="w-6 h-6 border-2 border-white rounded-full inline-flex shrink-0 items-center justify-center relative">
+                    <span className="w-6 h-6 border-2 border-[color:var(--quiz-text)] rounded-full inline-flex shrink-0 items-center justify-center relative">
                       {selectedOptions.includes(goz) && !showResults && (
                         <span className="w-[22px] h-[22px] bg-[#393e3a] rounded-full"></span>
                       )}
                       {icon && (
-                        <span className="text-sm text-white absolute">
+                        <span className="text-sm text-[color:var(--quiz-text)] absolute">
                           {icon}
                         </span>
                       )}
@@ -280,13 +328,19 @@ export default function PlayerPickAnswerQuestion({
               className="mt-[25px] mx-3 w-[calc(100%-20px)] p-4 border-none rounded-[10px]  font-bold cursor-pointer transition-all duration-300 text-2xl bg-white text-[#6c2bd9] disabled:opacity-60 disabled:cursor-not-allowed"
               onClick={handleSubmit}
               disabled={
-                selectedOptions.length === 0 || timeLeft <= -1 || submitted
+                selectedOptions.length === 0 || timeLeft <= 0 || submitted
               }
             >
               {submitted ? "Submitted ✅" : "Submit"}
             </button>
+            {submitted && (
+              <div className="mt-3 text-center text-sm text-[color:var(--quiz-text-muted)]">
+                پاسخ شما ثبت شد
+              </div>
+            )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

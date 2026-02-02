@@ -39,19 +39,19 @@ export default function TopBar({
     <div
       className={`fixed ${
         qrOpen ? "left-[20%] right-0" : "left-0 right-0"
-      } top-0 h-14 bg-pink-300 flex items-center justify-between px-5 z-50 transition-all duration-300`}
+      } top-0 h-14 bg-pink-300 flex items-center justify-between px-5 z-50 transition-all duration-300 text-[color:var(--quiz-text)]`}
     >
       <div className="flex items-center gap-2">
         <button
           onClick={() => navigate("/manager/panel/")}
-          className="w-9 h-9 pb-1 bg-black/15 rounded-full flex items-center justify-center text-white cursor-pointer border-none text-base hover:bg-black/25 transition-colors"
+          className="w-9 h-9 pb-1 bg-black/15 rounded-full flex items-center justify-center text-current cursor-pointer border-none text-base hover:bg-black/25 transition-colors"
           aria-label="Back"
         >
           ←
         </button>
         <button
           onClick={toggleMute}
-          className="w-8 h-8 bg-black/15 rounded-full flex items-center justify-center text-white cursor-pointer border-none text-base hover:bg-black/25 transition-colors"
+          className="w-8 h-8 bg-black/15 rounded-full flex items-center justify-center text-current cursor-pointer border-none text-base hover:bg-black/25 transition-colors"
           aria-label={isMuted ? "Unmute" : "Mute"}
         >
           {isMuted ? "🔇" : "🔊"}
@@ -60,7 +60,7 @@ export default function TopBar({
 
       {/* Center section with link and QR */}
       <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-2">
-        <div className="text-white font-medium text-[15px] flex items-center gap-2 whitespace-nowrap">
+        <div className="font-medium text-[15px] flex items-center gap-2 whitespace-nowrap">
           To join, go to:{" "}
           <strong
             onClick={copyToClipboard}
@@ -96,7 +96,7 @@ export default function TopBar({
         )}
       </div>
 
-      <div className="text-white font-semibold text-base flex items-center gap-1.5 before:content-['✱'] before:text-xl">
+      <div className="font-semibold text-base flex items-center gap-1.5 before:content-['✱'] before:text-xl">
         ProSlides
       </div>
     </div>

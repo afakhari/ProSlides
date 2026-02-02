@@ -5,6 +5,7 @@ import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { DefaultFooterStats } from "../../../data/mockData";
+import { isLightColor } from "../../../lib/colorUtils";
 
 function ManagerPlayerLeaderBoard({
   onNext,
@@ -73,12 +74,29 @@ function ManagerPlayerLeaderBoard({
       : "none",
     backgroundColor: quiz?.background?.color || "#1e1e2e",
   };
+  const textColor =
+    quiz?.text_color || quiz?.background?.text_color || "#111827";
+  const textMutedColor =
+    textColor.toLowerCase() === "#111827"
+      ? "rgba(17, 24, 39, 0.7)"
+      : "rgba(255, 255, 255, 0.7)";
+  const needsOverlay =
+    !!quiz?.background?.image ||
+    isLightColor(quiz?.background?.color || "#1e1e2e");
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
-      style={backgroundStyle}
+      className="relative min-h-screen bg-cover bg-center bg-no-repeat flex flex-col justify-around items-center font-semibold"
+      style={{
+        ...backgroundStyle,
+        "--quiz-text": textColor,
+        "--quiz-text-muted": textMutedColor,
+      }}
     >
+      {needsOverlay && (
+        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
+      <div className="relative z-10 flex min-h-screen w-full flex-col items-center justify-around">
       <TopBar
         accessCode={accessCode}
         showQRButton={true}
@@ -106,17 +124,17 @@ function ManagerPlayerLeaderBoard({
                   isConnected ? "bg-green-500" : "bg-red-500"
                 }`}
               ></div>
-              <span className="text-white/80">
+              <span className="text-[color:var(--quiz-text-muted)]">
                 {isConnected ? "Connected" : "Disconnected"}
               </span>
             </div>
 
             {/* Title and player count */}
             <div className="text-center w-full">
-              <h1 className="text-white px-4 text-5xl font-bold">
+              <h1 className="text-[color:var(--quiz-text)] px-4 text-5xl font-bold">
                 Leaderboard
               </h1>
-              <p className="text-white/70 text-lg mt-2">
+              <p className="text-[color:var(--quiz-text-muted)] text-lg mt-2">
                 {players.length} players
               </p>
             </div>
@@ -128,7 +146,7 @@ function ManagerPlayerLeaderBoard({
                 style={{ maxHeight: "calc(100vh - 260px)" }}
               >
                 {players.length === 0 ? (
-                  <div className="text-white/80 text-center py-6">
+                  <div className="text-[color:var(--quiz-text-muted)] text-center py-6">
                     Waiting for leaderboard data…
                   </div>
                 ) : (
@@ -155,7 +173,7 @@ function ManagerPlayerLeaderBoard({
                             onMouseLeave={() => setHovered(null)}
                           >
                             {/* Rank */}
-                            <div className="text-white/90 text-lg font-semibold w-8 text-center rounded-full bg-white/20 mr-3 py-1">
+                            <div className="text-[color:var(--quiz-text)] text-lg font-semibold w-8 text-center rounded-full bg-white/20 mr-3 py-1">
                               {p.rank}
                             </div>
 
@@ -183,7 +201,7 @@ function ManagerPlayerLeaderBoard({
 
                                 <div className="flex items-center space-x-3">
                                   <div
-                                    className={`text-white font-medium transition-all duration-200 ${
+                                    className={`text-[color:var(--quiz-text)] font-medium transition-all duration-200 ${
                                       isHidden ? "blur-sm select-none" : ""
                                     }`}
                                   >
@@ -221,9 +239,9 @@ function ManagerPlayerLeaderBoard({
                             </div>
 
                             {/* Score */}
-                            <div className="relative w-[10%] text-white font-semibold ml-3">
+                            <div className="relative w-[10%] text-[color:var(--quiz-text)] font-semibold ml-3">
                               {Math.round(p.total_points)}p{" "}
-                              <span className="text-white/60 text-sm">
+                              <span className="text-[color:var(--quiz-text-muted)] text-sm">
                                 +{Math.round(p.new_points)}
                               </span>
                             </div>
@@ -247,7 +265,9 @@ function ManagerPlayerLeaderBoard({
           isQROpen={showQRModal}
           onNext={onNext}
           onPrevious={onPrevious}
+          textColor={textColor}
         />
+      </div>
       </div>
     </div>
   );
