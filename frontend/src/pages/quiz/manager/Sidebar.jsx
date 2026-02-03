@@ -460,8 +460,8 @@ export default function Sidebar({
 
   const normalizeDigits = (value) => (
     value
-      .replace(/[?-?]/g, (digit) => String("??????????".indexOf(digit)))
-      .replace(/[?-?]/g, (digit) => String("??????????".indexOf(digit)))
+      .replace(/[\u06F0-\u06F9]/g, (digit) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(digit)))
+      .replace(/[\u0660-\u0669]/g, (digit) => String("\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669".indexOf(digit)))
   );
 
   const parseIntegerInput = (value) => {
@@ -730,7 +730,7 @@ export default function Sidebar({
             <button
               onClick={onClose}
               className="text-gray-500 hover:text-gray-700"
-            >انصراف</button>
+            >Cancel</button>
           </div>
 
           <div className="space-y-4">
@@ -768,7 +768,7 @@ export default function Sidebar({
                     src={preview}
                     alt="پیش نمایش"
                     className="w-full h-48 object-contain rounded-lg bg-gray-50"
-                    onError={() => setError("??? ?? ????? ?????.")}
+                    onError={() => setError("\u062e\u0637\u0627 \u062f\u0631 \u0646\u0645\u0627\u06cc\u0634 \u062a\u0635\u0648\u06cc\u0631.")}
                   />
                 </div>
               </div>
@@ -778,12 +778,12 @@ export default function Sidebar({
               <button
                 onClick={onClose}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-              >انصراف</button>
+              >Cancel</button>
               <button
                 onClick={handleSubmit}
                 disabled={!preview}
                 className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >ذخیره</button>
+              >Save</button>
             </div>
           </div>
         </div>
@@ -1188,7 +1188,7 @@ export default function Sidebar({
               onClick={handleCancel}
               disabled={isSaving}
               className="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >??????</button>
+            >Cancel</button>
             <button
               onClick={handleSubmit}
               disabled={!hasChanges || isSaving}
@@ -1197,7 +1197,7 @@ export default function Sidebar({
                   ? "bg-pink-600 text-white hover:bg-pink-700"
                   : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}
-            >ذخیره</button>
+            >Save</button>
           </div>
         </div>
       ) : (
@@ -1232,7 +1232,7 @@ export default function Sidebar({
               onClick={handleCancel}
               disabled={isSaving}
               className="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >??????</button>
+            >Cancel</button>
             <button
               onClick={handleSubmit}
               disabled={!hasChanges || isSaving}
@@ -1241,7 +1241,7 @@ export default function Sidebar({
                   ? "bg-pink-600 text-white hover:bg-pink-700 shadow-sm"
                   : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}
-            >ذخیره</button>
+            >Save</button>
           </div>
         </div>
       ) : (

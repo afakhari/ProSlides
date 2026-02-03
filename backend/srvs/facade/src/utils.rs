@@ -171,6 +171,7 @@ pub async fn cleanup_quiz_redis(
     all_keys.push(format!("players:{}", session_id));
     all_keys.push(format!("leaderboard:{session_id}"));
     all_keys.push(format!("new_points:{session_id}"));
+    all_keys.push(format!("question:{session_id}:active"));
 
     // Delete all keys in a single pipeline
     if !all_keys.is_empty() {
