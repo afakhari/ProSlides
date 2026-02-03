@@ -142,7 +142,13 @@ impl Handler<SendPlayerList> for Room {
 impl Handler<RegisterPlayer> for Room {
     type Result = ();
     fn handle(&mut self, msg: RegisterPlayer, _: &mut Self::Context) {
-        self.players.insert(msg.0);
+        let player = msg.0.clone();
+        self.players.insert(player.clone());
+        if let Some(last_question) = &self.last_question {
+            if let Ok(text) = serde_json::to_string(last_question) {
+                player.do_send(PlayerText(text));
+            }
+        }
     }
 }
 

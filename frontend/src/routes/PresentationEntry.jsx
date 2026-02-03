@@ -287,6 +287,24 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     modalLeaderboardResults,
   } = useServerData();
 
+  // Sync manager slide index with server question id to avoid UI mismatches
+  useEffect(() => {
+    if (role !== "manager") return;
+    if (!currentQuestion || !quiz?.slides?.length) return;
+
+    const idx = quiz.slides.findIndex(
+      (slide) => slide.question?.question_id === currentQuestion.question_id
+    );
+
+    if (idx >= 0 && currentSlide !== idx + 1) {
+      setCurrentSlide(idx + 1);
+    }
+
+    if (data.type !== "ManagerPickAnswerQuestion") {
+      setData({ type: "ManagerPickAnswerQuestion" });
+    }
+  }, [role, currentQuestion, quiz, currentSlide, data.type]);
+
   // dYY› U^U,O¦UO manager OO3O¦ U^ type:1 OOý O3OñU^Oñ U.UOƒ?OOñO3O_OO O"UØ U,UOO_OñO"U^OñO_ O"OñU^
   useEffect(() => {
     if (role === "manager" && leaderboardResults) {

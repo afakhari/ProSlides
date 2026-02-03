@@ -25,10 +25,9 @@ export default function ManagerJoinPage({
   roomId,
   onNext,
   currentSlide = 1,
-  totalSlides = 3,
   quiz,
 }) {
-  const { isConnected, connect, sendNavigation, sendEnd, lastMessage } =
+  const { isConnected, connect, sendNavigation, sendEnd: _sendEnd, lastMessage } =
     useWebSocket();
   const { users, processMessage } = useServerData();
 
@@ -119,7 +118,7 @@ export default function ManagerJoinPage({
     );
 
     // Send start command
-    const ok = sendNavigation("next");
+    const ok = sendNavigation("start");
     if (!ok) {
       setStartError("Failed to send start command. Please try again.");
       return;

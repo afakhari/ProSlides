@@ -184,6 +184,39 @@ pub async fn cleanup_quiz_redis(
     }
 }
 
+pub async fn reset_quiz_run_state(
+    con: &mut RedisPool,
+    session_id: &str,
+) {
+    let patterns = [
+        format!("question:{}:*:option:*:count", session_id),
+        format!("question:{}:*:submits", session_id),
+        format!("question:{}:*:start", session_id),
+        format!("question:{}:*:meta", session_id),
+    ];
+
+    let mut all_keys: Vec<String> = Vec::new();
+
+    for pattern in &patterns {
+        if let Ok(keys) = con.keys::<_, Vec<String>>(pattern).await {
+            all_keys.extend(keys);
+        }
+    }
+
+    all_keys.push(format!("question:{session_id}:active"));
+    all_keys.push(format!("leaderboard:{session_id}"));
+    all_keys.push(format!("new_points:{session_id}"));
+
+    if !all_keys.is_empty() {
+        let mut pipe = redis::pipe();
+        pipe.atomic();
+        for key in &all_keys {
+            pipe.del(key);
+        }
+        let _: Result<(), _> = pipe.query_async(con).await;
+    }
+}
+
 pub async fn add_scores_batch(
     con: &mut RedisPool,
     session_id: &str,

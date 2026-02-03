@@ -39,9 +39,10 @@ function ManagerLeaderBoard({
   const previousQuestionId = questionSlide?.question_id;
 
   // Try to get leaderboard for this specific question, or use current leaderboardResults
-  const leaderboardForThisQuestion = previousQuestionId
-    ? getLeaderboardForQuestion(previousQuestionId)
-    : null;
+  const leaderboardForThisQuestion =
+    previousQuestionId && typeof getLeaderboardForQuestion === "function"
+      ? getLeaderboardForQuestion(previousQuestionId)
+      : null;
   // همیشه آخرین لیدربرد معتبر را نگه دار و اگر داده جدید نیامد، پاک نکن
   // اگر هیچ داده‌ای برای اسلاید فعلی نبود، آخرین لیدربرد معتبر را نمایش بده
   let dataToUse = leaderboardResults || leaderboardForThisQuestion;
