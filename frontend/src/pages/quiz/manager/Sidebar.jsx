@@ -674,12 +674,12 @@ export default function Sidebar({
 
     const handlePreview = async () => {
       if (!link.trim()) {
-        setError("???? ???? ?? ???? ????");
+        setError("لطفا لینک تصویر را وارد کنید.");
         return;
       }
 
       if (!link.startsWith("http://") && !link.startsWith("https://")) {
-        setError("The link must start with http:// or https://");
+        setError("لینک باید با http:// یا https:// شروع شود.");
         return;
       }
 
@@ -693,7 +693,7 @@ export default function Sidebar({
           setLoading(false);
         };
         img.onerror = () => {
-          setError("???? ????? ??????? ??? ?? ???? ??????? ????");
+          setError("تصویر بارگذاری نشد. لطفا لینک معتبر وارد کنید.");
           setPreview(null);
           setLoading(false);
         };
@@ -701,12 +701,12 @@ export default function Sidebar({
 
         setTimeout(() => {
           if (!img.complete) {
-            setError("??????? ????? ??????? ??. ???? ???? ????? ?? ?????? ????");
+            setError("بارگذاری تصویر زمان بر شد. لطفا دوباره تلاش کنید.");
             setLoading(false);
           }
         }, 5000);
       } catch {
-        setError("??? ?? ????? ????");
+        setError("خطا در بارگذاری تصویر.");
         setLoading(false);
       }
     };
@@ -726,22 +726,16 @@ export default function Sidebar({
       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100]">
         <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">
-              Please enter the image link
-            </h3>
+            <h3 className="text-lg font-semibold text-gray-800">لطفا لینک تصویر را وارد کنید</h3>
             <button
               onClick={onClose}
               className="text-gray-500 hover:text-gray-700"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            >انصراف</button>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                URL:
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">آدرس:</label>
               <div className="flex gap-2">
                 <input
                   type="url"
@@ -758,7 +752,7 @@ export default function Sidebar({
                   disabled={loading || !link.trim()}
                   className="px-4 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
-                  {loading ? "Under Review ..." : "Preview"}
+                  {loading ? "در حال بررسی..." : "پیش نمایش"}
                 </button>
               </div>
               {error && (
@@ -768,13 +762,13 @@ export default function Sidebar({
 
             {preview && (
               <div className="border border-gray-200 rounded-lg p-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">Preview:</p>
+                <p className="text-sm font-medium text-gray-700 mb-2">پیش نمایش:</p>
                 <div className="relative">
                   <img
                     src={preview}
-                    alt="Preview"
+                    alt="پیش نمایش"
                     className="w-full h-48 object-contain rounded-lg bg-gray-50"
-                    onError={() => setError("??? ?? ????? ?????")}
+                    onError={() => setError("??? ?? ????? ?????.")}
                   />
                 </div>
               </div>
@@ -784,16 +778,12 @@ export default function Sidebar({
               <button
                 onClick={onClose}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-              >
-                cancel
-              </button>
+              >انصراف</button>
               <button
                 onClick={handleSubmit}
                 disabled={!preview}
                 className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                save
-              </button>
+              >ذخیره</button>
             </div>
           </div>
         </div>
@@ -848,7 +838,7 @@ export default function Sidebar({
                 <button
                   onClick={() => openImageLinkModal("question")}
                   className="p-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors border border-gray-200 flex items-center justify-center"
-                  title="?????? ???? ?????"
+                  title="افزودن تصویر سوال"
                   disabled={isSaving}
                 >
                   <ImageIcon className="w-4 h-4 text-gray-600" />
@@ -987,7 +977,7 @@ export default function Sidebar({
                             <button
                               onClick={() => openImageLinkModal("option", opt.option_id)}
                               className="p-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors border border-gray-200"
-                              title="?????? ???? ?????"
+                              title="افزودن تصویر گزینه"
                               disabled={isSaving}
                             >
                               <ImageIcon className="w-4 h-4 text-gray-600" />
@@ -1198,9 +1188,7 @@ export default function Sidebar({
               onClick={handleCancel}
               disabled={isSaving}
               className="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
+            >??????</button>
             <button
               onClick={handleSubmit}
               disabled={!hasChanges || isSaving}
@@ -1209,19 +1197,7 @@ export default function Sidebar({
                   ? "bg-pink-600 text-white hover:bg-pink-700"
                   : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Save Changes
-                </>
-              )}
-            </button>
+            >ذخیره</button>
           </div>
         </div>
       ) : (
@@ -1256,9 +1232,7 @@ export default function Sidebar({
               onClick={handleCancel}
               disabled={isSaving}
               className="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
+            >??????</button>
             <button
               onClick={handleSubmit}
               disabled={!hasChanges || isSaving}
@@ -1267,19 +1241,7 @@ export default function Sidebar({
                   ? "bg-pink-600 text-white hover:bg-pink-700 shadow-sm"
                   : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Save Changes
-                </>
-              )}
-            </button>
+            >ذخیره</button>
           </div>
         </div>
       ) : (
