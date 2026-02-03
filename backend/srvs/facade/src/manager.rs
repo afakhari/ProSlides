@@ -12,6 +12,7 @@ use crate::utils::{
     save_quiz_setup,
     post_question_leaderboard,
     cleanup_quiz_redis,
+    reset_quiz_run_state,
     add_scores_batch,
     post_options_result,
 };
@@ -482,14 +483,19 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
             if let Ok(cmd) = serde_json::from_str::<ManagerAction>(&text) {
                 if cmd.r#type == 9 {
                     match cmd.action.as_str() {
-                        "next" => {
+                        "start" | "next" => {
                             println!("?? Manager requested NEXT");
                             let slides: Vec<Slide> = self.quiz_setup.slides.clone();
                             let session_id = self.session_id.clone();
                             let mut con = self.redis_pool.clone();
                             let room_clone = self.room.clone();
                             let manager_addr = ctx.address();
+                            let should_reset = cmd.action == "start";
                             actix_rt::spawn(async move {
+                                if should_reset {
+                                    reset_quiz_run_state(&mut con, &session_id).await;
+                                    save_slide_index(&mut con, &session_id, -1).await;
+                                }
                                 let mut slide_index = get_slide_index(&mut con, &session_id).await;
 
                                 if slide_index >= 0 && (slide_index as usize) < slides.len() {
@@ -541,7 +547,8 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                                     };
 
                                     room_clone.do_send(NewQuestion(question.clone()));
-                                    room_clone.do_send(BroadcastToPlayers(json));
+                                    room_clone.do_send(BroadcastToPlayers(json.clone()));
+                                    manager_addr.do_send(ServerMessage(json));
 
                                     let qkey = format!("question:{}:{}", session_id, question.question_id);
                                     let active_key = format!("question:{}:active", session_id);
