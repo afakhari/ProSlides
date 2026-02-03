@@ -686,22 +686,17 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   };
 
 
-  const handleSelectType = async (type) => {
-    if (!activeSlide || activeSlide.slide_type !== 1) return;
-    if (isSelectingType) return;
-
-    const questionType = type === "Single Choice" ? "single" : "multiple";
-    const quizId = quiz.quiz_id;
-    const slideId = activeSlide.slide_id;
-    const requestedMode = type === "Single Choice" ? "single" : "multiple";
+  const applyQuestionTypeChange = async ({
+    currentQuestion,
+    questionType,
+    quizId,
+    slideId,
+    requestedMode,
+  }) => {
     try {
       setIsSelectingType(true);
       setTypeSelectionError(null);
       setTypeSelectionMode(requestedMode);
-      const currentQuestion = await resolveQuestionForSlide(
-        slideId,
-        activeSlide.question
-      );
       let updatedQuestion;
 
       if (!currentQuestion || !currentQuestion.question_id) {
@@ -725,32 +720,31 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         );
       } else {
         // ???? 2: ??????????? ???? ?????
-        
+
         // ????? type ???? ?? ????? ???????
         const updateData = {
           ...currentQuestion,
           question_type: questionType,
         };
 
-      
         // ??? ?? multiple ?? single ????? ??????? ??????? ?? ??????? ????? ???????
         if (currentQuestion.question_type === "multiple" && questionType === "single") {
           if (currentQuestion.options && currentQuestion.options.length > 0) {
             // ???? ???? ????? ???????? ?? ????? correct ????
-            const firstCorrectIndex = currentQuestion.options.findIndex(option => option.is_correct);
-            
+            const firstCorrectIndex = currentQuestion.options.findIndex(
+              (option) => option.is_correct
+            );
+
             // ????? ????? ???????? ?? ???? true ?????
             const indexToKeepTrue = firstCorrectIndex !== -1 ? firstCorrectIndex : 0;
-            
+
             // ????? ?? ????? ?? ???? ???????
             const updatePromises = currentQuestion.options.map((option, index) => {
               const optionData = {
-                
                 is_correct: index === indexToKeepTrue,
-                text: option.text || ""
-                
+                text: option.text || "",
               };
-              
+
               return quizService.updateOption(
                 quizId,
                 slideId,
@@ -758,7 +752,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                 optionData
               );
             });
-            
+
             // ????? ???????? ?? ??? ???????? ???? ????
             await Promise.all(updatePromises);
 
@@ -767,20 +761,20 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
               slideId,
               { question_type: questionType }
             );
-            
+
             // ??????????? ???????? ???? ????????
             const updatedOptions = currentQuestion.options.map((option, index) => ({
               ...option,
-              is_correct: index === indexToKeepTrue
+              is_correct: index === indexToKeepTrue,
             }));
-            
+
             // ??????????? question ?? ????????? ????? ???
             updatedQuestion = {
               ...updatedQuestion,
               options: updatedOptions,
             };
           }
-          if(!currentQuestion.options || currentQuestion.options.length === 0){
+          if (!currentQuestion.options || currentQuestion.options.length === 0) {
             updatedQuestion = await quizService.updateQuestion(
               quizId,
               slideId,
@@ -788,14 +782,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
             );
           }
         }
-        if (currentQuestion.question_type === "single" && questionType === "multiple"){
-            updatedQuestion = await quizService.updateQuestion(
-              quizId,
-              slideId,
-              updateData
-            );
+        if (currentQuestion.question_type === "single" && questionType === "multiple") {
+          updatedQuestion = await quizService.updateQuestion(
+            quizId,
+            slideId,
+            updateData
+          );
         }
-        
       }
 
       // ??????????? state
@@ -824,7 +817,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       setShowDesignPanel(false);
       setShowAudioPanel(false);
       setActiveTab("content");
-
     } catch (error) {
       console.error("Error changing question type:", error);
 
@@ -886,6 +878,76 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       } else {
         setTypeSelectionError("Unexpected error. Please try again.");
       }
+    } finally {
+      setIsSelectingType(false);
+    }
+  };
+
+  const handleSelectType = async (type) => {
+    if (!activeSlide || activeSlide.slide_type !== 1) return;
+    if (isSelectingType) return;
+
+    const questionType = type === "Single Choice" ? "single" : "multiple";
+    const quizId = quiz.quiz_id;
+    const slideId = activeSlide.slide_id;
+    const requestedMode = type === "Single Choice" ? "single" : "multiple";
+    try {
+      setIsSelectingType(true);
+      setTypeSelectionError(null);
+      setTypeSelectionMode(requestedMode);
+
+      const currentQuestion = await resolveQuestionForSlide(
+        slideId,
+        activeSlide.question
+      );
+
+      if (currentQuestion?.question_type === questionType) {
+        setTypeSelectionNotice(
+          `Question type is already ${requestedMode === "single" ? "Single Choice" : "Multiple Choice"}.`
+        );
+        setTimeout(() => {
+          setTypeSelectionNotice(null);
+        }, 2000);
+        setShowTypeBox(false);
+        setShowSidebar(true);
+        setShowDesignPanel(false);
+        setShowAudioPanel(false);
+        setActiveTab("content");
+        return;
+      }
+
+      if (currentQuestion?.question_type === "multiple" && questionType === "single") {
+        setIsSelectingType(false);
+        setConfirmDialog({
+          isOpen: true,
+          title: "Switch to Single Choice?",
+          description:
+            "Switching to single choice keeps only one correct option. Continue?",
+          onConfirm: () => {
+            applyQuestionTypeChange({
+              currentQuestion,
+              questionType,
+              quizId,
+              slideId,
+              requestedMode,
+            });
+          },
+          confirmText: "Continue",
+          cancelText: "Cancel",
+        });
+        return;
+      }
+
+      await applyQuestionTypeChange({
+        currentQuestion,
+        questionType,
+        quizId,
+        slideId,
+        requestedMode,
+      });
+    } catch (error) {
+      console.error("Error resolving question type change:", error);
+      setTypeSelectionError("Unexpected error. Please try again.");
     } finally {
       setIsSelectingType(false);
     }
