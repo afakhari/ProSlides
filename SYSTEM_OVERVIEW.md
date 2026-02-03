@@ -62,6 +62,8 @@ LOG_REQUEST_THRESHOLD_MS=500
 ```
 EXPORT_SERVICE_TOKEN=change-me-export-token
 DJANGO_API_BASE_URL=https://api.proslides.ir/api
+LEADERBOARD_POST_LIMIT=200
+LEADERBOARD_POST_MIN_LIMIT=50
 ```
 
 ### Frontend (frontend/.env)

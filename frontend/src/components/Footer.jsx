@@ -146,18 +146,6 @@ export default function Footer({
             onMouseLeave={() => setShowMenu(false)}
           />
 
-          {onPrevious && (
-            <button
-              onClick={() => onPrevious()}
-              className={`h-11 px-4 ${iconHoverSoft} ${focusRing} rounded-full flex items-center gap-2 text-current cursor-pointer border-none transition-colors text-sm font-semibold`}
-              title={labels.previous}
-              aria-label={labels.previous}
-            >
-              <span className="text-lg">{labels.leftArrow}</span>
-              {labels.previousShort}
-            </button>
-          )}
-
           <div className="flex flex-col items-center gap-1">
             <div
               className={`px-3 py-1 ${numberBackground} rounded-full text-current text-sm font-semibold`}

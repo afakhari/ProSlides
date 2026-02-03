@@ -33,6 +33,7 @@ use crate::models::{
 };
 
 use std::time::{Duration, Instant};
+use std::env;
 
 // Heartbeat interval and timeout
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -131,6 +132,22 @@ impl Handler<ManagerText> for ManagerSession {
     fn handle(&mut self, msg: ManagerText, ctx: &mut Self::Context) {
         ctx.text(msg.0);
     }
+}
+
+fn leaderboard_post_limit() -> usize {
+    env::var("LEADERBOARD_POST_LIMIT")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(200)
+}
+
+fn leaderboard_post_min_limit() -> usize {
+    env::var("LEADERBOARD_POST_MIN_LIMIT")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(50)
 }
 
 async fn send_leaderbaord(
@@ -246,7 +263,40 @@ async fn send_leaderbaord(
             "results": leaderboard,
         });
         manager_addr.do_send(ServerMessage(leaderboard_manager_json.to_string()));
-        post_question_leaderboard(&session_id, slide.slide_id, question_leaderboard.clone()).await.ok().expect("ERROR in backend: post leaderboard");
+        // Limit payload size to avoid API 400s on large lobbies
+        let total_entries = question_leaderboard.len();
+        if total_entries == 0 {
+            eprintln!("[leaderboard] skip posting empty leaderboard");
+        } else {
+            let mut limit = leaderboard_post_limit().min(total_entries);
+            let min_limit = leaderboard_post_min_limit().min(limit);
+
+            loop {
+                let trimmed: Vec<LeaderboardEntry> =
+                    question_leaderboard.iter().take(limit).cloned().collect();
+
+                println!(
+                    "[leaderboard] posting {}/{} entries (limit={})",
+                    trimmed.len(),
+                    total_entries,
+                    limit
+                );
+
+                match post_question_leaderboard(&session_id, slide.slide_id, trimmed).await {
+                    Ok(_) => break,
+                    Err(e) => {
+                        eprintln!(
+                            "ERROR in backend: post leaderboard failed (limit={}): {}",
+                            limit, e
+                        );
+                        if limit <= min_limit {
+                            break;
+                        }
+                        limit = (limit / 2).max(min_limit);
+                    }
+                }
+            }
+        }
     } else if slide.slide_type == 3 {
         // For leaderboard slides, broadcast to all
         let leaderboard_manager_json = json!({
