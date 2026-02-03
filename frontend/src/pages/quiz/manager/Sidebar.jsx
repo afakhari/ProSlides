@@ -818,26 +818,6 @@ export default function Sidebar({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {(hasChanges || isSaving) && (
-            <button
-              onClick={handleSubmit}
-              disabled={!hasChanges || isSaving}
-              className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition
-                bg-pink-600 text-white hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Save
-                </>
-              )}
-            </button>
-          )}
           <button
             onClick={handleCancel}
             className="p-2 hover:bg-red-100 rounded-lg transition-colors"
