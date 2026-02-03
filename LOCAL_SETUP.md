@@ -60,6 +60,12 @@ LOG_DIR=backend/srvs/office/logs
 LOG_REQUEST_THRESHOLD_MS=500
 ```
 
+Optional Rust facade settings (if you run the Rust service locally):
+```
+LEADERBOARD_POST_LIMIT=200
+LEADERBOARD_POST_MIN_LIMIT=50
+```
+
 Email behavior:
 - For console output (fast local dev):
   ```

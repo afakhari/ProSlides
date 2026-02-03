@@ -19,6 +19,14 @@ Export the API base URL for the Rust process:
 DJANGO_API_BASE_URL=https://api.proslides.ir/api
 ```
 
+Optional leaderboard post limits:
+```
+# Max entries posted per leaderboard request (default: 200)
+LEADERBOARD_POST_LIMIT=200
+# Minimum entries before aborting retry (default: 50)
+LEADERBOARD_POST_MIN_LIMIT=50
+```
+
 You can also use a local API base, for example:
 ```
 http://127.0.0.1:8000/api
@@ -89,3 +97,4 @@ curl -X POST \
 ## 4) Notes
 - Rust should not hardcode the API base in code; prefer a config/env value.
 - If `EXPORT_SERVICE_TOKEN` is empty, service-token access is disabled.
+- If leaderboard POSTs fail with 400 on large lobbies, lower `LEADERBOARD_POST_LIMIT` or increase the reverse proxy body size.

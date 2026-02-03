@@ -6,9 +6,27 @@ use crate::models::{
 };
 use redis::AsyncCommands;
 use reqwest::Client;
+use std::env;
 use serde_json::json;
 
-const API_TOKEN: &str = "Salam-Amin-Bidad1";
+const DEFAULT_API_TOKEN: &str = "Salam-Amin-Bidad1";
+const DEFAULT_API_BASE: &str = "http://87.107.165.177:8000/api";
+
+fn api_base() -> String {
+    env::var("DJANGO_API_BASE_URL")
+        .unwrap_or_else(|_| DEFAULT_API_BASE.to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
+
+fn export_service_token() -> String {
+    let token = env::var("EXPORT_SERVICE_TOKEN").unwrap_or_default();
+    if token.is_empty() {
+        DEFAULT_API_TOKEN.to_string()
+    } else {
+        token
+    }
+}
 
 pub async fn save_quiz_setup(
     session_id: &str,
@@ -47,13 +65,14 @@ pub async fn get_slide_index(
 }
 
 pub async fn get_quiz_setup(session_id: &str) -> Result<QuizSetup, Box<dyn std::error::Error>> {
-    let url = format!("http://87.107.165.177:8000/api/quizzes/{}/export/", session_id);
+    let url = format!("{}/quizzes/{}/export/", api_base(), session_id);
 
     let client = Client::new();
 
+    let token = export_service_token();
     let response = client
         .get(&url)
-        .header("X-Export-Token", API_TOKEN)        
+        .header("X-Export-Token", token)
         .send()
         .await?
         .error_for_status()?;
@@ -69,16 +88,19 @@ pub async fn post_question_leaderboard(
     leaderboard: Vec<LeaderboardEntry>,
 ) -> anyhow::Result<()> {
     let url = format!(
-        "http://87.107.165.177:8000/api/quizzes/{}/slides/{}/question/leaderboard/",
-        session_id, slide_pk
+        "{}/quizzes/{}/slides/{}/question/leaderboard/",
+        api_base(),
+        session_id,
+        slide_pk
     );
 
     let payload = LeaderboardUpdate { leaderboard };
     let client = reqwest::Client::new();
+    let token = export_service_token();
 
     let response = client
         .post(&url)
-        .header("X-Export-Token", API_TOKEN)        
+        .header("X-Export-Token", token)
         .json(&payload)
         .send()
         .await?;
@@ -98,16 +120,19 @@ pub async fn post_options_result(
     options_result: Vec<serde_json::Value>,
 ) -> anyhow::Result<()> {
     let url = format!(
-        "http://87.107.165.177:8000/api/quizzes/{}/slides/{}/question/results/",
-        session_id, slide_id
+        "{}/quizzes/{}/slides/{}/question/results/",
+        api_base(),
+        session_id,
+        slide_id
     );
 
     let client = reqwest::Client::new();
     let data = json!({ "options": options_result });
+    let token = export_service_token();
 
     let response = client
         .post(&url)
-        .header("X-Export-Token", API_TOKEN)
+        .header("X-Export-Token", token)
         .json(&data)
         .send()
         .await?;

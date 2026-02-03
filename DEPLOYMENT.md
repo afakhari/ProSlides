@@ -88,6 +88,14 @@ Rust also needs the Django API base URL:
 DJANGO_API_BASE_URL=https://api.your.domain/api
 ```
 
+Optional Rust leaderboard limits (protects Django from large payloads):
+```
+# Max leaderboard entries posted per question (default: 200)
+LEADERBOARD_POST_LIMIT=200
+# Minimum entries to try before giving up (default: 50)
+LEADERBOARD_POST_MIN_LIMIT=50
+```
+
 Notes:
 - `ALLOWED_HOSTS` is a comma-separated list.
 - For production, `DEBUG` must be `False`.
@@ -96,6 +104,7 @@ Notes:
   if you need Postgres/MySQL.
 - These are the only Django-related env vars read by this service (per
   `backend/srvs/office/office/settings/base.py` and `prod.py`).
+- If leaderboard POSTs fail with 400 on large lobbies, lower `LEADERBOARD_POST_LIMIT` or raise the reverse proxy body size.
 
 ## 3) Run migrations
 Run from the repo root so Django can resolve `backend.*` imports. If your
