@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
-import Footer from "../../../components/Footer";
 // LeaderboardModal was removed; modal UI now lives on Manager LeaderBoard page
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
@@ -10,7 +9,6 @@ import {
   User_adding,
   createNextPrevious,
   UserColorList,
-  DefaultFooterStats,
 } from "../../../data/mockData";
 
 // Calculate players ready based on the User_adding.type
@@ -29,7 +27,6 @@ export default function ManagerJoinPage({
   currentSlide = 1,
   totalSlides = 3,
   quiz,
-  onEndGame,
 }) {
   const { isConnected, connect, sendNavigation, sendEnd, lastMessage } =
     useWebSocket();
@@ -103,31 +100,6 @@ export default function ManagerJoinPage({
     // ذخیره پیام در ServerData
     processMessage(lastMessage);
   }, [lastMessage, processMessage]);
-
-  // Handle navigation and update server data
-  const handleNext = () => {
-    const newNavigationData = createNextPrevious(
-      5,
-      "next",
-      currentQuestionIndex
-    );
-    setNavigationData(newNavigationData);
-    console.log(
-      "[JoinPage2] Navigation data to send to server:",
-      newNavigationData
-    );
-
-    // Send navigation to WebSocket
-    sendNavigation("next");
-
-    if (onNext) onNext();
-  };
-
-  const handleEnd = () => {
-    console.log("[JoinPage] Sending end command to server");
-    sendEnd();
-    if (onEndGame) onEndGame();
-  };
 
   const handleStart = () => {
     const newNavigationData = createNextPrevious(
@@ -412,24 +384,6 @@ export default function ManagerJoinPage({
             )}
           </div>
         </main>
-
-        {/* Footer */}
-
-        <Footer
-          currentSlide={currentSlide}
-          totalSlides={totalSlides}
-          stats={{
-            ...DefaultFooterStats,
-            players: { current: playersReady, max: 50 },
-          }}
-          showQRButton={true}
-          onQRToggle={setShowQRModal}
-          isQROpen={showQRModal}
-          onNext={handleNext}
-          onEnd={handleEnd}
-          textColor={textColor}
-          // onPrevious=null
-        />
 
         {/* QR Code Sidebar */}
         <QRSidebar
