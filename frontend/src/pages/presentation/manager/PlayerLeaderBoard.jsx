@@ -4786,7 +4786,7 @@ function ManagerPlayerLeaderBoard({
 
                             {/* Score */}
                             <div className="relative w-[10%] text-[color:var(--quiz-text)] font-semibold ml-3">
-                              {Math.round(p.total_points)} ??????{" "}
+                              {Math.round(p.total_points)} {"\u0627\u0645\u062a\u06cc\u0627\u0632"}{" "}
                               <span className="text-[color:var(--quiz-text-muted)] text-xs font-normal ml-1">
                                 +{Math.round(p.new_points)}
                               </span>

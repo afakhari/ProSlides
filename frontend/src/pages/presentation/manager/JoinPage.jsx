@@ -33,6 +33,7 @@ export default function ManagerJoinPage({
   const { users, processMessage } = useServerData();
 
   const [page, setPage] = useState("lobby"); // 'lobby' | 'quiz'
+  const [startError, setStartError] = useState("");
   const [newUserId, setNewUserId] = useState(null);
   const [previousUserCount, setPreviousUserCount] = useState(
     User_adding.Users.length
@@ -102,20 +103,30 @@ export default function ManagerJoinPage({
   }, [lastMessage, processMessage]);
 
   const handleStart = () => {
+    setStartError("");
+    if (!isConnected) {
+      setStartError("Connection is not ready. Please wait and try again.");
+      return;
+    }
     const newNavigationData = createNextPrevious(
       5,
       "start",
       currentQuestionIndex
     );
-    setNavigationData(newNavigationData);
-    setPage("quiz");
     console.log(
       "[JoinPage2] Starting quiz, navigation data to send to server:",
       newNavigationData
     );
 
     // Send start command
-    sendNavigation("next");
+    const ok = sendNavigation("next");
+    if (!ok) {
+      setStartError("Failed to send start command. Please try again.");
+      return;
+    }
+
+    setNavigationData(newNavigationData);
+    setPage("quiz");
 
     if (onNext) onNext();
   };
@@ -368,12 +379,18 @@ export default function ManagerJoinPage({
                 )}
                 <div className="flex justify-center">
                   <button
-                    className="inline-flex items-center gap-1.5 bg-linear-to-br from-purple-800 to-purple-600 text-white px-8! py-3! rounded-lg border-none cursor-pointer font-semibold text-base shadow-lg shadow-purple-600/40 transition-all duration-150 hover:-translate-y-1 hover:scale-110 hover:shadow-xl hover:shadow-purple-600/50 after:content-['⏵'] after:text-sm after:ml-1"
+                    className="inline-flex items-center gap-1.5 bg-linear-to-br from-purple-800 to-purple-600 text-white px-8! py-3! rounded-lg border-none cursor-pointer font-semibold text-base shadow-lg shadow-purple-600/40 transition-all duration-150 hover:-translate-y-1 hover:scale-110 hover:shadow-xl hover:shadow-purple-600/50 after:content-['⏵'] after:text-sm after:ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleStart}
+                    disabled={!isConnected}
                   >
                     Start
                   </button>
                 </div>
+                {startError && (
+                  <div className="mt-3 text-center text-sm text-red-500">
+                    {startError}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-center">
