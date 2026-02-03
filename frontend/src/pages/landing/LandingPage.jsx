@@ -483,16 +483,18 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-            <p className="mt-10 text-center text-xs text-[#94a3b8] md:text-sm">
-              ساخته شده توسط تیم ProSlides —{" "}
-              <Link
-                to="/team"
-                className="font-semibold text-[#64748b] transition hover:text-[#0f172a]"
-              >
-                آشنایی با تیم
-              </Link>
-            </p>
           </section>
+
+          <p className="mt-10 text-center text-xs text-[#94a3b8] md:text-sm">
+            ساخته شده توسط تیم ProSlides
+            {" — "}
+            <Link
+              to="/team"
+              className="font-semibold text-[#64748b] transition hover:text-[#0f172a]"
+            >
+              آشنایی با تیم
+            </Link>
+          </p>
         </main>
       </div>
     </div>

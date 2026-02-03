@@ -28,14 +28,14 @@ const frontendTheme = {
 
 const backendTeam = [
   {
-    name: "Amin Bidad",
+    name: "امین بیداد",
     role: "مهندس بک‌اند — Rust",
     description: "روی پایداری و سرعت سرویس‌های بلادرنگ تمرکز دارد تا تجربه زنده بدون وقفه بماند.",
     avatar: aminBidad,
     theme: backendTheme,
   },
   {
-    name: "Amirali Fakahri",
+    name: "امیرعلی فخاری",
     role: "مهندس بک‌اند — Django",
     description: "ساختار داده و کنترل دسترسی را طوری نگه می‌دارد که تجربه کاربر قابل اتکا باشد.",
     avatar: amiraliFakhari,
@@ -45,35 +45,35 @@ const backendTeam = [
 
 const frontendTeam = [
   {
-    name: "Alireza Reazaei",
+    name: "علیرضا رضایی",
     role: "مهندس فرانت‌اند — React",
     description: "یکپارچگی طراحی را حفظ می‌کند و رشد محصول را بی‌نقص جلو می‌برد.",
     avatar: alirezaRezaei,
     theme: frontendTheme,
   },
   {
-    name: "Hesam Azmoun",
+    name: "حسام آزمون",
     role: "مهندس فرانت‌اند — React",
     description: "هدف محصول را به تعامل‌های ساده و روان تبدیل می‌کند.",
     avatar: HesamAzmoun,
     theme: frontendTheme,
   },
   {
-    name: "Kian Janbozorgi",
+    name: "کیان جان بزرگی",
     role: "مهندس فرانت‌اند — React",
     description: "مسیرهای پیچیده را به تجربه‌ای واضح و قابل استفاده تبدیل می‌کند.",
     avatar: kianJanbozorgi,
     theme: frontendTheme,
   },
   {
-    name: "Sima Kazemi",
+    name: "سیما کاظمی",
     role: "مهندس فرانت‌اند — React",
     description: "روی عملکرد و رندر روان در ارائه‌های سنگین کار می‌کند.",
     avatar: SimaKazemi,
     theme: frontendTheme,
   },
   {
-    name: "Zahra Kefayati",
+    name: "زهرا کفایتی",
     role: "مهندس فرانت‌اند — React",
     description: "به جزئیات دسترس‌پذیری و نظم بصری توجه ویژه دارد.",
     avatar: ZahraKefayati,
