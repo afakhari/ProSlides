@@ -20,6 +20,9 @@ const ManagerPickAnswerQuestion = lazy(() =>
 const ManagerLeaderBoard = lazy(() =>
   import("../pages/presentation/manager/LeaderBoard")
 );
+const ManagerContentSlide = lazy(() =>
+  import("../pages/presentation/manager/ContentSlide")
+);
 const FinalLeaderboard = lazy(() =>
   import("../pages/presentation/manager/FinalLeaderboard")
 );
@@ -32,6 +35,9 @@ const PlayerPickAnswerQuestion = lazy(() =>
 );
 const PlayerLeaderBoard = lazy(() =>
   import("../pages/presentation/player/LeaderBoard")
+);
+const PlayerContentSlide = lazy(() =>
+  import("../pages/presentation/player/ContentSlide")
 );
 
 export default function PresentationEntry({ mode }) {
@@ -281,6 +287,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
   const {
     currentQuestion,
+    currentContent,
     leaderboardResults,
     questionResults,
     partialQuestionResults,
@@ -305,6 +312,23 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     }
   }, [role, currentQuestion, quiz, currentSlide, data.type]);
 
+  useEffect(() => {
+    if (role !== "manager") return;
+    if (!currentContent || !quiz?.slides?.length) return;
+
+    const idx = quiz.slides.findIndex(
+      (slide) => slide.slide_id === currentContent.slide_id
+    );
+
+    if (idx >= 0 && currentSlide !== idx + 1) {
+      setCurrentSlide(idx + 1);
+    }
+
+    if (data.type !== "ManagerContentSlide") {
+      setData({ type: "ManagerContentSlide" });
+    }
+  }, [role, currentContent, quiz, currentSlide, data.type]);
+
   // dYY› U^U,O¦UO manager OO3O¦ U^ type:1 OOý O3OñU^Oñ U.UOƒ?OOñO3O_OO O"UØ U,UOO_OñO"U^OñO_ O"OñU^
   useEffect(() => {
     if (role === "manager" && leaderboardResults) {
@@ -320,6 +344,8 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     } else {
       if (quiz.slides[currentSlide].slide_type === 3) {
         setData({ type: "ManagerLeaderBoard" });
+      } else if (quiz.slides[currentSlide].slide_type === 2) {
+        setData({ type: "ManagerContentSlide" });
       } else if (quiz.slides[currentSlide].slide_type === 1) {
         setData({ type: "ManagerPickAnswerQuestion" });
       }
@@ -332,7 +358,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
       setData({ type: "ManagerJoinPage" });
     } else {
       if (quiz.slides[currentSlide - 2].slide_type === 2) {
-        setData({ type: "ManagerLeaderBoard" });
+        setData({ type: "ManagerContentSlide" });
       } else if (quiz.slides[currentSlide - 2].slide_type === 1) {
         setData({ type: "ManagerPickAnswerQuestion" });
       }
@@ -385,6 +411,18 @@ function AppPresentation({ roomId, role, initialQuizData }) {
             onEndGame={handleEndGame}
           />
         );
+      case "ManagerContentSlide":
+        return (
+          <ManagerContentSlide
+            roomId={roomId}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            currentSlide={currentSlide}
+            totalSlides={totalSlides}
+            quiz={quiz}
+            onEndGame={handleEndGame}
+          />
+        );
       case "ManagerFinalLeaderboard":
         return (
           <FinalLeaderboard
@@ -422,6 +460,10 @@ function AppPresentation({ roomId, role, initialQuizData }) {
           quiz={quiz}
         />
       );
+    }
+
+    if (currentContent) {
+      return <PlayerContentSlide roomId={roomId} quiz={quiz} content={currentContent} />;
     }
 
     // O"O1O_ O3U^OU, OñU^ U+Uc UcU+

@@ -13,6 +13,7 @@ export const ServerDataProvider = ({ children }) => {
     managerLastLeaderboard: null, // آخرین لیدربورد معتبر برای منیجر
     modalLeaderboardResults: null, // Type 12: نتایج لیدربورد برای modal
     currentQuestion: null, // Type 2: سوال فعلی
+    currentContent: null, // Slide type 2: content فعلی
     lastMessageType: null, // آخرین type دریافتی
     lastUpdateTime: null, // زمان آخرین به‌روزرسانی
   });
@@ -60,6 +61,7 @@ export const ServerDataProvider = ({ children }) => {
       leaderboardResults: results,
       managerLastLeaderboard: results, // ذخیره آخرین لیدربورد معتبر
       currentQuestion: null, // پاک کردن سوال فعلی تا لیدربورد نمایش داده شود
+      currentContent: null,
       lastMessageType: 1,
       lastUpdateTime: new Date().toISOString(),
     }));
@@ -82,6 +84,7 @@ export const ServerDataProvider = ({ children }) => {
     setServerData((prev) => ({
       ...prev,
       currentQuestion: question,
+      currentContent: null,
       leaderboardResults: null, // پاک کردن لیدربورد تا سوال نمایش داده شود
       // reset any partial results from previous question when a new question arrives
       partialQuestionResults: null,
@@ -89,6 +92,19 @@ export const ServerDataProvider = ({ children }) => {
       lastUpdateTime: new Date().toISOString(),
     }));
     console.log("[ServerData] Current question updated:", question);
+  }, []);
+
+  const updateCurrentContent = useCallback((content) => {
+    setServerData((prev) => ({
+      ...prev,
+      currentContent: content,
+      currentQuestion: null,
+      leaderboardResults: null,
+      partialQuestionResults: null,
+      lastMessageType: 2,
+      lastUpdateTime: new Date().toISOString(),
+    }));
+    console.log("[ServerData] Current content updated:", content);
   }, []);
 
   // تابع کلی برای پردازش پیام از WebSocket
@@ -104,6 +120,12 @@ export const ServerDataProvider = ({ children }) => {
           "players"
         );
         updateLeaderboard(message.results);
+        return;
+      }
+
+      // Content slide payload from server (slide_type=2, no `type` field)
+      if (!message.type && message.slide_type === 2) {
+        updateCurrentContent(message);
         return;
       }
 
@@ -168,6 +190,7 @@ export const ServerDataProvider = ({ children }) => {
       updateLeaderboard,
       updateModalLeaderboard,
       updateCurrentQuestion,
+      updateCurrentContent,
       updatePartialQuestionResults,
     ]
   );
@@ -182,6 +205,7 @@ export const ServerDataProvider = ({ children }) => {
       managerLastLeaderboard: null,
       modalLeaderboardResults: null,
       currentQuestion: null,
+      currentContent: null,
       lastMessageType: null,
       lastUpdateTime: null,
     });
@@ -198,6 +222,7 @@ export const ServerDataProvider = ({ children }) => {
     managerLastLeaderboard: serverData.managerLastLeaderboard,
     modalLeaderboardResults: serverData.modalLeaderboardResults,
     currentQuestion: serverData.currentQuestion,
+    currentContent: serverData.currentContent,
     lastMessageType: serverData.lastMessageType,
     lastUpdateTime: serverData.lastUpdateTime,
 
@@ -208,6 +233,7 @@ export const ServerDataProvider = ({ children }) => {
     updateLeaderboard,
     updateModalLeaderboard,
     updateCurrentQuestion,
+    updateCurrentContent,
     processMessage,
     clearData,
   };
