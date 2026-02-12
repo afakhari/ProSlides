@@ -22,12 +22,14 @@ use models::{
     RegisterPlayer,
     UnregisterPlayer,
     BroadcastToPlayers,
+    ResetRoomReplay,
     RegisterManager,
     UnregisterManager,
     PlayerText,
     PlayerOk,
     ManagerSession,
     RedisPool,
+    RoomReplayCache,
 };
 use std::time::Instant;
 
@@ -40,7 +42,7 @@ impl Room {
             players: HashSet::new(),
             manager: None,
             ok_responses: 0,
-            last_question: None,
+            replay_cache: RoomReplayCache::default(),
             redis_pool,
             session_id,
         }
@@ -54,7 +56,7 @@ impl Actor for Room {
 impl Handler<NewQuestion> for Room {
     type Result = ();
     fn handle(&mut self, msg: NewQuestion, _: &mut Self::Context) {
-        self.last_question = Some(msg.0);
+        self.replay_cache.on_new_question(msg.0);
     }
 }
 
@@ -144,10 +146,8 @@ impl Handler<RegisterPlayer> for Room {
     fn handle(&mut self, msg: RegisterPlayer, _: &mut Self::Context) {
         let player = msg.0.clone();
         self.players.insert(player.clone());
-        if let Some(last_question) = &self.last_question {
-            if let Ok(text) = serde_json::to_string(last_question) {
-                player.do_send(PlayerText(text));
-            }
+        if let Some(payload) = self.replay_cache.replay_payload() {
+            player.do_send(PlayerText(payload));
         }
     }
 }
@@ -177,9 +177,18 @@ impl Handler<BroadcastToPlayers> for Room {
     type Result = ();
     fn handle(&mut self, msg: BroadcastToPlayers, _: &mut Self::Context) {
         self.ok_responses = 0;
+        self.replay_cache.on_broadcast(msg.0.clone());
         for player in &self.players {
             player.do_send(PlayerText(msg.0.clone()));
         }
+    }
+}
+
+impl Handler<ResetRoomReplay> for Room {
+    type Result = ();
+
+    fn handle(&mut self, _: ResetRoomReplay, _: &mut Self::Context) {
+        self.replay_cache.reset();
     }
 }
 

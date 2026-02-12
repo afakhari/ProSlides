@@ -23,6 +23,7 @@ use crate::models::{
     ServerMessage,
     ManagerText,
     BroadcastToPlayers,
+    ResetRoomReplay,
     Slide,
     OptionItem,
     Question,
@@ -495,6 +496,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                                 if should_reset {
                                     reset_quiz_run_state(&mut con, &session_id).await;
                                     save_slide_index(&mut con, &session_id, -1).await;
+                                    room_clone.do_send(ResetRoomReplay);
                                 }
                                 let mut slide_index = get_slide_index(&mut con, &session_id).await;
 
