@@ -101,9 +101,34 @@ pub struct Room {
     pub players: HashSet<Addr<PlayerSession>>,
     pub manager: Option<Addr<ManagerSession>>,
     pub ok_responses: usize,
-    pub last_question: Option<Question>,
+    pub replay_cache: RoomReplayCache,
     pub redis_pool: RedisPool,
     pub session_id: String,
+}
+
+#[derive(Default)]
+pub struct RoomReplayCache {
+    pub last_question: Option<Question>,
+    pub last_player_payload: Option<String>,
+}
+
+impl RoomReplayCache {
+    pub fn on_new_question(&mut self, question: Question) {
+        self.last_question = Some(question);
+    }
+
+    pub fn on_broadcast(&mut self, payload: String) {
+        self.last_player_payload = Some(payload);
+    }
+
+    pub fn replay_payload(&self) -> Option<String> {
+        self.last_player_payload.clone()
+    }
+
+    pub fn reset(&mut self) {
+        self.last_question = None;
+        self.last_player_payload = None;
+    }
 }
 
 
@@ -252,6 +277,10 @@ pub struct UnregisterManager;
 #[rtype(result = "()")]
 pub struct BroadcastToPlayers(pub String);
 
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct ResetRoomReplay;
+
 
 pub struct ManagerSession {
     pub room: Addr<Room>,
@@ -264,3 +293,60 @@ pub struct ManagerSession {
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct ServerMessage(pub String);
+
+#[cfg(test)]
+mod tests {
+    use super::{Question, RoomReplayCache};
+
+    fn sample_question(id: u64) -> Question {
+        Question {
+            r#type: 2,
+            question_id: id,
+            question_text: format!("Q{id}"),
+            question_time: 20,
+            max_point: 1000.0,
+            min_point: 0.0,
+            has_multiple: false,
+            options: vec![],
+        }
+    }
+
+    #[test]
+    fn replay_uses_last_broadcast_payload_not_question() {
+        let mut cache = RoomReplayCache::default();
+        cache.on_new_question(sample_question(10));
+        cache.on_broadcast(r#"{"type":11,"results":[{"name":"A"}]}"#.to_string());
+
+        let replay = cache.replay_payload();
+        assert_eq!(
+            replay.as_deref(),
+            Some(r#"{"type":11,"results":[{"name":"A"}]}"#)
+        );
+        assert_eq!(cache.last_question.as_ref().map(|q| q.question_id), Some(10));
+    }
+
+    #[test]
+    fn reset_clears_stale_replay_between_runs() {
+        let mut cache = RoomReplayCache::default();
+        cache.on_new_question(sample_question(1));
+        cache.on_broadcast(r#"{"slide_type":2,"title":"Intro"}"#.to_string());
+
+        cache.reset();
+
+        assert!(cache.replay_payload().is_none());
+        assert!(cache.last_question.is_none());
+    }
+
+    #[test]
+    fn start_then_first_slide_replay_matches_fresh_broadcast() {
+        let mut cache = RoomReplayCache::default();
+
+        cache.on_broadcast(r#"{"type":2,"question_id":99}"#.to_string());
+        cache.reset();
+
+        let first_slide_payload = r#"{"slide_id":1,"slide_type":2,"title":"Welcome"}"#;
+        cache.on_broadcast(first_slide_payload.to_string());
+
+        assert_eq!(cache.replay_payload().as_deref(), Some(first_slide_payload));
+    }
+}
