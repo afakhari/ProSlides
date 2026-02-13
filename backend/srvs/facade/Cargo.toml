@@ -24,16 +24,5 @@ features = [
     "v4",
 ]
 
-
-[dev-dependencies]
-actix-web = "4"
-futures-util = "0.3"
-tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
-
 [profile.e2e-ci]
 inherits = "test"
-opt-level = 0
-debug = 0
-codegen-units = 256
-incremental = false
-lto = "off"
