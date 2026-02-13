@@ -1,42 +1,23 @@
+use crate::models::RedisPool;
+use crate::models::{
+    BroadcastToPlayers, LeaderboardEntry, ManagerAction, ManagerSession, ManagerText, NewQuestion,
+    OptionItem, OptionResult, Question, QuestionResult, QuizQuestion, RegisterManager,
+    ResetRoomReplay, ServerMessage, Slide, UnregisterManager,
+};
+use crate::utils::{
+    add_scores_batch, cleanup_quiz_redis, get_slide_index, post_options_result,
+    post_question_leaderboard, reset_quiz_run_state, save_quiz_setup, save_slide_index,
+};
 use actix::*;
 use actix_web_actors::ws;
-use serde_json::Value;
 use redis::AsyncCommands;
+use serde_json::Value;
 use serde_json::json;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::models::RedisPool;
-use crate::utils::{
-    save_slide_index,
-    get_slide_index,
-    save_quiz_setup,
-    post_question_leaderboard,
-    cleanup_quiz_redis,
-    reset_quiz_run_state,
-    add_scores_batch,
-    post_options_result,
-};
-use crate::models::{
-    ManagerSession,
-    RegisterManager,
-    UnregisterManager,
-    ServerMessage,
-    ManagerText,
-    BroadcastToPlayers,
-    ResetRoomReplay,
-    Slide,
-    OptionItem,
-    Question,
-    ManagerAction,
-    NewQuestion,
-    OptionResult,
-    QuestionResult,
-    LeaderboardEntry,
-    QuizQuestion,
-};
 
-use std::time::{Duration, Instant};
 use std::env;
+use std::time::{Duration, Instant};
 
 // Heartbeat interval and timeout
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -71,7 +52,9 @@ impl Actor for ManagerSession {
         let mut con = self.redis_pool.clone();
         let manager_addr = ctx.address();
         actix_rt::spawn(async move {
-            save_quiz_setup(&session_id, &quiz_setup, &mut con).await.ok();
+            save_quiz_setup(&session_id, &quiz_setup, &mut con)
+                .await
+                .ok();
 
             // Send current players list to manager on connect (resync after reconnect)
             let pattern = format!("players:{session_id}");
@@ -86,14 +69,11 @@ impl Actor for ManagerSession {
 
             let mut users: Vec<serde_json::Value> = Vec::new();
             if !keys.is_empty() {
-                let player_jsons: Vec<Option<String>> = match redis::cmd("MGET")
-                    .arg(&keys)
-                    .query_async(&mut con)
-                    .await
-                {
-                    Ok(v) => v,
-                    Err(_) => return,
-                };
+                let player_jsons: Vec<Option<String>> =
+                    match redis::cmd("MGET").arg(&keys).query_async(&mut con).await {
+                        Ok(v) => v,
+                        Err(_) => return,
+                    };
 
                 for json_opt in player_jsons.into_iter().flatten() {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json_opt) {
@@ -127,7 +107,6 @@ impl Handler<ServerMessage> for ManagerSession {
         ctx.text(msg.0);
     }
 }
-
 
 impl Handler<ManagerText> for ManagerSession {
     type Result = ();
@@ -171,21 +150,23 @@ async fn send_leaderbaord(
     let player_jsons: Vec<Option<String>> = if player_keys.is_empty() {
         vec![]
     } else {
-        match redis::cmd("MGET")
-            .arg(&player_keys)
-            .query_async(con)
-            .await {
+        match redis::cmd("MGET").arg(&player_keys).query_async(con).await {
             Ok(vals) => vals,
             Err(_) => return,
         }
     };
 
     let mut players = Vec::with_capacity(player_jsons.len());
-    let mut dict_players: HashMap<String, serde_json::Value> = HashMap::with_capacity(player_jsons.len());
+    let mut dict_players: HashMap<String, serde_json::Value> =
+        HashMap::with_capacity(player_jsons.len());
 
     for player_json in player_jsons.into_iter().flatten() {
         if let Ok(pdata) = serde_json::from_str::<serde_json::Value>(&player_json) {
-            let user_id = pdata.get("user_id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let user_id = pdata
+                .get("user_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
             dict_players.insert(user_id.clone(), pdata.clone());
             players.push(pdata);
         }
@@ -199,16 +180,18 @@ async fn send_leaderbaord(
     for entry in &question_leaderboard {
         // Normalize the ID - remove any quotes
         let normalized_id = entry.rust_session_id.trim_matches('"').to_string();
-        dict_players.entry(normalized_id.clone()).or_insert_with(|| {
-            json!({
-                "user_id": normalized_id,
-                "name": entry.player_name,
-                "character": entry.avatar,
-                "rank": 0,
-                "total_points": 0,
-                "new_points": entry.score,
-            })
-        });
+        dict_players
+            .entry(normalized_id.clone())
+            .or_insert_with(|| {
+                json!({
+                    "user_id": normalized_id,
+                    "name": entry.player_name,
+                    "character": entry.avatar,
+                    "rank": 0,
+                    "total_points": 0,
+                    "new_points": entry.score,
+                })
+            });
     }
 
     // Now add scores to Redis (after dict_players is populated)
@@ -315,7 +298,6 @@ async fn send_leaderbaord(
     }
 }
 
-
 fn build_question_payload(slide: &Slide) -> Option<(Question, QuizQuestion)> {
     let quiz_question = slide.question.as_ref()?.clone();
 
@@ -407,10 +389,7 @@ async fn finalize_question(
         .iter()
         .enumerate()
         .map(|(i, opt)| {
-            let count = counts
-                .get(i)
-                .and_then(|c| *c)
-                .unwrap_or(0)
+            let count = counts.get(i).and_then(|c| *c).unwrap_or(0)
                 + quiz_question
                     .options
                     .get(i)
@@ -472,11 +451,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
         if let Ok(ws::Message::Ping(msg)) = msg {
             self.hb = Instant::now();
             ctx.pong(&msg);
-        }
-        else if let Ok(ws::Message::Pong(_)) = msg {
+        } else if let Ok(ws::Message::Pong(_)) = msg {
             self.hb = Instant::now();
-        }
-        else if let Ok(ws::Message::Text(text)) = msg {
+        } else if let Ok(ws::Message::Text(text)) = msg {
             self.hb = Instant::now();
             println!("🧭 Manager sent: {}", text);
 
@@ -492,6 +469,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                             let room_clone = self.room.clone();
                             let manager_addr = ctx.address();
                             let should_reset = cmd.action == "start";
+                            if should_reset {
+                                room_clone.do_send(crate::models::MarkRunStarted);
+                            }
                             actix_rt::spawn(async move {
                                 if should_reset {
                                     reset_quiz_run_state(&mut con, &session_id).await;
@@ -503,7 +483,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                                 if slide_index >= 0 && (slide_index as usize) < slides.len() {
                                     let current_slide = &slides[slide_index as usize];
                                     if current_slide.slide_type == 1 {
-                                        if let Some((question, quiz_question)) = build_question_payload(current_slide) {
+                                        if let Some((question, quiz_question)) =
+                                            build_question_payload(current_slide)
+                                        {
                                             finalize_question(
                                                 &mut con,
                                                 session_id.clone(),
@@ -519,8 +501,13 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                                     }
                                 }
 
-                                slide_index = if slide_index + 1 < slides.len() as i32 { slide_index + 1 } else { slides.len() as i32 };
-                                if slide_index >= slides.len() as i32 { // end
+                                slide_index = if slide_index + 1 < slides.len() as i32 {
+                                    slide_index + 1
+                                } else {
+                                    slides.len() as i32
+                                };
+                                if slide_index >= slides.len() as i32 {
+                                    // end
                                     cleanup_quiz_redis(&mut con, &session_id).await;
                                     save_slide_index(&mut con, &session_id, -1).await;
                                     return;
@@ -528,20 +515,29 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                                 save_slide_index(&mut con, &session_id, slide_index).await;
                                 let slide = &slides[slide_index as usize];
 
-                                if slide.slide_type == 3 { // Leaderboard Slide
-                                    send_leaderbaord(&mut con, session_id.clone(), slide.clone(), manager_addr.clone(), room_clone.clone()).await;
-                                }
-                                else if slide.slide_type == 2 { // content
+                                if slide.slide_type == 3 {
+                                    // Leaderboard Slide
+                                    send_leaderbaord(
+                                        &mut con,
+                                        session_id.clone(),
+                                        slide.clone(),
+                                        manager_addr.clone(),
+                                        room_clone.clone(),
+                                    )
+                                    .await;
+                                } else if slide.slide_type == 2 {
+                                    // content
                                     if let Ok(str_json) = serde_json::to_string(&slide) {
                                         room_clone.do_send(BroadcastToPlayers(str_json.clone()));
                                         manager_addr.do_send(ServerMessage(str_json));
                                     }
-                                }
-                                else if slide.slide_type == 1 { // PickAnswerQuestion Slide
-                                    let (question, quiz_question) = match build_question_payload(slide) {
-                                        Some(payload) => payload,
-                                        None => return,
-                                    };
+                                } else if slide.slide_type == 1 {
+                                    // PickAnswerQuestion Slide
+                                    let (question, quiz_question) =
+                                        match build_question_payload(slide) {
+                                            Some(payload) => payload,
+                                            None => return,
+                                        };
 
                                     let json = match serde_json::to_string(&question) {
                                         Ok(j) => j,
@@ -552,13 +548,17 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                                     room_clone.do_send(BroadcastToPlayers(json.clone()));
                                     manager_addr.do_send(ServerMessage(json));
 
-                                    let qkey = format!("question:{}:{}", session_id, question.question_id);
+                                    let qkey =
+                                        format!("question:{}:{}", session_id, question.question_id);
                                     let active_key = format!("question:{}:active", session_id);
+                                    let run_id_key = format!("quiz:{}:run_id", session_id);
+                                    let run_id: u64 = con.get(&run_id_key).await.unwrap_or(0);
                                     let meta = json!({
                                         "question_id": question.question_id,
                                         "question_time": question.question_time,
                                         "max_point": question.max_point,
                                         "min_point": question.min_point,
+                                        "run_id": run_id,
                                     });
 
                                     // Store question meta & start timestamp using pipeline
@@ -577,7 +577,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                                     let _: Result<(), _> = pipe.query_async(&mut con).await;
 
                                     // Wait question_time seconds
-                                    tokio::time::sleep(std::time::Duration::from_secs(question.question_time as u64)).await;
+                                    tokio::time::sleep(std::time::Duration::from_secs(
+                                        question.question_time as u64,
+                                    ))
+                                    .await;
 
                                     finalize_question(
                                         &mut con,
@@ -592,12 +595,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                                     .await;
                                 }
                             });
-                        },
+                        }
                         "previous" => {
-                            println!("⬅️ Manager requested PREVIOUS");
-                            self.room.do_send(BroadcastToPlayers(
-                                "Manager pressed previous".to_string(),
-                            ));
+                            println!("⬅️ Manager requested PREVIOUS (ignored, disabled)");
+                            // Intentionally ignored for safety.
                         }
 
                         "end" => {
@@ -615,15 +616,12 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
             } else {
                 println!("⚠️ Manager sent invalid JSON: {}", text);
             }
-        }
-        else if let Ok(ws::Message::Binary(bin)) = msg {
+        } else if let Ok(ws::Message::Binary(bin)) = msg {
             ctx.binary(bin);
-        }
-        else if let Ok(ws::Message::Close(reason)) = msg {
+        } else if let Ok(ws::Message::Close(reason)) = msg {
             ctx.close(reason);
             ctx.stop();
-        }
-        else {
+        } else {
             ctx.stop();
         }
     }

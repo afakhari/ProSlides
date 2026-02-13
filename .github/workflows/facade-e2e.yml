@@ -1,0 +1,34 @@
+name: facade-e2e
+
+on:
+  pull_request:
+    paths:
+      - 'backend/srvs/facade/**'
+      - '.github/workflows/facade-e2e.yml'
+  push:
+    branches: [ master, main ]
+    paths:
+      - 'backend/srvs/facade/**'
+      - '.github/workflows/facade-e2e.yml'
+
+jobs:
+  facade-e2e:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Facade tests (unit + E2E lifecycle)
+        working-directory: backend/srvs/facade
+        run: cargo test --profile e2e-ci --tests -- --nocapture

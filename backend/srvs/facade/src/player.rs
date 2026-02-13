@@ -1,14 +1,13 @@
+use crate::models::{
+    OptionResult, PlayerAnswer, PlayerInfo, PlayerOk, PlayerSession, PlayerText, QuestionResult,
+    RegisterPlayer, SendPlayerList, UnregisterPlayer,
+};
+use crate::utils::{get_slide_index, load_quiz_setup};
 use actix::*;
 use actix_web_actors::ws;
 use redis::AsyncCommands;
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::utils::{
-    get_slide_index, load_quiz_setup
-};
-use crate::models::{
-    OptionResult, PlayerAnswer, PlayerInfo, PlayerOk, PlayerSession, PlayerText, QuestionResult, RegisterPlayer, SendPlayerList, UnregisterPlayer
-};
 
 use std::time::{Duration, Instant};
 
@@ -33,7 +32,6 @@ impl PlayerSession {
     }
 }
 
-
 impl Actor for PlayerSession {
     type Context = ws::WebsocketContext<Self>;
     fn started(&mut self, ctx: &mut Self::Context) {
@@ -47,7 +45,6 @@ impl Actor for PlayerSession {
     }
 }
 
-
 impl Handler<PlayerText> for PlayerSession {
     type Result = ();
 
@@ -58,7 +55,6 @@ impl Handler<PlayerText> for PlayerSession {
         // Automatically send "ok" back to manager
         if let Ok(player_info) = serde_json::from_str::<PlayerInfo>(&msg.0) {
             if player_info.r#type == 6 { // Player registration
-
             }
         }
         self.room.do_send(PlayerOk(ctx.address()));
@@ -70,13 +66,12 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
         if let Ok(ws::Message::Ping(msg)) = msg {
             self.hb = Instant::now();
             ctx.pong(&msg);
-        }
-        else if let Ok(ws::Message::Pong(_)) = msg {
+        } else if let Ok(ws::Message::Pong(_)) = msg {
             self.hb = Instant::now();
-        }
-        else if let Ok(ws::Message::Text(text)) = msg {
+        } else if let Ok(ws::Message::Text(text)) = msg {
             if let Ok(player_info) = serde_json::from_str::<PlayerInfo>(&text) {
-                if player_info.r#type == 6 { // Player registration
+                if player_info.r#type == 6 {
+                    // Player registration
                     let name = player_info.name.clone();
                     let character = player_info.character.clone();
                     self.name = Some(name.clone());
@@ -118,12 +113,12 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                         pipe.atomic()
                             .set(&player_key, &redis_data)
                             .sadd(&session_key, &player_key);
-                        
+
                         let _: Result<(), _> = pipe.query_async(&mut con).await;
                     });
 
                     // Notify room to send updated list to manager
-                    self.room.do_send(SendPlayerList { 
+                    self.room.do_send(SendPlayerList {
                         session_id: self.session_id.clone(),
                         new_player: user_data,
                     });
@@ -139,13 +134,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
             if text == "ok" {
                 // self.room.do_send(crate::PlayerOk(ctx.address()));
             } else if let Ok(answer) = serde_json::from_str::<PlayerAnswer>(&text) {
-                if answer.r#type == 4 { // Submit Question
+                if answer.r#type == 4 {
+                    // Submit Question
                     let session_id = self.session_id.clone();
                     let user_id = self.id.to_string();
                     let answer_clone = answer.clone();
                     let mut con = self.redis_pool.clone();
                     let existing_setup = self.quiz_setup.clone();
-                    
+
                     actix_rt::spawn(async move {
                         // Load quiz setup if needed
                         let setup_quiz = match existing_setup {
@@ -156,15 +152,15 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                                     println!("⚠️ Failed to load quiz setup");
                                     return;
                                 }
-                            }
+                            },
                         };
-                        
+
                         let slide_index = get_slide_index(&mut con, &session_id).await;
                         if slide_index < 0 || slide_index as usize >= setup_quiz.slides.len() {
                             println!("⚠️ Invalid slide index: {}", slide_index);
                             return;
                         }
-                        
+
                         let slide = &setup_quiz.slides[slide_index as usize];
                         let question = match &slide.question {
                             Some(q) => q,
@@ -179,13 +175,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                         // Batch fetch meta and start time
                         let meta_key = format!("{qkey}:meta");
                         let start_key = format!("{qkey}:start");
-                        
-                        let (qmeta_str, start_time): (Option<String>, Option<f64>) = 
+
+                        let (qmeta_str, start_time): (Option<String>, Option<f64>) =
                             match redis::pipe()
                                 .get(&meta_key)
                                 .get(&start_key)
                                 .query_async(&mut con)
-                                .await {
+                                .await
+                            {
                                 Ok(r) => r,
                                 Err(_) => {
                                     println!("⚠️ Failed to fetch question data from Redis");
@@ -200,7 +197,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                                 return;
                             }
                         };
-                        
+
                         let start_time = match start_time {
                             Some(t) => t,
                             None => {
@@ -217,18 +214,31 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                             }
                         };
 
+                        if let Some(answer_run_id) = answer_clone.run_id {
+                            let current_run_id = qmeta["run_id"].as_u64().unwrap_or(0);
+                            if answer_run_id != current_run_id {
+                                println!(
+                                    "⚠️ Ignoring stale answer due to run_id mismatch (got {}, expected {})",
+                                    answer_run_id, current_run_id
+                                );
+                                return;
+                            }
+                        }
+
                         let question_time = qmeta["question_time"].as_f64().unwrap_or(0.0);
                         let max_point = qmeta["max_point"].as_f64().unwrap_or(0.0);
                         let min_point = qmeta["min_point"].as_f64().unwrap_or(0.0);
 
                         // Build options result
-                        let options: Vec<OptionResult> = question.options.iter()
-                            .map(|opt| OptionResult { 
-                                option_id: opt.option_id, 
+                        let options: Vec<OptionResult> = question
+                            .options
+                            .iter()
+                            .map(|opt| OptionResult {
+                                option_id: opt.option_id,
                                 answer: opt.is_correct,
                             })
                             .collect();
-                        
+
                         let result = QuestionResult {
                             r#type: 3,
                             question_id: question.question_id,
@@ -238,10 +248,11 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                         // Calculate score
                         let mut correct_picked_nums: i16 = 0;
                         let mut total_corrects: u8 = 0;
-                        
+
                         for (i, ans_opt) in answer_clone.options_result.iter().enumerate() {
-                            if i < result.options_result.len() && 
-                               result.options_result[i].option_id == ans_opt.option_id {
+                            if i < result.options_result.len()
+                                && result.options_result[i].option_id == ans_opt.option_id
+                            {
                                 if result.options_result[i].answer {
                                     total_corrects += 1;
                                     if ans_opt.picked {
@@ -252,7 +263,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                                 }
                             }
                         }
-                        
+
                         correct_picked_nums = correct_picked_nums.max(0);
                         let slope: f64 = if total_corrects > 0 {
                             correct_picked_nums as f64 / total_corrects as f64
@@ -280,10 +291,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                         // Get player data and update in one pipeline
                         let pkey = format!("player:{session_id}:{user_id}");
                         let player_str: Option<String> = con.get(&pkey).await.unwrap_or(None);
-                        
+
                         let mut player: serde_json::Value = match player_str {
                             Some(s) => serde_json::from_str(&s).unwrap_or(json!({})),
-                            None => json!({})
+                            None => json!({}),
                         };
 
                         let old_total = player["total_points"].as_f64().unwrap_or(0.0);

@@ -1,13 +1,12 @@
+use actix::*;
 use redis::aio::ConnectionManager;
 use serde::{Deserialize, Serialize};
-use actix::*;
-use uuid::Uuid;
 use std::collections::HashSet;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use uuid::Uuid;
 
 // Type alias for Redis connection pool
 pub type RedisPool = ConnectionManager;
-
 
 //
 // ==== Question struct ====
@@ -62,6 +61,8 @@ pub struct PlayerAnswer {
     pub question_id: u32,
     pub user_id: String,
     pub submit_time: f32,
+    #[serde(default)]
+    pub run_id: Option<u64>,
     pub options_result: Vec<PlayerOptionAnswer>,
 }
 
@@ -102,6 +103,9 @@ pub struct Room {
     pub manager: Option<Addr<ManagerSession>>,
     pub ok_responses: usize,
     pub replay_cache: RoomReplayCache,
+    pub run_id: u64,
+    pub started: bool,
+    pub abandoned: bool,
     pub redis_pool: RedisPool,
     pub session_id: String,
 }
@@ -143,11 +147,28 @@ impl RoomReplayCache {
         self.last_question = Some(question);
     }
 
-    pub fn on_broadcast(&mut self, payload: String) {
+    pub fn on_broadcast(&mut self, payload: String, run_id: u64) {
         self.last_player_payload = Some(payload);
+        self.last_run_id = run_id;
+        self.stored_at = Some(Instant::now());
     }
 
-    pub fn replay_payload(&self) -> Option<String> {
+    pub fn replay_payload(
+        &self,
+        run_id: u64,
+        manager_connected: bool,
+        ttl: Duration,
+    ) -> Option<String> {
+        if !manager_connected {
+            return None;
+        }
+        if self.last_run_id != run_id {
+            return None;
+        }
+        let stored_at = self.stored_at?;
+        if stored_at.elapsed() > ttl {
+            return None;
+        }
         self.last_player_payload.clone()
     }
 
@@ -157,7 +178,6 @@ impl RoomReplayCache {
         self.run_id = None;
     }
 }
-
 
 //
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -253,7 +273,6 @@ pub struct QuizOption {
 #[rtype(result = "()")]
 pub struct PlayerText(pub String);
 
-
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct RegisterPlayer(pub Addr<PlayerSession>);
@@ -265,7 +284,6 @@ pub struct UnregisterPlayer(pub Addr<PlayerSession>);
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct PlayerOk(#[allow(dead_code)] pub Addr<PlayerSession>);
-
 
 /// Player WebSocket actor
 pub struct PlayerSession {
@@ -308,6 +326,9 @@ pub struct BroadcastToPlayers(pub String);
 #[rtype(result = "()")]
 pub struct ResetRoomReplay;
 
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct MarkRunStarted;
 
 pub struct ManagerSession {
     pub room: Addr<Room>,
@@ -324,6 +345,7 @@ pub struct ServerMessage(pub String);
 #[cfg(test)]
 mod tests {
     use super::{Question, RoomReplayCache};
+    use std::time::Duration;
 
     fn sample_question(id: u64) -> Question {
         Question {
@@ -342,25 +364,32 @@ mod tests {
     fn replay_uses_last_broadcast_payload_not_question() {
         let mut cache = RoomReplayCache::default();
         cache.on_new_question(sample_question(10));
-        cache.on_broadcast(r#"{"type":11,"results":[{"name":"A"}]}"#.to_string());
+        cache.on_broadcast(r#"{"type":11,"results":[{"name":"A"}]}"#.to_string(), 1);
 
-        let replay = cache.replay_payload();
+        let replay = cache.replay_payload(1, true, Duration::from_secs(30));
         assert_eq!(
             replay.as_deref(),
             Some(r#"{"type":11,"results":[{"name":"A"}]}"#)
         );
-        assert_eq!(cache.last_question.as_ref().map(|q| q.question_id), Some(10));
+        assert_eq!(
+            cache.last_question.as_ref().map(|q| q.question_id),
+            Some(10)
+        );
     }
 
     #[test]
     fn reset_clears_stale_replay_between_runs() {
         let mut cache = RoomReplayCache::default();
         cache.on_new_question(sample_question(1));
-        cache.on_broadcast(r#"{"slide_type":2,"title":"Intro"}"#.to_string());
+        cache.on_broadcast(r#"{"slide_type":2,"title":"Intro"}"#.to_string(), 1);
 
         cache.reset();
 
-        assert!(cache.replay_payload().is_none());
+        assert!(
+            cache
+                .replay_payload(1, true, Duration::from_secs(30))
+                .is_none()
+        );
         assert!(cache.last_question.is_none());
     }
 
@@ -368,13 +397,18 @@ mod tests {
     fn start_then_first_slide_replay_matches_fresh_broadcast() {
         let mut cache = RoomReplayCache::default();
 
-        cache.on_broadcast(r#"{"type":2,"question_id":99}"#.to_string());
+        cache.on_broadcast(r#"{"type":2,"question_id":99}"#.to_string(), 1);
         cache.reset();
 
         let first_slide_payload = r#"{"slide_id":1,"slide_type":2,"title":"Welcome"}"#;
-        cache.on_broadcast(first_slide_payload.to_string());
+        cache.on_broadcast(first_slide_payload.to_string(), 2);
 
-        assert_eq!(cache.replay_payload().as_deref(), Some(first_slide_payload));
+        assert_eq!(
+            cache
+                .replay_payload(2, true, Duration::from_secs(30))
+                .as_deref(),
+            Some(first_slide_payload)
+        );
     }
 
     #[test]
