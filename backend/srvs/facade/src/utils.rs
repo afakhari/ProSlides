@@ -1,13 +1,8 @@
-use crate::models::{
-    QuizSetup,
-    LeaderboardEntry,
-    LeaderboardUpdate,
-    RedisPool,
-};
+use crate::models::{LeaderboardEntry, LeaderboardUpdate, QuizSetup, RedisPool};
 use redis::AsyncCommands;
 use reqwest::Client;
-use std::env;
 use serde_json::json;
+use std::env;
 
 const DEFAULT_API_TOKEN: &str = "Salam-Amin-Bidad1";
 const DEFAULT_API_BASE: &str = "http://87.107.165.177:8000/api";
@@ -38,28 +33,18 @@ pub async fn save_quiz_setup(
     con.set(quiz_key, json).await
 }
 
-pub async fn load_quiz_setup(
-    session_id: &str,
-    con: &mut RedisPool,
-) -> Option<QuizSetup> {
+pub async fn load_quiz_setup(session_id: &str, con: &mut RedisPool) -> Option<QuizSetup> {
     let key = format!("quiz:{session_id}");
     let data: Option<String> = con.get(key).await.ok()?;
     data.and_then(|json| serde_json::from_str(&json).ok())
 }
 
-pub async fn save_slide_index(
-    con: &mut RedisPool,
-    session_id: &str,
-    index: i32,
-) {
+pub async fn save_slide_index(con: &mut RedisPool, session_id: &str, index: i32) {
     let key = format!("quiz:{}:slide_index", session_id);
     let _: Result<(), _> = con.set(key, index).await;
 }
 
-pub async fn get_slide_index(
-    con: &mut RedisPool,
-    session_id: &str
-) -> i32 {
+pub async fn get_slide_index(con: &mut RedisPool, session_id: &str) -> i32 {
     let key = format!("quiz:{}:slide_index", session_id);
     con.get::<_, i32>(key).await.unwrap_or(-1)
 }
@@ -104,7 +89,7 @@ pub async fn post_question_leaderboard(
         .json(&payload)
         .send()
         .await?;
-    
+
     let status = response.status();
     if !status.is_success() {
         let text = response.text().await?;
@@ -136,7 +121,7 @@ pub async fn post_options_result(
         .json(&data)
         .send()
         .await?;
-    
+
     let status = response.status();
     if !status.is_success() {
         let text = response.text().await?;
@@ -146,10 +131,7 @@ pub async fn post_options_result(
     Ok(())
 }
 
-pub async fn cleanup_quiz_redis(
-    con: &mut RedisPool,
-    session_id: &str,
-) {
+pub async fn cleanup_quiz_redis(con: &mut RedisPool, session_id: &str) {
     // Collect all keys to delete in batches
     let patterns = [
         format!("player:{session_id}:*"),
@@ -160,7 +142,7 @@ pub async fn cleanup_quiz_redis(
     ];
 
     let mut all_keys: Vec<String> = Vec::new();
-    
+
     for pattern in &patterns {
         if let Ok(keys) = con.keys::<_, Vec<String>>(pattern).await {
             all_keys.extend(keys);
@@ -184,10 +166,7 @@ pub async fn cleanup_quiz_redis(
     }
 }
 
-pub async fn reset_quiz_run_state(
-    con: &mut RedisPool,
-    session_id: &str,
-) {
+pub async fn reset_quiz_run_state(con: &mut RedisPool, session_id: &str) {
     let patterns = [
         format!("question:{}:*:option:*:count", session_id),
         format!("question:{}:*:submits", session_id),
