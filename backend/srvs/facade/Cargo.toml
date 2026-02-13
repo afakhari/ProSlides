@@ -23,3 +23,6 @@ version = "1.18.1"
 features = [
     "v4",
 ]
+
+[profile.e2e-ci]
+inherits = "test"
