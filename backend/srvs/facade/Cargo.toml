@@ -26,3 +26,7 @@ features = [
 
 [profile.e2e-ci]
 inherits = "test"
+
+[dev-dependencies]
+futures-util = "0.3"
+tokio-tungstenite = "0.23"

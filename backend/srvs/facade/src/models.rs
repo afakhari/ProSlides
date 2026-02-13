@@ -114,29 +114,22 @@ pub struct Room {
 pub struct RoomReplayCache {
     pub last_question: Option<Question>,
     pub last_player_payload: Option<String>,
-    pub run_id: Option<String>,
+    pub last_run_id: u64,
+    pub stored_at: Option<Instant>,
 }
 
 impl RoomReplayCache {
-    pub fn start_new_run(&mut self) -> String {
-        let run_id = Uuid::new_v4().to_string();
-        self.run_id = Some(run_id.clone());
-        run_id
-    }
-
-    fn ensure_run_id(&mut self) -> String {
-        self.run_id.clone().unwrap_or_else(|| self.start_new_run())
-    }
-
-    pub fn prepare_broadcast_payload(&mut self, payload: String) -> String {
-        let run_id = self.ensure_run_id();
+    pub fn prepare_broadcast_payload(&self, payload: String, run_id: u64) -> String {
         let mut value: serde_json::Value = match serde_json::from_str(&payload) {
             Ok(v) => v,
             Err(_) => return payload,
         };
 
         if let Some(obj) = value.as_object_mut() {
-            obj.insert("run_id".to_string(), serde_json::Value::String(run_id));
+            obj.insert(
+                "run_id".to_string(),
+                serde_json::Value::Number(serde_json::Number::from(run_id)),
+            );
             return value.to_string();
         }
 
@@ -175,7 +168,8 @@ impl RoomReplayCache {
     pub fn reset(&mut self) {
         self.last_question = None;
         self.last_player_payload = None;
-        self.run_id = None;
+        self.last_run_id = 0;
+        self.stored_at = None;
     }
 }
 
@@ -412,32 +406,23 @@ mod tests {
     }
 
     #[test]
-    fn prepare_broadcast_payload_injects_run_id_and_rotates_after_reset() {
+    fn prepare_broadcast_payload_injects_numeric_run_id() {
         let mut cache = RoomReplayCache::default();
 
-        let first = cache.prepare_broadcast_payload(r#"{"type":11}"#.to_string());
+        let first = cache.prepare_broadcast_payload(r#"{"type":11}"#.to_string(), 1);
         let first_value: serde_json::Value = serde_json::from_str(&first).expect("valid json");
-        let first_run_id = first_value
-            .get("run_id")
-            .and_then(|v| v.as_str())
-            .expect("run_id should exist")
-            .to_string();
+        let first_run_id = first_value.get("run_id").and_then(|v| v.as_u64());
+        assert_eq!(first_run_id, Some(1));
 
-        let second = cache.prepare_broadcast_payload(r#"{"type":2}"#.to_string());
+        let second = cache.prepare_broadcast_payload(r#"{"type":2}"#.to_string(), 1);
         let second_value: serde_json::Value = serde_json::from_str(&second).expect("valid json");
-        let second_run_id = second_value
-            .get("run_id")
-            .and_then(|v| v.as_str())
-            .expect("run_id should exist");
-        assert_eq!(first_run_id, second_run_id);
+        let second_run_id = second_value.get("run_id").and_then(|v| v.as_u64());
+        assert_eq!(second_run_id, Some(1));
 
         cache.reset();
-        let third = cache.prepare_broadcast_payload(r#"{"type":2}"#.to_string());
+        let third = cache.prepare_broadcast_payload(r#"{"type":2}"#.to_string(), 2);
         let third_value: serde_json::Value = serde_json::from_str(&third).expect("valid json");
-        let third_run_id = third_value
-            .get("run_id")
-            .and_then(|v| v.as_str())
-            .expect("run_id should exist");
-        assert_ne!(first_run_id, third_run_id);
+        let third_run_id = third_value.get("run_id").and_then(|v| v.as_u64());
+        assert_eq!(third_run_id, Some(2));
     }
 }
