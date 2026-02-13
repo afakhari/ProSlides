@@ -137,8 +137,30 @@ async fn start_mock_api_server() -> (String, MockState) {
     (format!("http://{}", addr), state)
 }
 
+fn resolve_facade_bin() -> String {
+    if let Ok(bin) = std::env::var("CARGO_BIN_EXE_facade") {
+        return bin;
+    }
+
+    let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+    let candidate = format!("target/{profile}/facade");
+    if std::path::Path::new(&candidate).exists() {
+        return candidate;
+    }
+
+    for fallback in ["target/e2e-ci/facade", "target/debug/facade"] {
+        if std::path::Path::new(fallback).exists() {
+            return fallback.to_string();
+        }
+    }
+
+    panic!(
+        "facade binary not found: set CARGO_BIN_EXE_facade or build with `cargo build --bin facade`"
+    );
+}
+
 fn spawn_facade(mock_base: &str) -> ProcessGuard {
-    let bin = std::env::var("CARGO_BIN_EXE_facade").expect("facade binary path missing");
+    let bin = resolve_facade_bin();
     let child = Command::new(bin)
         .env("DJANGO_API_BASE_URL", format!("{mock_base}/api"))
         .stdout(Stdio::null())
