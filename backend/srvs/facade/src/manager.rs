@@ -469,18 +469,19 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ManagerSession {
                             let room_clone = self.room.clone();
                             let manager_addr = ctx.address();
                             let should_reset = cmd.action == "start";
-                            if should_reset {
-                                room_clone.do_send(crate::models::MarkRunStarted);
-                            }
                             actix_rt::spawn(async move {
                                 if should_reset {
                                     reset_quiz_run_state(&mut con, &session_id).await;
                                     save_slide_index(&mut con, &session_id, -1).await;
-                                    room_clone.do_send(ResetRoomReplay);
+                                    let _ = room_clone.send(ResetRoomReplay).await;
+                                    let _ = room_clone.send(crate::models::MarkRunStarted).await;
                                 }
                                 let mut slide_index = get_slide_index(&mut con, &session_id).await;
 
-                                if slide_index >= 0 && (slide_index as usize) < slides.len() {
+                                if !should_reset
+                                    && slide_index >= 0
+                                    && (slide_index as usize) < slides.len()
+                                {
                                     let current_slide = &slides[slide_index as usize];
                                     if current_slide.slide_type == 1 {
                                         if let Some((question, quiz_question)) =
