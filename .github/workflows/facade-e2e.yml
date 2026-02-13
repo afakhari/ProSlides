@@ -29,6 +29,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Build facade binary for integration tests
+        working-directory: backend/srvs/facade
+        run: cargo build --bin facade --profile e2e-ci
+      - name: Export facade binary path
+        working-directory: backend/srvs/facade
+        run: echo "CARGO_BIN_EXE_facade=$(pwd)/target/e2e-ci/facade" >> "$GITHUB_ENV"
       - name: Facade tests (unit + E2E lifecycle)
         working-directory: backend/srvs/facade
         run: cargo test --profile e2e-ci --tests -- --nocapture
