@@ -171,9 +171,7 @@ impl Handler<BroadcastToPlayers> for Room {
     type Result = ();
     fn handle(&mut self, msg: BroadcastToPlayers, _: &mut Self::Context) {
         self.ok_responses = 0;
-        let payload = self
-            .replay_cache
-            .prepare_broadcast_payload(msg.0, self.run_id);
+        let payload = self.replay_cache.prepare_broadcast_payload(msg.0);
         self.replay_cache.on_broadcast(payload.clone(), self.run_id);
         for player in &self.players {
             player.do_send(PlayerText(payload.clone()));

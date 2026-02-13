@@ -114,6 +114,7 @@ pub struct Room {
 pub struct RoomReplayCache {
     pub last_question: Option<Question>,
     pub last_player_payload: Option<String>,
+    pub run_id: Option<String>,
     pub last_run_id: u64,
     pub stored_at: Option<Instant>,
 }
@@ -168,6 +169,7 @@ impl RoomReplayCache {
     pub fn reset(&mut self) {
         self.last_question = None;
         self.last_player_payload = None;
+        self.run_id = None;
         self.last_run_id = 0;
         self.stored_at = None;
     }
