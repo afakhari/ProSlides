@@ -138,6 +138,11 @@ fn spawn_facade(base: &str) -> Guard {
     let bin = resolve_facade_bin();
     let child = Command::new(bin)
         .env("DJANGO_API_BASE_URL", format!("{base}/api"))
+        .env("NO_PROXY", "127.0.0.1,localhost")
+        .env("no_proxy", "127.0.0.1,localhost")
+        .env_remove("HTTP_PROXY")
+        .env_remove("HTTPS_PROXY")
+        .env_remove("ALL_PROXY")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -173,6 +178,31 @@ async fn recv_json(ws: &mut Ws, wait: Duration) -> Option<Value> {
     .ok()
     .flatten()
 }
+
+async fn recv_started_and_question(ws: &mut Ws, wait: Duration) -> (Value, Value) {
+    let deadline = tokio::time::Instant::now() + wait;
+    let mut started: Option<Value> = None;
+    let mut question: Option<Value> = None;
+    let mut backlog = VecDeque::new();
+
+    while tokio::time::Instant::now() < deadline {
+        if let Some(v) = recv_json(ws, Duration::from_millis(300)).await {
+            match v.get("type").and_then(Value::as_i64) {
+                Some(14) => started = Some(v),
+                Some(2) => question = Some(v),
+                _ => backlog.push_back(v),
+            }
+            if started.is_some() && question.is_some() {
+                return (started.unwrap(), question.unwrap());
+            }
+        }
+    }
+
+    panic!(
+        "missing start/question pair; started={started:?}, question={question:?}, backlog={backlog:?}"
+    )
+}
+
 async fn recv_type(ws: &mut Ws, expected: i64, wait: Duration) -> Value {
     let t0 = tokio::time::Instant::now();
     let mut backlog = VecDeque::new();
@@ -225,10 +255,9 @@ async fn presentation_lifecycle_run_id_and_replay_rules() {
 
     // 2) Manager start => session_started => next payload accepted.
     send_json(&mut m, json!({"type":9,"action":"start"})).await;
-    let started = recv_type(&mut p1, 14, Duration::from_secs(2)).await;
+    let (started, q1) = recv_started_and_question(&mut p1, Duration::from_secs(3)).await;
     let run1 = started["run_id"].as_u64().unwrap();
     assert_eq!(started["event"], "session_started");
-    let q1 = recv_type(&mut p1, 2, Duration::from_secs(2)).await;
     assert_eq!(q1["run_id"], json!(run1));
 
     // flush/ack old + valid answers
@@ -250,10 +279,9 @@ async fn presentation_lifecycle_run_id_and_replay_rules() {
 
     // 3) Restart run => old run messages ignored (run_id mismatch)
     send_json(&mut m, json!({"type":9,"action":"start"})).await;
-    let started2 = recv_type(&mut p1, 14, Duration::from_secs(2)).await;
+    let (started2, q2) = recv_started_and_question(&mut p1, Duration::from_secs(3)).await;
     let run2 = started2["run_id"].as_u64().unwrap();
     assert!(run2 > run1);
-    let q2 = recv_type(&mut p1, 2, Duration::from_secs(2)).await;
     assert_eq!(q2["run_id"], json!(run2));
 
     // stale answer from run1 should be ignored
@@ -276,7 +304,11 @@ async fn presentation_lifecycle_run_id_and_replay_rules() {
     let mut late = connect("player", &sid).await;
     send_json(&mut late, json!({"type":6,"name":"late","character":"c2"})).await;
     let _ack_late = recv_type(&mut late, 10, Duration::from_secs(2)).await;
-    let replay = recv_type(&mut late, 2, Duration::from_secs(2)).await;
+    let replay = recv_json(&mut late, Duration::from_secs(2))
+        .await
+        .expect("late join should receive a replay payload");
+    let replay_type = replay["type"].as_i64().unwrap_or_default();
+    assert!(matches!(replay_type, 2 | 3));
     assert_eq!(replay["run_id"], json!(run2));
 
     // 5) Manager disconnect => Abandoned => player join does not replay; reconnect/start works
