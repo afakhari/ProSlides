@@ -10,6 +10,7 @@ import { AudioProvider, useAudio } from "../contexts/AudioContext";
 import { apiFetch } from "../utils/apiFetch";
 
 import Waiting from "../pages/loading/LoadingPage";
+import FinalLeaderboard from "../pages/presentation/manager/FinalLeaderboard";
 
 const ManagerJoinPage = lazy(() =>
   import("../pages/presentation/manager/JoinPage")
@@ -23,10 +24,6 @@ const ManagerLeaderBoard = lazy(() =>
 const ManagerContentSlide = lazy(() =>
   import("../pages/presentation/manager/ContentSlide")
 );
-const FinalLeaderboard = lazy(() =>
-  import("../pages/presentation/manager/FinalLeaderboard")
-);
-
 const PlayerJoinPage = lazy(() =>
   import("../pages/presentation/player/JoinPage")
 );
