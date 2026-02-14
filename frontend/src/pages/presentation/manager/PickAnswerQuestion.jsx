@@ -25,8 +25,7 @@ export default function ManagerPickAnswerQuestion({
 }) {
   const { isConnected, sendNavigation, sendEnd, lastMessage, type8Message } =
     useWebSocket();
-  const { questionResults, modalLeaderboardResults, processMessage } =
-    useServerData();
+  const { questionResults, modalLeaderboardResults } = useServerData();
 
   // Calculate current question number and details from currentSlide
   const currentQuestionIndex = currentSlide - 1;
@@ -90,9 +89,6 @@ export default function ManagerPickAnswerQuestion({
 
     console.log("[PickAnswerQuestion] Received message:", lastMessage);
 
-    // ذخیره پیام در ServerData
-    processMessage(lastMessage);
-
     // Type 8: Question Results - مستقیم اعمال کن
     if (lastMessage.type === 8) {
       console.log("[PickAnswerQuestion] ===== TYPE 8 RECEIVED =====");
@@ -155,7 +151,6 @@ export default function ManagerPickAnswerQuestion({
     lastMessage,
     currentQuestion.options,
     currentQuestion.question_id,
-    processMessage,
   ]);
 
   // ✅ useEffect مخصوص type8Message - این گم نمیشه!
