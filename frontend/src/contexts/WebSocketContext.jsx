@@ -10,6 +10,7 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
   const [connectionError, setConnectionError] = useState(null);
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  const manualCloseRef = useRef(false);
   const [sessionId, setSessionId] = useState(null);
   const sessionIdRef = useRef(null);
 
@@ -24,6 +25,7 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
     }
 
     sessionIdRef.current = sessionIdInput;
+    manualCloseRef.current = false;
 
     try {
       // const wsUrl = `ws://localhost:8080/ws/${sessionIdInput}/${role}`;
@@ -47,6 +49,11 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
 
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
+        }
+
+        if (manualCloseRef.current) {
+          console.log("[WS] Manual close detected; reconnect skipped");
+          return;
         }
 
         reconnectTimeoutRef.current = setTimeout(() => {
@@ -89,6 +96,7 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
   };
 
   const disconnect = () => {
+    manualCloseRef.current = true;
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
     }
@@ -134,6 +142,7 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
 
   useEffect(() => {
     return () => {
+      manualCloseRef.current = true;
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }

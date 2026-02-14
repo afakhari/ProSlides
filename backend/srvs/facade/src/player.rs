@@ -1,12 +1,15 @@
 use crate::models::{
-    OptionResult, PlayerAnswer, PlayerInfo, PlayerOk, PlayerSession, PlayerText, QuestionResult,
-    RegisterPlayer, SendPlayerList, UnregisterPlayer,
+    OptionItem, OptionResult, PlayerAnswer, PlayerInfo, PlayerOk, PlayerSession, PlayerText,
+    Question, QuestionResult, QuizQuestion, Slide, RegisterPlayer, SendPlayerList,
+    UnregisterPlayer,
 };
 use crate::utils::{get_slide_index, load_quiz_setup};
 use actix::*;
 use actix_web_actors::ws;
 use redis::AsyncCommands;
 use serde_json::json;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use std::time::{Duration, Instant};
@@ -32,12 +35,179 @@ impl PlayerSession {
     }
 }
 
+fn build_question_payload(slide: &Slide) -> Option<(Question, QuizQuestion)> {
+    let quiz_question = slide.question.as_ref()?.clone();
+
+    let mut answer_nums = 0;
+    let options: Vec<OptionItem> = quiz_question
+        .options
+        .iter()
+        .map(|opt| {
+            if opt.is_correct {
+                answer_nums += 1;
+            }
+            OptionItem {
+                option_id: opt.option_id,
+                option_text: opt.text.clone(),
+                image: opt.image_url.clone(),
+            }
+        })
+        .collect();
+
+    let question = Question {
+        r#type: 2,
+        question_id: quiz_question.question_id,
+        question_text: quiz_question.text.clone().unwrap_or_default(),
+        question_time: quiz_question.time_limit,
+        max_point: quiz_question.max_point,
+        min_point: quiz_question.min_point,
+        has_multiple: answer_nums > 1,
+        options,
+    };
+
+    Some((question, quiz_question))
+}
+
+async fn load_leaderboard_from_redis(con: &mut crate::models::RedisPool, session_id: &str) -> Option<Vec<Value>> {
+    let pattern = format!("player:{session_id}:*");
+    let player_keys: Vec<String> = con.keys(&pattern).await.ok()?;
+    let player_jsons: Vec<Option<String>> = if player_keys.is_empty() {
+        vec![]
+    } else {
+        redis::cmd("MGET")
+            .arg(&player_keys)
+            .query_async(con)
+            .await
+            .ok()?
+    };
+
+    let mut dict_players: HashMap<String, Value> = HashMap::with_capacity(player_jsons.len());
+    for player_json in player_jsons.into_iter().flatten() {
+        if let Ok(pdata) = serde_json::from_str::<Value>(&player_json) {
+            let user_id = pdata
+                .get("user_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            dict_players.insert(user_id, pdata);
+        }
+    }
+
+    let key = format!("leaderboard:{session_id}");
+    let raw: Vec<(String, f64)> = con.zrevrange_withscores(&key, 0, -1).await.ok()?;
+
+    let mut rank = 0;
+    let leaderboard: Vec<Value> = raw
+        .into_iter()
+        .filter_map(|(player_id, score)| {
+            let normalized_id = player_id.trim_matches('"').to_string();
+            dict_players.get(&normalized_id).map(|player| {
+                rank += 1;
+                json!({
+                    "user_id": normalized_id,
+                    "name": player["name"],
+                    "character": player["character"],
+                    "rank": rank,
+                    "total_points": score,
+                    "new_points": player["new_points"],
+                })
+            })
+        })
+        .collect();
+
+    Some(leaderboard)
+}
+
+async fn sync_player_state_on_reconnect(
+    con: &mut crate::models::RedisPool,
+    session_id: &str,
+    player_addr: Addr<PlayerSession>,
+) {
+    let setup = match load_quiz_setup(session_id, con).await {
+        Some(s) => s,
+        None => return,
+    };
+    let slide_index = get_slide_index(con, session_id).await;
+    if slide_index < 0 || slide_index as usize >= setup.slides.len() {
+        return;
+    }
+    let slide = &setup.slides[slide_index as usize];
+
+    match slide.slide_type {
+        1 => {
+            let (question, quiz_question) = match build_question_payload(slide) {
+                Some(payload) => payload,
+                None => return,
+            };
+            let run_id_key = format!("quiz:{}:run_id", session_id);
+            let run_id: u64 = con.get(&run_id_key).await.unwrap_or(0);
+            let mut question_value = match serde_json::to_value(&question) {
+                Ok(v) => v,
+                Err(_) => return,
+            };
+            if let Some(obj) = question_value.as_object_mut() {
+                obj.insert("run_id".to_string(), json!(run_id));
+            }
+            player_addr.do_send(PlayerText(question_value.to_string()));
+
+            let active_key = format!("question:{}:active", session_id);
+            let active_marker: Option<String> = con.get(&active_key).await.ok();
+            let active_for_current = active_marker
+                .as_ref()
+                .map(|marker| marker.starts_with(&format!("{}:", question.question_id)))
+                .unwrap_or(false);
+            if active_for_current {
+                return;
+            }
+
+            let options: Vec<OptionResult> = quiz_question
+                .options
+                .iter()
+                .map(|opt| OptionResult {
+                    option_id: opt.option_id,
+                    answer: opt.is_correct,
+                })
+                .collect();
+            let result = QuestionResult {
+                r#type: 3,
+                question_id: question.question_id,
+                options_result: options,
+            };
+            if let Ok(result_json) = serde_json::to_string(&result) {
+                player_addr.do_send(PlayerText(result_json));
+            }
+        }
+        2 => {
+            if let Ok(str_json) = serde_json::to_string(slide) {
+                player_addr.do_send(PlayerText(str_json));
+            }
+        }
+        3 => {
+            if let Some(leaderboard) = load_leaderboard_from_redis(con, session_id).await {
+                let payload = json!({
+                    "type": 11,
+                    "results": leaderboard,
+                });
+                player_addr.do_send(PlayerText(payload.to_string()));
+            }
+        }
+        _ => {}
+    }
+}
+
 impl Actor for PlayerSession {
     type Context = ws::WebsocketContext<Self>;
     fn started(&mut self, ctx: &mut Self::Context) {
         // Start heartbeat
         self.hb(ctx);
         self.room.do_send(RegisterPlayer(ctx.address()));
+
+        let session_id = self.session_id.clone();
+        let mut con = self.redis_pool.clone();
+        let player_addr = ctx.address();
+        actix_rt::spawn(async move {
+            sync_player_state_on_reconnect(&mut con, &session_id, player_addr).await;
+        });
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
@@ -76,14 +246,19 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                     let character = player_info.character.clone();
                     self.name = Some(name.clone());
                     self.character = Some(character.clone());
+                    self.registered_user_id = Some(self.id.to_string());
                     let mut con = self.redis_pool.clone();
 
                     // Generate a unique ID
-                    let user_id = self.id.to_string();
+                    let user_id = self
+                        .registered_user_id
+                        .clone()
+                        .unwrap_or_else(|| self.id.to_string());
+                    let player_user_id = user_id.clone();
 
                     // Store player info in Redis
                     let player_json = json!({
-                        "user_id": user_id,
+                        "user_id": user_id.clone(),
                         "name": name,
                         "character": character,
                         "total_points": 0,
@@ -95,18 +270,18 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                         "type": 10,
                         "name": name,
                         "character": character,
-                        "user_id": user_id,
+                        "user_id": user_id.clone(),
                     });
                     let user_data = json!({
                         "name": name,
                         "character": character,
-                        "user_id": user_id,
+                        "user_id": user_id.clone(),
                     });
                     let session_id = self.session_id.clone();
 
                     // Use pipeline for atomic batch operations
                     actix_rt::spawn(async move {
-                        let player_key = format!("player:{}:{}", session_id, user_id);
+                        let player_key = format!("player:{}:{}", session_id, player_user_id);
                         let session_key = format!("players:{}", session_id);
 
                         let mut pipe = redis::pipe();
@@ -137,7 +312,23 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                 if answer.r#type == 4 {
                     // Submit Question
                     let session_id = self.session_id.clone();
-                    let user_id = self.id.to_string();
+                    let answer_user_id = answer.user_id.trim().to_string();
+                    if let Some(registered_user_id) = &self.registered_user_id {
+                        if !answer_user_id.is_empty() && answer_user_id != *registered_user_id {
+                            println!(
+                                "⚠️ Ignoring answer due to user_id mismatch (registered={}, payload={})",
+                                registered_user_id, answer_user_id
+                            );
+                            return;
+                        }
+                    }
+                    let user_id = if !answer_user_id.is_empty() {
+                        answer_user_id
+                    } else if let Some(registered_user_id) = &self.registered_user_id {
+                        registered_user_id.clone()
+                    } else {
+                        self.id.to_string()
+                    };
                     let answer_clone = answer.clone();
                     let mut con = self.redis_pool.clone();
                     let existing_setup = self.quiz_setup.clone();
@@ -214,8 +405,8 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                             }
                         };
 
+                        let current_run_id = qmeta["run_id"].as_u64().unwrap_or(0);
                         if let Some(answer_run_id) = answer_clone.run_id {
-                            let current_run_id = qmeta["run_id"].as_u64().unwrap_or(0);
                             if answer_run_id != current_run_id {
                                 println!(
                                     "⚠️ Ignoring stale answer due to run_id mismatch (got {}, expected {})",
@@ -223,6 +414,11 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                                 );
                                 return;
                             }
+                        } else {
+                            println!(
+                                "⚠️ Missing run_id in answer for user {} (session {}, question {}, expected run {})",
+                                user_id, session_id, answer.question_id, current_run_id
+                            );
                         }
 
                         let question_time = qmeta["question_time"].as_f64().unwrap_or(0.0);
@@ -283,6 +479,29 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                             return;
                         }
 
+                        // Idempotency guard: each player can submit once per (session, run, question).
+                        let submit_once_key = format!(
+                            "submitted:{}:{}:{}:{}",
+                            session_id, current_run_id, answer.question_id, user_id
+                        );
+                        let submit_ttl = (question_time.ceil() as u64).saturating_add(3600);
+                        let submit_once_ok: Option<String> = redis::cmd("SET")
+                            .arg(&submit_once_key)
+                            .arg("1")
+                            .arg("NX")
+                            .arg("EX")
+                            .arg(submit_ttl)
+                            .query_async(&mut con)
+                            .await
+                            .ok();
+                        if submit_once_ok.is_none() {
+                            println!(
+                                "⚠️ Ignoring duplicate answer (session={}, run_id={}, question_id={}, user_id={})",
+                                session_id, current_run_id, answer.question_id, user_id
+                            );
+                            return;
+                        }
+
                         let elapsed = submit_time.min(question_time);
                         let ratio = 1.0 - (elapsed / question_time);
                         let score = ratio * (max_point - min_point) + min_point;
@@ -291,11 +510,18 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for PlayerSession {
                         // Get player data and update in one pipeline
                         let pkey = format!("player:{session_id}:{user_id}");
                         let player_str: Option<String> = con.get(&pkey).await.unwrap_or(None);
-
-                        let mut player: serde_json::Value = match player_str {
-                            Some(s) => serde_json::from_str(&s).unwrap_or(json!({})),
-                            None => json!({}),
+                        let player_str = match player_str {
+                            Some(value) => value,
+                            None => {
+                                println!(
+                                    "⚠️ Ignoring answer for unknown user_id {} in session {}",
+                                    user_id, session_id
+                                );
+                                return;
+                            }
                         };
+                        let mut player: serde_json::Value =
+                            serde_json::from_str(&player_str).unwrap_or(json!({}));
 
                         let old_total = player["total_points"].as_f64().unwrap_or(0.0);
                         player["total_points"] = json!(old_total + new_points);

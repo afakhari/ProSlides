@@ -21,7 +21,18 @@ export default function PlayerPickAnswerQuestion({
   const startTime = useRef(Date.now());
 
   // result رو از چند منبع چک کن - مستقیم از context
-  const result = propResult || questionResults || partialQuestionResults;
+  const matchQuestionResult = (candidate) => {
+    if (!candidate || questionId == null || candidate.question_id == null) {
+      return null;
+    }
+    return String(candidate.question_id) === String(questionId)
+      ? candidate
+      : null;
+  };
+  const result =
+    matchQuestionResult(propResult) ||
+    matchQuestionResult(questionResults) ||
+    matchQuestionResult(partialQuestionResults);
 
   // لاگ برای دیباگ
   console.log(
@@ -98,12 +109,17 @@ export default function PlayerPickAnswerQuestion({
 
     // Calculate submit_time: elapsed time since question started
     const elapsedSeconds = (Date.now() - startTime.current) / 1000;
+    const runId =
+      Number.isFinite(question?.run_id) || typeof question?.run_id === "number"
+        ? question.run_id
+        : null;
 
     // Build answer payload in exact format required by server
     const answer = {
       type: 4,
       question_id: question.question_id,
       user_id: userId,
+      ...(runId != null ? { run_id: runId } : {}),
       submit_time: Math.round(elapsedSeconds * 1000) / 1000, // round to 3 decimals
       options_result: question.options.map((opt) => ({
         option_id: opt.option_id,

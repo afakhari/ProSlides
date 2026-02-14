@@ -17,8 +17,10 @@ use models::{
     RegisterPlayer, ResetRoomReplay, Room, RoomReplayCache, SendPlayerList, UnregisterManager,
     UnregisterPlayer,
 };
-use std::time::Instant;
-use utils::get_quiz_setup;
+use std::time::{Duration, Instant};
+use utils::{cleanup_quiz_redis, get_quiz_setup, save_slide_index};
+
+const ABANDONED_ROOM_TTL: Duration = Duration::from_secs(900);
 
 pub const REDIS_URL: &str = "redis://127.0.0.1/";
 
@@ -32,6 +34,7 @@ impl Room {
             run_id: 0,
             started: false,
             abandoned: false,
+            abandoned_at: None,
             redis_pool,
             session_id,
         }
@@ -133,7 +136,7 @@ impl Handler<RegisterPlayer> for Room {
     fn handle(&mut self, msg: RegisterPlayer, _: &mut Self::Context) {
         let player = msg.0.clone();
         self.players.insert(player.clone());
-        let ttl = std::time::Duration::from_secs(30);
+        let ttl = Duration::from_secs(7200);
         let manager_connected = self.manager.is_some() && !self.abandoned;
         if let Some(payload) = self
             .replay_cache
@@ -156,14 +159,37 @@ impl Handler<RegisterManager> for Room {
     fn handle(&mut self, msg: RegisterManager, _: &mut Self::Context) {
         self.manager = Some(msg.0);
         self.abandoned = false;
+        self.abandoned_at = None;
     }
 }
 
 impl Handler<UnregisterManager> for Room {
     type Result = ();
-    fn handle(&mut self, _: UnregisterManager, _: &mut Self::Context) {
+    fn handle(&mut self, _: UnregisterManager, ctx: &mut Self::Context) {
         self.manager = None;
         self.abandoned = true;
+        self.abandoned_at = Some(Instant::now());
+
+        let cleanup_after = ABANDONED_ROOM_TTL;
+        ctx.run_later(cleanup_after, |act, _| {
+            if act.manager.is_some() || !act.abandoned {
+                return;
+            }
+            if let Some(at) = act.abandoned_at {
+                if at.elapsed() < ABANDONED_ROOM_TTL {
+                    return;
+                }
+            } else {
+                return;
+            }
+
+            let mut con = act.redis_pool.clone();
+            let session_id = act.session_id.clone();
+            actix_rt::spawn(async move {
+                cleanup_quiz_redis(&mut con, &session_id).await;
+                save_slide_index(&mut con, &session_id, -1).await;
+            });
+        });
     }
 }
 
@@ -301,6 +327,7 @@ async fn ws_route(
                 room,
                 name: None,
                 character: None,
+                registered_user_id: None,
                 session_id,
                 redis_pool: redis_pool.clone(),
                 quiz_setup: None,
