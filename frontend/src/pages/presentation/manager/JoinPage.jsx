@@ -29,7 +29,7 @@ export default function ManagerJoinPage({
 }) {
   const { isConnected, connect, sendNavigation, sendEnd: _sendEnd, lastMessage } =
     useWebSocket();
-  const { users, processMessage } = useServerData();
+  const { users } = useServerData();
 
   const [page, setPage] = useState("lobby"); // 'lobby' | 'quiz'
   const [startError, setStartError] = useState("");
@@ -91,15 +91,10 @@ export default function ManagerJoinPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle incoming WebSocket messages and save to ServerData
   useEffect(() => {
     if (!lastMessage) return;
-
     console.log("[JoinPage] Received message:", lastMessage);
-
-    // ذخیره پیام در ServerData
-    processMessage(lastMessage);
-  }, [lastMessage, processMessage]);
+  }, [lastMessage]);
 
   const handleStart = () => {
     setStartError("");
