@@ -90,6 +90,14 @@ impl Actor for ManagerSession {
             if let Ok(text) = serde_json::to_string(&payload) {
                 manager_addr.do_send(ManagerText(text));
             }
+
+            sync_manager_state_on_reconnect(
+                &mut con,
+                &session_id,
+                &quiz_setup.slides,
+                manager_addr.clone(),
+            )
+            .await;
         });
         self.room.do_send(RegisterManager(ctx.address()));
     }
@@ -130,6 +138,61 @@ fn leaderboard_post_min_limit() -> usize {
         .and_then(|v| v.parse::<usize>().ok())
         .filter(|v| *v > 0)
         .unwrap_or(50)
+}
+
+async fn load_leaderboard_from_redis(
+    con: &mut RedisPool,
+    session_id: &str,
+) -> Option<Vec<Value>> {
+    let pattern = format!("player:{session_id}:*");
+    let player_keys: Vec<String> = con.keys(&pattern).await.ok()?;
+
+    let player_jsons: Vec<Option<String>> = if player_keys.is_empty() {
+        vec![]
+    } else {
+        redis::cmd("MGET")
+            .arg(&player_keys)
+            .query_async(con)
+            .await
+            .ok()?
+    };
+
+    let mut dict_players: HashMap<String, serde_json::Value> =
+        HashMap::with_capacity(player_jsons.len());
+    for player_json in player_jsons.into_iter().flatten() {
+        if let Ok(pdata) = serde_json::from_str::<serde_json::Value>(&player_json) {
+            let user_id = pdata
+                .get("user_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            dict_players.insert(user_id, pdata);
+        }
+    }
+
+    let key = format!("leaderboard:{session_id}");
+    let raw: Vec<(String, f64)> = con.zrevrange_withscores(&key, 0, -1).await.ok()?;
+
+    let mut rank = 0;
+    let results: Vec<Value> = raw
+        .into_iter()
+        .filter_map(|(player_id, score)| {
+            let normalized_id = player_id.trim_matches('"').to_string();
+            dict_players.get(&normalized_id).map(|player| {
+                rank += 1;
+                json!({
+                    "user_id": normalized_id,
+                    "name": player["name"],
+                    "character": player["character"],
+                    "rank": rank,
+                    "total_points": score,
+                    "new_points": player["new_points"],
+                })
+            })
+        })
+        .collect();
+
+    Some(results)
 }
 
 async fn send_leaderbaord(
@@ -329,6 +392,115 @@ fn build_question_payload(slide: &Slide) -> Option<(Question, QuizQuestion)> {
     };
 
     Some((question, quiz_question))
+}
+
+async fn sync_manager_state_on_reconnect(
+    con: &mut RedisPool,
+    session_id: &str,
+    slides: &[Slide],
+    manager_addr: Addr<ManagerSession>,
+) {
+    let slide_index = get_slide_index(con, session_id).await;
+    if slide_index < 0 || slide_index as usize >= slides.len() {
+        return;
+    }
+    let slide = &slides[slide_index as usize];
+
+    match slide.slide_type {
+        1 => {
+            let (question, quiz_question) = match build_question_payload(slide) {
+                Some(payload) => payload,
+                None => return,
+            };
+            let run_id_key = format!("quiz:{}:run_id", session_id);
+            let run_id: u64 = con.get(&run_id_key).await.unwrap_or(0);
+            let mut question_value = match serde_json::to_value(&question) {
+                Ok(v) => v,
+                Err(_) => return,
+            };
+            if let Some(obj) = question_value.as_object_mut() {
+                obj.insert("run_id".to_string(), json!(run_id));
+            }
+            manager_addr.do_send(ServerMessage(question_value.to_string()));
+
+            let active_key = format!("question:{}:active", session_id);
+            let active_marker: Option<String> = con.get(&active_key).await.ok();
+            let active_for_current = active_marker
+                .as_ref()
+                .map(|marker| marker.starts_with(&format!("{}:", question.question_id)))
+                .unwrap_or(false);
+            if active_for_current {
+                return;
+            }
+
+            let option_keys: Vec<String> = question
+                .options
+                .iter()
+                .map(|opt| {
+                    format!(
+                        "question:{}:{}:option:{}:count",
+                        session_id, question.question_id, opt.option_id
+                    )
+                })
+                .collect();
+            let counts: Vec<Option<u16>> = if option_keys.is_empty() {
+                vec![]
+            } else {
+                redis::cmd("MGET")
+                    .arg(&option_keys)
+                    .query_async(con)
+                    .await
+                    .unwrap_or_else(|_| vec![None; option_keys.len()])
+            };
+
+            let options_result: Vec<serde_json::Value> = question
+                .options
+                .iter()
+                .enumerate()
+                .map(|(i, opt)| {
+                    let count = counts.get(i).and_then(|c| *c).unwrap_or(0)
+                        + quiz_question
+                            .options
+                            .get(i)
+                            .map(|o| o.votes as u16)
+                            .unwrap_or(0);
+                    json!({
+                        "option_id": opt.option_id,
+                        "number_of_submits": count
+                    })
+                })
+                .collect();
+            let results_json = json!({
+                "type": 8,
+                "question_id": question.question_id,
+                "options": options_result
+            });
+            manager_addr.do_send(ServerMessage(results_json.to_string()));
+
+            if let Some(leaderboard) = load_leaderboard_from_redis(con, session_id).await {
+                let leaderboard_json = json!({
+                    "type": 12,
+                    "results": leaderboard,
+                });
+                manager_addr.do_send(ServerMessage(leaderboard_json.to_string()));
+            }
+        }
+        2 => {
+            if let Ok(str_json) = serde_json::to_string(slide) {
+                manager_addr.do_send(ServerMessage(str_json));
+            }
+        }
+        3 => {
+            if let Some(leaderboard) = load_leaderboard_from_redis(con, session_id).await {
+                let leaderboard_json = json!({
+                    "type": 1,
+                    "results": leaderboard,
+                });
+                manager_addr.do_send(ServerMessage(leaderboard_json.to_string()));
+            }
+        }
+        _ => {}
+    }
 }
 
 async fn finalize_question(

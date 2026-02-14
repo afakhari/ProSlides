@@ -106,6 +106,7 @@ pub struct Room {
     pub run_id: u64,
     pub started: bool,
     pub abandoned: bool,
+    pub abandoned_at: Option<Instant>,
     pub redis_pool: RedisPool,
     pub session_id: String,
 }
@@ -285,6 +286,7 @@ pub struct PlayerSession {
     pub room: Addr<Room>,
     pub name: Option<String>,
     pub character: Option<String>,
+    pub registered_user_id: Option<String>,
     pub session_id: String,
     pub redis_pool: RedisPool,
     pub quiz_setup: Option<QuizSetup>,

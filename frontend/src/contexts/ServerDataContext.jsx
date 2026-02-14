@@ -86,6 +86,7 @@ export const ServerDataProvider = ({ children }) => {
       currentQuestion: question,
       currentContent: null,
       leaderboardResults: null, // پاک کردن لیدربورد تا سوال نمایش داده شود
+      questionResults: null,
       // reset any partial results from previous question when a new question arrives
       partialQuestionResults: null,
       lastMessageType: 2,

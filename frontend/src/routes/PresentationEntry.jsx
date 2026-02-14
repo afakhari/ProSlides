@@ -468,7 +468,16 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
     // O"O1O_ O3U^OU, OñU^ U+Uc UcU+
     if (currentQuestion) {
-      const result = questionResults || partialQuestionResults;
+      const hasMatchingQuestion = (candidate) =>
+        !!candidate &&
+        candidate.question_id != null &&
+        String(candidate.question_id) === String(currentQuestion.question_id);
+      let result = null;
+      if (hasMatchingQuestion(questionResults)) {
+        result = questionResults;
+      } else if (hasMatchingQuestion(partialQuestionResults)) {
+        result = partialQuestionResults;
+      }
       return (
         <PlayerPickAnswerQuestion
           roomId={roomId}
