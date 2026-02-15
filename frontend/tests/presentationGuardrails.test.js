@@ -15,6 +15,10 @@ const playerLeaderboardPath =
   "frontend/src/pages/presentation/player/LeaderBoard.jsx";
 const playerQuestionPath =
   "frontend/src/pages/presentation/player/PickAnswerQuestion.jsx";
+const managerQuestionPath =
+  "frontend/src/pages/presentation/manager/PickAnswerQuestion.jsx";
+const timerSyncPath =
+  "frontend/src/pages/presentation/utils/questionTimerSync.js";
 
 test("manager question page waits for server results and has no mock-vote fallback", () => {
   const src = readFileSync(pickAnswerPath, "utf8");
@@ -65,6 +69,7 @@ test("player should not render leaderboard before seeing an active slide", () =>
   assert.equal(src.includes("const [playerHasSeenActiveSlide, setPlayerHasSeenActiveSlide]"), true);
   assert.equal(src.includes("if (currentQuestion || currentContent)"), true);
   assert.equal(src.includes("if (hasLeaderboard && playerHasSeenActiveSlide)"), true);
+  assert.equal(src.includes("sessionStorage.setItem(playerActiveSlideSeenKey, \"1\")"), true);
 });
 
 test("access-code route uses unified PresentationEntry resolver", () => {
@@ -86,4 +91,14 @@ test("player answer queue is room-scoped and pruned by current question", () => 
   assert.equal(src.includes("presentation_answer_queue_v2:"), true);
   assert.equal(src.includes("pruneQueuedAnswersForCurrentQuestion"), true);
   assert.equal(src.includes("localStorage.removeItem(LEGACY_ANSWER_QUEUE_KEY)"), true);
+});
+
+test("player and manager question timers use persisted timer sync", () => {
+  const playerSrc = readFileSync(playerQuestionPath, "utf8");
+  const managerSrc = readFileSync(managerQuestionPath, "utf8");
+  const timerSyncSrc = readFileSync(timerSyncPath, "utf8");
+  assert.equal(playerSrc.includes("resolveQuestionTimer"), true);
+  assert.equal(managerSrc.includes("resolveQuestionTimer"), true);
+  assert.equal(managerSrc.includes("questionAnchorStartMs"), true);
+  assert.equal(timerSyncSrc.includes("const looksStale ="), true);
 });

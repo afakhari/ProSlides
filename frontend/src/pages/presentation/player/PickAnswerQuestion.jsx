@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 import { isLightColor } from "../../../lib/colorUtils";
+import { resolveQuestionTimer } from "../utils/questionTimerSync";
 
 const LEGACY_ANSWER_QUEUE_KEY = "presentation_answer_queue_v1";
 const getAnswerQueueKey = (roomId) =>
@@ -141,13 +142,18 @@ export default function PlayerPickAnswerQuestion({
 
   useEffect(() => {
     if (!question) return;
-    startTime.current = Date.now();
-    setTimeLeft(questionTime);
+    const resolvedTimer = resolveQuestionTimer({
+      question,
+      roomId,
+      role: "player",
+    });
+    startTime.current = resolvedTimer.anchorStartMs;
+    setTimeLeft(resolvedTimer.remainingSeconds);
     setSelectedOptions([]);
     setSubmitted(false);
     setSubmitState("idle");
     setSubmitMessage("");
-  }, [question, questionId, questionTime]);
+  }, [question, roomId, questionId, questionTime]);
 
   useEffect(() => {
     if (!question) return;
