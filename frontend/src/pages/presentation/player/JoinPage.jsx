@@ -5,6 +5,7 @@ import { useWebSocket } from "../../../hooks/useWebSocket";
 import { ErrorModal } from "../../quiz/manager/ErrorModal";
 import { isLightColor } from "../../../lib/colorUtils";
 import {
+  createClientUserId,
   DEFAULT_AVATAR,
   createJoinMessage,
   getPersistedUserIdForRoom,
@@ -193,7 +194,8 @@ export default function PlayerJoinPage({ roomId, quiz }) {
       return alert("لطفاً نام خود را وارد کنید!");
     }
 
-    saveStoredProfile({ room_id: roomId, name, avatar });
+    const stableUserId = getPersistedUserIdForRoom(roomId) || createClientUserId();
+    saveStoredProfile({ room_id: roomId, name, avatar, user_id: stableUserId });
     setJoined(true);
     setJoinSent(false);
 

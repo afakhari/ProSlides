@@ -42,7 +42,12 @@ export default function ManagerJoinPage({
 }) {
   const { isConnected, connect, sendNavigation, sendEnd: _sendEnd, lastMessage } =
     useWebSocket();
-  const { users } = useServerData();
+  const {
+    users,
+    currentQuestion,
+    currentContent,
+    leaderboardResults,
+  } = useServerData();
 
   const [page, setPage] = useState("lobby"); // 'lobby' | 'quiz'
   const [startError, setStartError] = useState("");
@@ -64,6 +69,15 @@ export default function ManagerJoinPage({
   const displayUsers = users.length > 0 ? users : User_adding.Users;
   const playersReady = users.length || calculatePlayersReady(User_adding);
   const currentQuestionIndex = Math.floor(currentSlide / 2);
+  const hasLeaderboard =
+    Array.isArray(leaderboardResults) ?
+      leaderboardResults.length > 0 :
+      Array.isArray(leaderboardResults?.results) &&
+      leaderboardResults.results.length > 0;
+  const sessionInProgress =
+    !!currentQuestion ||
+    !!currentContent ||
+    hasLeaderboard;
 
   // List of 10 vibrant colors for user names
   const colorList = UserColorList;
@@ -111,6 +125,11 @@ export default function ManagerJoinPage({
 
   const handleStart = () => {
     setStartError("");
+    if (sessionInProgress) {
+      setStartError("Session is already in progress. Resuming current slide...");
+      onNext?.();
+      return;
+    }
     if (!isConnected) {
       setStartError("Connection is not ready. Please wait and try again.");
       return;
@@ -388,9 +407,9 @@ export default function ManagerJoinPage({
                   <button
                     className="inline-flex items-center gap-1.5 bg-linear-to-br from-purple-800 to-purple-600 text-white px-8! py-3! rounded-lg border-none cursor-pointer font-semibold text-base shadow-lg shadow-purple-600/40 transition-all duration-150 hover:-translate-y-1 hover:scale-110 hover:shadow-xl hover:shadow-purple-600/50 after:content-['⏵'] after:text-sm after:ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleStart}
-                    disabled={!isConnected}
+                    disabled={!isConnected || sessionInProgress}
                   >
-                    Start
+                    {sessionInProgress ? "Resuming..." : "Start"}
                   </button>
                 </div>
                 {startError && (

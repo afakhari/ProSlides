@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   PLAYER_PROFILE_KEY,
   DEFAULT_AVATAR,
+  createClientUserId,
   readStoredProfile,
   saveStoredProfile,
   getPersistedUserIdForRoom,
@@ -84,4 +85,10 @@ test("getPersistedUserIdForRoom returns id only for matching room", () => {
   saveStoredProfile({ room_id: 33, name: "ali", avatar: "🦊", user_id: "u-33" });
   assert.equal(getPersistedUserIdForRoom(33), "u-33");
   assert.equal(getPersistedUserIdForRoom(44), null);
+});
+
+test("createClientUserId creates non-empty id", () => {
+  const id = createClientUserId();
+  assert.equal(typeof id, "string");
+  assert.equal(id.length > 5, true);
 });
