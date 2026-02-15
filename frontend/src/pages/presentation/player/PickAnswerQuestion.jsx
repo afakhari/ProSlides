@@ -3,12 +3,79 @@ import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 import { isLightColor } from "../../../lib/colorUtils";
 
+const ANSWER_QUEUE_KEY = "presentation_answer_queue_v1";
+
+const getAnswerKey = (answer) =>
+  `${answer.user_id}:${answer.question_id}:${answer.run_id ?? "na"}`;
+
+const readQueuedAnswers = () => {
+  try {
+    const raw = localStorage.getItem(ANSWER_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeQueuedAnswers = (items) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    localStorage.removeItem(ANSWER_QUEUE_KEY);
+    return;
+  }
+  localStorage.setItem(ANSWER_QUEUE_KEY, JSON.stringify(items));
+};
+
+const queueAnswer = (answer) => {
+  const key = getAnswerKey(answer);
+  const current = readQueuedAnswers();
+  const next = current.filter((item) => getAnswerKey(item) !== key);
+  next.push(answer);
+  writeQueuedAnswers(next);
+};
+
+const removeQueuedAnswer = (answer) => {
+  const key = getAnswerKey(answer);
+  const current = readQueuedAnswers();
+  const next = current.filter((item) => getAnswerKey(item) !== key);
+  writeQueuedAnswers(next);
+};
+
+const flushQueuedAnswers = (sendMessage) => {
+  const current = readQueuedAnswers();
+  if (current.length === 0) {
+    return { sentKeys: [], remaining: 0 };
+  }
+
+  const sentKeys = [];
+  const remaining = [];
+  let socketFailed = false;
+
+  for (const answer of current) {
+    if (socketFailed) {
+      remaining.push(answer);
+      continue;
+    }
+
+    const ok = sendMessage(answer);
+    if (ok) {
+      sentKeys.push(getAnswerKey(answer));
+    } else {
+      socketFailed = true;
+      remaining.push(answer);
+    }
+  }
+
+  writeQueuedAnswers(remaining);
+  return { sentKeys, remaining: remaining.length };
+};
+
 export default function PlayerPickAnswerQuestion({
   question,
   result: propResult,
   quiz,
 }) {
-  // همه hooks باید قبل از conditional return باشن
   const { questionResults, partialQuestionResults } = useServerData();
   const { sendMessage, isConnected, connectionError } = useWebSocket();
 
@@ -17,10 +84,11 @@ export default function PlayerPickAnswerQuestion({
 
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [submitted, setSubmitted] = useState(false);
+  const [submitState, setSubmitState] = useState("idle"); // idle | queued | sent | missing_id
+  const [submitMessage, setSubmitMessage] = useState("");
   const [timeLeft, setTimeLeft] = useState(questionTime);
   const startTime = useRef(Date.now());
 
-  // result رو از چند منبع چک کن - مستقیم از context
   const matchQuestionResult = (candidate) => {
     if (!candidate || questionId == null || candidate.question_id == null) {
       return null;
@@ -29,37 +97,27 @@ export default function PlayerPickAnswerQuestion({
       ? candidate
       : null;
   };
+
   const result =
     matchQuestionResult(propResult) ||
     matchQuestionResult(questionResults) ||
     matchQuestionResult(partialQuestionResults);
 
-  // لاگ برای دیباگ
-  console.log(
-    "[PlayerPickAnswerQuestion] question_id:",
-    question?.question_id,
-    "result:",
-    result,
-    "partialQuestionResults:",
-    partialQuestionResults
-  );
-
-  // اگه question نیست، بعد از hooks برگرد
-
-  // ⏱ تایمر دقیق با اختلاف زمان واقعی (حتی اگر تب عوض شود یا فریز شود)
   useEffect(() => {
     if (!question) return;
     startTime.current = Date.now();
     setTimeLeft(questionTime);
-    // ریست کردن state ها وقتی سوال عوض میشه
     setSelectedOptions([]);
     setSubmitted(false);
+    setSubmitState("idle");
+    setSubmitMessage("");
   }, [question, questionId, questionTime]);
 
   useEffect(() => {
     if (!question) return;
     let frameId;
     let stopped = false;
+
     const tick = () => {
       if (stopped) return;
       const elapsed = (Date.now() - startTime.current) / 1000;
@@ -69,6 +127,7 @@ export default function PlayerPickAnswerQuestion({
         frameId = requestAnimationFrame(tick);
       }
     };
+
     tick();
     return () => {
       stopped = true;
@@ -76,15 +135,35 @@ export default function PlayerPickAnswerQuestion({
     };
   }, [question, questionId, questionTime]);
 
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const { sentKeys, remaining } = flushQueuedAnswers(sendMessage);
+    if (sentKeys.length === 0) return;
+
+    const currentUserId = localStorage.getItem("user_id");
+    if (currentUserId && questionId != null) {
+      const currentKeyPrefix = `${currentUserId}:${questionId}:`;
+      const sentCurrent = sentKeys.some((key) => key.startsWith(currentKeyPrefix));
+      if (sentCurrent) {
+        setSubmitState("sent");
+        setSubmitMessage("پاسخ شما ارسال شد.");
+        return;
+      }
+    }
+
+    if (remaining === 0 && submitState === "queued") {
+      setSubmitState("sent");
+      setSubmitMessage("پاسخ شما ارسال شد.");
+    }
+  }, [isConnected, sendMessage, questionId, submitState]);
+
   const handleSelect = (option) => {
     if (submitted || timeLeft <= 0) return;
 
-    // اگر has_multiple فالس باشد، فقط یک گزینه مجاز است
     if (question.has_multiple === false) {
-      // اگر گزینه قبلاً انتخاب شده، پاک می‌کنیم (toggle off)
       setSelectedOptions((prev) => (prev.includes(option) ? [] : [option]));
     } else {
-      // اگر has_multiple ترو یا تعریف نشده باشد، رفتار قبلی (چند انتخابی)
       setSelectedOptions((prev) =>
         prev.includes(option)
           ? prev.filter((item) => item !== option)
@@ -95,55 +174,48 @@ export default function PlayerPickAnswerQuestion({
 
   const handleSubmit = () => {
     if (!question) return;
-    // mark submitted for UI
-    if (selectedOptions.length > 0) setSubmitted(true);
+    if (selectedOptions.length === 0) return;
 
-    // Get user_id from localStorage (set during registration)
-    let userId = localStorage.getItem("user_id");
+    setSubmitted(true);
+
+    const userId = localStorage.getItem("user_id");
     if (!userId) {
-      console.warn("Player user_id not found in localStorage - using fallback");
-      // Fallback: generate a temporary user_id if not registered
-      userId = "player_" + Math.random().toString(36).substring(2, 11);
-      localStorage.setItem("user_id", userId);
+      setSubmitState("missing_id");
+      setSubmitMessage("هویت بازیکن معتبر نیست. لطفا دوباره وارد بازی شوید.");
+      return;
     }
 
-    // Calculate submit_time: elapsed time since question started
     const elapsedSeconds = (Date.now() - startTime.current) / 1000;
     const runId =
       Number.isFinite(question?.run_id) || typeof question?.run_id === "number"
         ? question.run_id
         : null;
 
-    // Build answer payload in exact format required by server
+    const options = question.options || [];
     const answer = {
       type: 4,
       question_id: question.question_id,
       user_id: userId,
       ...(runId != null ? { run_id: runId } : {}),
-      submit_time: Math.round(elapsedSeconds * 1000) / 1000, // round to 3 decimals
-      options_result: question.options.map((opt) => ({
+      submit_time: Math.round(elapsedSeconds * 1000) / 1000,
+      options_result: options.map((opt) => ({
         option_id: opt.option_id,
         picked: selectedOptions.some((s) => s.option_id === opt.option_id),
       })),
     };
 
-    console.log("Player submit:", answer);
-
-    // Attempt to send via WebSocket; sendMessage returns false if socket not open
-    if (isConnected) {
-      const ok = sendMessage(answer);
-      if (!ok) {
-        console.warn("WebSocket not connected - submit not sent yet");
-      }
-    } else {
-      // Demo/fallback: just log if not connected
-      console.log(
-        "Demo mode: answer logged but not sent (WebSocket not connected)"
-      );
+    if (isConnected && sendMessage(answer)) {
+      removeQueuedAnswer(answer);
+      setSubmitState("sent");
+      setSubmitMessage("پاسخ شما ارسال شد.");
+      return;
     }
+
+    queueAnswer(answer);
+    setSubmitState("queued");
+    setSubmitMessage("اتصال قطع است؛ پاسخ ذخیره شد و پس از اتصال ارسال می‌شود.");
   };
 
-  // Auto-submit when time runs out
   useEffect(() => {
     if (timeLeft <= 0 && !submitted) {
       handleSubmit();
@@ -153,12 +225,10 @@ export default function PlayerPickAnswerQuestion({
 
   const progressPercent =
     timeLeft >= 0 && questionTime > 0 ? (timeLeft / questionTime) * 100 : 0;
-  // نمایش جواب‌ها اگر تایمر تمام شد یا داده result رسید
   const showResults = timeLeft <= 0 || !!result;
   const waitingForResults = timeLeft <= 0 && !result;
   const options = question?.options || [];
 
-  // Calculate dynamic background style from quiz data
   const backgroundStyle = {
     backgroundImage: quiz?.background?.image
       ? `url('${quiz.background.image}')`
@@ -203,9 +273,7 @@ export default function PlayerPickAnswerQuestion({
             isConnected ? "bg-green-400" : "bg-red-400"
           }`}
         ></span>
-        <span aria-live="polite">
-          {isConnected ? "متصل" : "قطع ارتباط"}
-        </span>
+        <span aria-live="polite">{isConnected ? "متصل" : "قطع ارتباط"}</span>
       </div>
       {connectionError && (
         <div className="fixed top-12 right-4 z-40 rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-100">
@@ -224,14 +292,10 @@ export default function PlayerPickAnswerQuestion({
             </div>
           </div>
         )}
-        {/* <h1 className="text-center text-xl p-1 bg-transparent rounded-xl text-white font-medium ">
-          PROSLIDES
-        </h1> */}
         <div className="mx-4 mt-7 flex flex-col items-stretch m-auto">
           <div className=" text-3xl font-bold mb-2 text-center h-15">
             {question.question_text}
           </div>
-          {/* تصویر سوال */}
           {question.image_url && (
             <div className="mb-4 flex justify-center">
               <img
@@ -241,7 +305,6 @@ export default function PlayerPickAnswerQuestion({
               />
             </div>
           )}
-          {/* Progress Bar */}
           <div className="min-h-auto max-w-2xl">
             <div className="m-2.5 flex flex-col items-stretch gap-[0.5vh]">
               <div className="flex items-center justify-between text-xl font-semibold text-[color:var(--quiz-text)] px-2 mt-3 opacity-90">
@@ -257,7 +320,6 @@ export default function PlayerPickAnswerQuestion({
                   className="h-full bg-purple-600"
                   style={{
                     width: "100%",
-                    // Use GPU-accelerated transform instead of animating width.
                     transform: `scaleX(${Math.max(
                       0,
                       Math.min(1, progressPercent / 100)
@@ -276,24 +338,19 @@ export default function PlayerPickAnswerQuestion({
               </div>
             </div>
 
-            {/* Options */}
             <div className="flex flex-col gap-3">
               {options.map((goz) => {
                 let optionClass = "";
                 let icon = null;
 
                 if (showResults && result?.optionsResult) {
-                  // نتیجه از type:3 میاد با فرمت { option_id, answer: true/false }
-                  // مقایسه با تبدیل به string برای اطمینان
                   const foundOption = result.optionsResult.find(
                     (option) =>
                       String(option.option_id) === String(goz.option_id)
                   );
 
-                  // جواب صحیح از سرور (type:3)
                   const isCorrect = foundOption?.answer === true;
 
-                  // نمایش آیکون بر اساس جواب از سرور
                   icon = isCorrect ? "✅" : "❌";
 
                   if (selectedOptions.includes(goz) && submitted) {
@@ -326,7 +383,6 @@ export default function PlayerPickAnswerQuestion({
                         </span>
                       )}
                     </span>
-                    {/* تصویر گزینه */}
                     {goz.image_url && (
                       <img
                         src={goz.image_url}
@@ -351,7 +407,12 @@ export default function PlayerPickAnswerQuestion({
             </button>
             {submitted && (
               <div className="mt-3 text-center text-sm text-[color:var(--quiz-text-muted)]">
-                پاسخ شما ثبت شد
+                {submitMessage || "پاسخ شما ثبت شد"}
+              </div>
+            )}
+            {submitState === "missing_id" && (
+              <div className="mt-2 text-center text-sm text-red-200">
+                هویت بازیکن معتبر نیست. لطفا دوباره وارد بازی شوید.
               </div>
             )}
           </div>

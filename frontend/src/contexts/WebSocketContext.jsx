@@ -4,6 +4,11 @@ import React, { createContext, useEffect, useRef, useState } from "react";
 export const WebSocketContext = createContext(null);
 
 export const WebSocketProvider = ({ children, role = "manager" }) => {
+  const debugEnabled = import.meta.env.DEV;
+  const debugLog = (...args) => {
+    if (debugEnabled) console.log(...args);
+  };
+
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
   const [type8Message, setType8Message] = useState(null); // type:8 message stash
@@ -16,11 +21,11 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
 
   const connect = (sessionIdInput) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      console.log("[WS] Already connected");
+      debugLog("[WS] Already connected");
       return;
     }
     if (wsRef.current?.readyState === WebSocket.CONNECTING) {
-      console.log("[WS] Already connecting");
+      debugLog("[WS] Already connecting");
       return;
     }
 
@@ -30,12 +35,12 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
     try {
       // const wsUrl = `ws://localhost:8080/ws/${sessionIdInput}/${role}`;
       const wsUrl = `wss://present.proslides.ir/ws/${sessionIdInput}/${role}`;
-      console.log(`[WS] Connecting to: ${wsUrl}`);
+      debugLog(`[WS] Connecting to: ${wsUrl}`);
 
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log("[WS] Connected as", role);
+        debugLog("[WS] Connected as", role);
         setIsConnected(true);
         setConnectionError(null);
         setSessionId(sessionIdInput);
@@ -43,7 +48,7 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
 
       ws.onclose = (event) => {
         const reason = event?.reason ? `: ${event.reason}` : "";
-        console.log(`[WS] Disconnected (${event?.code ?? "unknown"}${reason})`);
+        debugLog(`[WS] Disconnected (${event?.code ?? "unknown"}${reason})`);
         setIsConnected(false);
         wsRef.current = null;
 
@@ -52,14 +57,14 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
         }
 
         if (manualCloseRef.current) {
-          console.log("[WS] Manual close detected; reconnect skipped");
+          debugLog("[WS] Manual close detected; reconnect skipped");
           return;
         }
 
         reconnectTimeoutRef.current = setTimeout(() => {
           const idToUse = sessionIdRef.current || sessionId;
           if (idToUse) {
-            console.log("[WS] Attempting to reconnect...");
+            debugLog("[WS] Attempting to reconnect...");
             connect(idToUse);
           }
         }, 3000);
@@ -71,17 +76,17 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
       };
 
       ws.onmessage = (event) => {
-        console.log("[WS] Received:", event.data);
+        debugLog("[WS] Received:", event.data);
 
         try {
           const data = JSON.parse(event.data);
           setLastMessage(data);
           if (data.type === 8) {
-            console.log("[WS] Type 8 stored separately");
+            debugLog("[WS] Type 8 stored separately");
             setType8Message({ ...data, _timestamp: Date.now() });
           }
         } catch {
-          console.log("[WS] Text message:", event.data);
+          debugLog("[WS] Text message:", event.data);
           if (!event.data.startsWith("OK")) {
             setLastMessage({ type: "text", content: event.data });
           }
@@ -116,7 +121,7 @@ export const WebSocketProvider = ({ children, role = "manager" }) => {
       const messageStr =
         typeof message === "string" ? message : JSON.stringify(message);
       wsRef.current.send(messageStr);
-      console.log("[WS] Sent:", messageStr);
+      debugLog("[WS] Sent:", messageStr);
       return true;
     }
 

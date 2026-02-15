@@ -16,7 +16,6 @@ import {
 
 export default function ManagerPickAnswerQuestion({
   onNext,
-  onPrevious,
   currentSlide = 1,
   totalSlides = 5,
   quiz,
@@ -278,24 +277,6 @@ export default function ManagerPickAnswerQuestion({
     if (onNext) onNext();
   };
 
-  const handlePrevious = () => {
-    const newNavigationData = createNextPrevious(
-      5,
-      "previous",
-      currentQuestionIndex
-    );
-    setNavigationData(newNavigationData);
-    console.log(
-      "[PollPage] Navigation data to send to server:",
-      newNavigationData
-    );
-
-    // Send navigation to WebSocket
-    sendNavigation("previous");
-
-    if (onPrevious) onPrevious();
-  };
-
   const handleEnd = () => {
     console.log("[PickAnswerQuestion] Sending end command to server");
     sendEnd();
@@ -546,7 +527,6 @@ export default function ManagerPickAnswerQuestion({
         isQROpen={showQRModal}
         onShowLeaderboard={() => setShowLeaderboard(true)}
         onNext={handleNext}
-        onPrevious={handlePrevious}
         onEnd={handleEnd}
         textColor={textColor}
       />

@@ -11,7 +11,6 @@ import { createNextPrevious, DefaultFooterStats } from "../../../data/mockData";
 
 function ManagerLeaderBoard({
   onNext,
-  onPrevious,
   currentSlide = 1,
   totalSlides = 3,
   quiz,
@@ -126,24 +125,6 @@ function ManagerLeaderBoard({
     sendNavigation("next");
 
     if (onNext) onNext();
-  };
-
-  const handlePrevious = () => {
-    const newNavigationData = createNextPrevious(
-      5,
-      "previous",
-      currentQuestionIndex
-    );
-    setNavigationData(newNavigationData);
-    console.log(
-      "[LeaderBoard] Navigation data to send to server:",
-      newNavigationData
-    );
-
-    // Send navigation to WebSocket
-    sendNavigation("previous");
-
-    if (onPrevious) onPrevious();
   };
 
   const handleEnd = () => {
@@ -395,7 +376,6 @@ function ManagerLeaderBoard({
           isQROpen={showQRModal}
           onShowLeaderboard={() => setShowLeaderboardModal(true)}
           onNext={handleNext}
-          onPrevious={handlePrevious}
           onEnd={handleEnd}
           textColor={textColor}
         />

@@ -1,9 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useState, useCallback } from "react";
+import React, { createContext, useState, useCallback, useRef } from "react";
 
 export const ServerDataContext = createContext(null);
 
 export const ServerDataProvider = ({ children }) => {
+  const lastProcessedMessageRef = useRef({ signature: null, at: 0 });
   // State برای ذخیره داده‌های دریافتی از سرور
   const [serverData, setServerData] = useState({
     users: [], // Type 7: لیست بازیکنان
@@ -112,6 +113,22 @@ export const ServerDataProvider = ({ children }) => {
   const processMessage = useCallback(
     (message) => {
       if (!message) return;
+      // Deduplicate exact same websocket payload arriving back-to-back.
+      // This protects UI state from accidental double-processing.
+      let signature = null;
+      try {
+        signature = JSON.stringify(message);
+      } catch {
+        signature = null;
+      }
+      if (signature) {
+        const now = Date.now();
+        const last = lastProcessedMessageRef.current;
+        if (last.signature === signature && now - last.at < 300) {
+          return;
+        }
+        lastProcessedMessageRef.current = { signature, at: now };
+      }
 
       // اگر پیام فقط results دارد و type ندارد، آن را به عنوان لیدربورد در نظر بگیر
       if (!message.type && message.results && Array.isArray(message.results)) {

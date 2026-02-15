@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy } from "react";
+import React, { useState, useEffect, lazy } from "react";
 import { useParams } from "react-router-dom";
 
 import { QuizSetup } from "../data/mockData";
@@ -8,6 +8,7 @@ import { useServerData } from "../hooks/useServerData";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { AudioProvider, useAudio } from "../contexts/AudioContext";
 import { apiFetch } from "../utils/apiFetch";
+import { hasLeaderboardEntries } from "../pages/presentation/utils/leaderboardUtils";
 
 import Waiting from "../pages/loading/LoadingPage";
 import FinalLeaderboard from "../pages/presentation/manager/FinalLeaderboard";
@@ -63,7 +64,6 @@ function AccessCodeResolver() {
           { auth: false }
         );
         const data = await res.json();
-        console.log("[AccessCodeResolver] API Response:", data);
 
         if (!mounted) return;
 
@@ -155,11 +155,6 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   // Initialize remoteQuiz with initialQuizData if available (for player)
   useEffect(() => {
     if (initialQuizData && role === "player") {
-      console.log(
-        "[AppPresentation] Initializing player with:",
-        initialQuizData
-      );
-
       // Handle potential flat structure or nested structure for background
       const rawBg = initialQuizData.background || {};
       const background = {
@@ -190,12 +185,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
         // If we already have initial data for player, we might skip full fetch or do it in background
         // But if user wants ONLY this API for player, we skip fetch for player
-        if (role === "player") {
-          console.log(
-            "[AppPresentation] Skipping full export fetch for player, using initial data"
-          );
-          return;
-        }
+        if (role === "player") return;
 
         const res = await apiFetch(`/quizzes/${roomId}/export/`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -258,10 +248,9 @@ function AppPresentation({ roomId, role, initialQuizData }) {
           };
 
           setRemoteQuiz(quizData);
-          console.log("[AppPresentation] remote quiz loaded", quizData);
         }
       } catch (err) {
-        console.warn("[AppPresentation] could not load remote quiz", err);
+        console.error("[AppPresentation] could not load remote quiz", err);
       }
     };
     fetchQuiz();
@@ -297,7 +286,9 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     if (!currentQuestion || !quiz?.slides?.length) return;
 
     const idx = quiz.slides.findIndex(
-      (slide) => slide.question?.question_id === currentQuestion.question_id
+      (slide) =>
+        String(slide.question_id ?? slide.question?.question_id ?? "") ===
+        String(currentQuestion.question_id ?? "")
     );
 
     if (idx >= 0 && currentSlide !== idx + 1) {
@@ -328,7 +319,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
   // dYY› U^U,O¦UO manager OO3O¦ U^ type:1 OOý O3OñU^Oñ U.UOƒ?OOñO3O_OO O"UØ U,UOO_OñO"U^OñO_ O"OñU^
   useEffect(() => {
-    if (role === "manager" && leaderboardResults) {
+    if (role === "manager" && hasLeaderboardEntries(leaderboardResults)) {
       setData({ type: "ManagerLeaderBoard" });
     }
   }, [leaderboardResults, role]);
@@ -339,29 +330,24 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     if (data.type === "ManagerJoinPage") {
       setData({ type: "ManagerPickAnswerQuestion" });
     } else {
-      if (quiz.slides[currentSlide].slide_type === 3) {
+      const nextSlide = quiz.slides[currentSlide];
+      if (!nextSlide) {
+        setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
+        return;
+      }
+      if (nextSlide.slide_type === 3) {
         setData({ type: "ManagerLeaderBoard" });
-      } else if (quiz.slides[currentSlide].slide_type === 2) {
+      } else if (nextSlide.slide_type === 2) {
         setData({ type: "ManagerContentSlide" });
-      } else if (quiz.slides[currentSlide].slide_type === 1) {
+      } else if (nextSlide.slide_type === 1) {
         setData({ type: "ManagerPickAnswerQuestion" });
       }
       setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
     }
   };
 
-  const handlePrevious = () => {
-    if (data.type === "ManagerPickAnswerQuestion" && currentSlide === 1) {
-      setData({ type: "ManagerJoinPage" });
-    } else {
-      if (quiz.slides[currentSlide - 2].slide_type === 2) {
-        setData({ type: "ManagerContentSlide" });
-      } else if (quiz.slides[currentSlide - 2].slide_type === 1) {
-        setData({ type: "ManagerPickAnswerQuestion" });
-      }
-      setCurrentSlide((prev) => Math.max(prev - 1, 1));
-    }
-  };
+  // Product requirement: presentation flow is forward-only (no previous step).
+  const handlePrevious = () => {};
 
   const handleEndGame = () => {
     setData({ type: "ManagerFinalLeaderboard" });
@@ -434,22 +420,8 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
   /* ---------------- Player Rendering (Server Driven) ---------------- */
   const renderPlayer = () => {
-    console.log(
-      "[App renderPlayer] currentQuestion:",
-      !!currentQuestion,
-      "leaderboardResults:",
-      !!leaderboardResults,
-      "leaderboardResults value:",
-      leaderboardResults
-    );
-
     // dYY› OU^U, U,UOO_OñO"U^OñO_ OñU^ U+Uc UcU+ - OU_UØ type:1 OñO3UOO_UØ O"OO'UØOO U,UOO_OñO"U^OñO_ U+O'U^U+ O"O_UØ
     if (leaderboardResults) {
-      console.log(
-        "[App renderPlayer] Showing PlayerLeaderBoard with",
-        (leaderboardResults.results || leaderboardResults)?.length,
-        "players"
-      );
       return (
         <PlayerLeaderBoard
           roomId={roomId}
@@ -489,11 +461,66 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   };
 
   /* ----------- Final Conditional Rendering ----------- */
-  if (role === "manager") return renderManager();
+  if (role === "manager") {
+    return (
+      <PresentationErrorBoundary key={`manager-${roomId ?? "unknown"}`}>
+        {renderManager()}
+      </PresentationErrorBoundary>
+    );
+  }
 
-  if (role === "player") return renderPlayer();
+  if (role === "player") {
+    return (
+      <PresentationErrorBoundary key={`player-${roomId ?? "unknown"}`}>
+        {renderPlayer()}
+      </PresentationErrorBoundary>
+    );
+  }
 
   return <Waiting />;
+}
+
+class PresentationErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("[PresentationErrorBoundary] Runtime error:", error, errorInfo);
+  }
+
+  handleReload = () => {
+    window.location.reload();
+  };
+
+  render() {
+    if (!this.state.hasError) {
+      return this.props.children;
+    }
+
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-slate-950 px-4 text-white">
+        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+          <h2 className="text-xl font-bold">Presentation Error</h2>
+          <p className="mt-2 text-sm text-white/70">
+            A runtime error occurred. Please reload to recover the session.
+          </p>
+          <button
+            type="button"
+            onClick={this.handleReload}
+            className="mt-5 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-400"
+          >
+            Reload
+          </button>
+        </div>
+      </div>
+    );
+  }
 }
 
 /* ---------------- WebSocket Handler ---------------- */
