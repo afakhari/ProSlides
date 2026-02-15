@@ -1,6 +1,17 @@
 export const PLAYER_PROFILE_KEY = "presentation_player_profile_v1";
 export const DEFAULT_AVATAR = "🧙";
 
+export const createClientUserId = () => {
+  if (
+    typeof globalThis !== "undefined" &&
+    globalThis.crypto &&
+    typeof globalThis.crypto.randomUUID === "function"
+  ) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `u_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+};
+
 export const readStoredProfile = (roomId) => {
   try {
     const raw = localStorage.getItem(PLAYER_PROFILE_KEY);

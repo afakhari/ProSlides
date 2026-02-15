@@ -328,6 +328,18 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
   const handleNext = () => {
     if (data.type === "ManagerJoinPage") {
+      if (hasLeaderboardEntries(leaderboardResults)) {
+        setData({ type: "ManagerLeaderBoard" });
+        return;
+      }
+      if (currentContent) {
+        setData({ type: "ManagerContentSlide" });
+        return;
+      }
+      if (currentQuestion) {
+        setData({ type: "ManagerPickAnswerQuestion" });
+        return;
+      }
       setData({ type: "ManagerPickAnswerQuestion" });
     } else {
       const nextSlide = quiz.slides[currentSlide];
