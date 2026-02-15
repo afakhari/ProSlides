@@ -39,10 +39,12 @@ export const saveStoredProfile = ({ room_id, name, avatar, user_id }) => {
   }
 };
 
+export const getPersistedUserIdForRoom = (roomId) =>
+  readStoredProfile(roomId)?.user_id || null;
+
 export const createJoinMessage = ({ name, avatar, persistedUserId }) => ({
   type: 6,
   name,
   character: avatar,
   ...(persistedUserId ? { user_id: persistedUserId } : {}),
 });
-

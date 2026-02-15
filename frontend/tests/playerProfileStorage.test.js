@@ -5,6 +5,7 @@ import {
   DEFAULT_AVATAR,
   readStoredProfile,
   saveStoredProfile,
+  getPersistedUserIdForRoom,
   createJoinMessage,
 } from "../src/pages/presentation/player/playerProfileStorage.js";
 
@@ -77,4 +78,10 @@ test("createJoinMessage includes persisted user_id only when present", () => {
     name: "ali",
     character: "🦊",
   });
+});
+
+test("getPersistedUserIdForRoom returns id only for matching room", () => {
+  saveStoredProfile({ room_id: 33, name: "ali", avatar: "🦊", user_id: "u-33" });
+  assert.equal(getPersistedUserIdForRoom(33), "u-33");
+  assert.equal(getPersistedUserIdForRoom(44), null);
 });

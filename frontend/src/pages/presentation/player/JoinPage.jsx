@@ -7,6 +7,7 @@ import { isLightColor } from "../../../lib/colorUtils";
 import {
   DEFAULT_AVATAR,
   createJoinMessage,
+  getPersistedUserIdForRoom,
   readStoredProfile,
   saveStoredProfile,
 } from "./playerProfileStorage";
@@ -217,12 +218,12 @@ export default function PlayerJoinPage({ roomId, quiz }) {
     const msg = createJoinMessage({
       name,
       avatar,
-      persistedUserId: localStorage.getItem("user_id"),
+      persistedUserId: getPersistedUserIdForRoom(roomId),
     });
 
     const ok = sendMessage(msg);
     if (ok) setJoinSent(true);
-  }, [joined, isConnected, joinSent, name, avatar, sendMessage]);
+  }, [joined, isConnected, joinSent, name, avatar, sendMessage, roomId]);
 
   useEffect(() => {
     if (!joined) return;

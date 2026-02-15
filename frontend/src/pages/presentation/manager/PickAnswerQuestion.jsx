@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
@@ -13,6 +13,10 @@ import {
   QuestionResult,
 } from "../../../data/mockData";
 // import { useLocation, useNavigate } from "react-router-dom";
+
+const debugLog = (...args) => {
+  if (import.meta.env.DEV) console.log(...args);
+};
 
 export default function ManagerPickAnswerQuestion({
   onNext,
@@ -44,7 +48,7 @@ export default function ManagerPickAnswerQuestion({
       };
   const options = currentQuestion.options?.map((opt) => opt.option_text) || [];
 
-  // پیدا کردن همه گزینه‌های صحیح (نه فقط یکی)
+  // Ù¾ÛŒØ¯Ø§ Ú©Ø±Ø¯Ù† Ù‡Ù…Ù‡ Ú¯Ø²ÛŒÙ†Ù‡â€ŒÙ‡Ø§ÛŒ ØµØ­ÛŒØ­ (Ù†Ù‡ ÙÙ‚Ø· ÛŒÚ©ÛŒ)
   const correctIndexes =
     currentQuestion?.options?.reduce((arr, opt, idx) => {
       if (opt.answer === true) arr.push(idx);
@@ -59,6 +63,7 @@ export default function ManagerPickAnswerQuestion({
     new Array(currentQuestion.options.length).fill(0)
   );
   const [hasReceivedResults, setHasReceivedResults] = useState(false);
+  const [awaitingServerResults, setAwaitingServerResults] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [_navigationData, setNavigationData] = useState(
@@ -69,12 +74,13 @@ export default function ManagerPickAnswerQuestion({
   // Reset state when slide changes (new question)
   useEffect(() => {
     if (!isRemoteReady) return;
-    console.log("[PickAnswerQuestion] Slide changed to:", currentSlide);
-    console.log("[PickAnswerQuestion] Resetting state...");
+    debugLog("[PickAnswerQuestion] Slide changed to:", currentSlide);
+    debugLog("[PickAnswerQuestion] Resetting state...");
     setShowResults(false);
     setVotes(new Array(currentQuestion.options.length).fill(0));
     setTimer(currentQuestion.question_time);
     setHasReceivedResults(false);
+    setAwaitingServerResults(false);
   }, [
     currentSlide,
     currentQuestion.options.length,
@@ -86,46 +92,47 @@ export default function ManagerPickAnswerQuestion({
   useEffect(() => {
     if (!lastMessage) return;
 
-    console.log("[PickAnswerQuestion] Received message:", lastMessage);
+    debugLog("[PickAnswerQuestion] Received message:", lastMessage);
 
-    // Type 8: Question Results - مستقیم اعمال کن
+    // Type 8: Question Results - Ù…Ø³ØªÙ‚ÛŒÙ… Ø§Ø¹Ù…Ø§Ù„ Ú©Ù†
     if (lastMessage.type === 8) {
-      console.log("[PickAnswerQuestion] ===== TYPE 8 RECEIVED =====");
-      console.log(
+      debugLog("[PickAnswerQuestion] ===== TYPE 8 RECEIVED =====");
+      debugLog(
         "[PickAnswerQuestion] Current question_id:",
         currentQuestion.question_id
       );
-      console.log(
+      debugLog(
         "[PickAnswerQuestion] Message question_id:",
         lastMessage.question_id
       );
-      console.log(
+      debugLog(
         "[PickAnswerQuestion] Current options:",
         currentQuestion.options?.map((o) => o.option_id)
       );
-      console.log(
+      debugLog(
         "[PickAnswerQuestion] Server options:",
         lastMessage.options?.map((o) => o.option_id)
       );
 
       setHasReceivedResults(true);
+      setAwaitingServerResults(false);
 
       // Check if options array exists (from server)
       const serverResults = lastMessage.options || lastMessage.submit || [];
 
-      // اگه currentQuestion.options خالی یا undefined باشه، مستقیم از serverResults استفاده کن
+      // Ø§Ú¯Ù‡ currentQuestion.options Ø®Ø§Ù„ÛŒ ÛŒØ§ undefined Ø¨Ø§Ø´Ù‡ØŒ Ù…Ø³ØªÙ‚ÛŒÙ… Ø§Ø² serverResults Ø§Ø³ØªÙØ§Ø¯Ù‡ Ú©Ù†
       if (!currentQuestion.options || currentQuestion.options.length === 0) {
-        console.log(
+        debugLog(
           "[PickAnswerQuestion] No current options, using server results directly"
         );
         const newVotes = serverResults.map((s) => s.number_of_submits || 0);
-        console.log("[PickAnswerQuestion] Direct votes:", newVotes);
+        debugLog("[PickAnswerQuestion] Direct votes:", newVotes);
         setVotes(newVotes);
         setShowResults(true);
         return;
       }
 
-      // فقط از داده سرور استفاده کن
+      // ÙÙ‚Ø· Ø§Ø² Ø¯Ø§Ø¯Ù‡ Ø³Ø±ÙˆØ± Ø§Ø³ØªÙØ§Ø¯Ù‡ Ú©Ù†
       const newVotes = currentQuestion.options.map((option) => {
         const serverResult = serverResults.find(
           (s) => String(s.option_id) === String(option.option_id)
@@ -134,7 +141,7 @@ export default function ManagerPickAnswerQuestion({
           ? serverResult.number_of_submits ?? serverResult.number_of_submit ?? 0
           : 0;
 
-        console.log(
+        debugLog(
           `[PickAnswerQuestion] Option ${
             option.option_id
           }: found=${!!serverResult}, vote=${serverVote}`
@@ -142,7 +149,7 @@ export default function ManagerPickAnswerQuestion({
         return serverVote;
       });
 
-      console.log("[PickAnswerQuestion] Final votes:", newVotes);
+      debugLog("[PickAnswerQuestion] Final votes:", newVotes);
       setVotes(newVotes);
       setShowResults(true);
     }
@@ -152,16 +159,16 @@ export default function ManagerPickAnswerQuestion({
     currentQuestion.question_id,
   ]);
 
-  // ✅ useEffect مخصوص type8Message - این گم نمیشه!
+  // âœ… useEffect Ù…Ø®ØµÙˆØµ type8Message - Ø§ÛŒÙ† Ú¯Ù… Ù†Ù…ÛŒØ´Ù‡!
   useEffect(() => {
     if (!type8Message) return;
 
-    // چک کن که question_id مچ باشه - اگه نه، نادیده بگیر
+    // Ú†Ú© Ú©Ù† Ú©Ù‡ question_id Ù…Ú† Ø¨Ø§Ø´Ù‡ - Ø§Ú¯Ù‡ Ù†Ù‡ØŒ Ù†Ø§Ø¯ÛŒØ¯Ù‡ Ø¨Ú¯ÛŒØ±
     const msgQId = String(type8Message.question_id);
     const currentQId = String(currentQuestion.question_id);
 
     if (msgQId !== currentQId) {
-      console.log(
+      debugLog(
         "[PickAnswerQuestion] type8Message question_id mismatch, ignoring. msg:",
         msgQId,
         "current:",
@@ -170,23 +177,24 @@ export default function ManagerPickAnswerQuestion({
       return;
     }
 
-    console.log("[PickAnswerQuestion] ===== TYPE 8 MESSAGE RECEIVED =====");
-    console.log("[PickAnswerQuestion] type8Message:", type8Message);
+    debugLog("[PickAnswerQuestion] ===== TYPE 8 MESSAGE RECEIVED =====");
+    debugLog("[PickAnswerQuestion] type8Message:", type8Message);
 
     setHasReceivedResults(true);
+    setAwaitingServerResults(false);
 
     const serverResults = type8Message.options || [];
 
-    // اگه options خالیه، مستقیم استفاده کن
+    // Ø§Ú¯Ù‡ options Ø®Ø§Ù„ÛŒÙ‡ØŒ Ù…Ø³ØªÙ‚ÛŒÙ… Ø§Ø³ØªÙØ§Ø¯Ù‡ Ú©Ù†
     if (!currentQuestion.options || currentQuestion.options.length === 0) {
       const newVotes = serverResults.map((s) => s.number_of_submits || 0);
-      console.log("[PickAnswerQuestion] Direct votes:", newVotes);
+      debugLog("[PickAnswerQuestion] Direct votes:", newVotes);
       setVotes(newVotes);
       setShowResults(true);
       return;
     }
 
-    // مپ کن به options فعلی
+    // Ù…Ù¾ Ú©Ù† Ø¨Ù‡ options ÙØ¹Ù„ÛŒ
     const newVotes = currentQuestion.options.map((option) => {
       const serverResult = serverResults.find(
         (s) => String(s.option_id) === String(option.option_id)
@@ -194,7 +202,7 @@ export default function ManagerPickAnswerQuestion({
       return serverResult?.number_of_submits ?? 0;
     });
 
-    console.log("[PickAnswerQuestion] Votes from type8Message:", newVotes);
+    debugLog("[PickAnswerQuestion] Votes from type8Message:", newVotes);
     setVotes(newVotes);
     setShowResults(true);
   }, [type8Message, currentQuestion.options, currentQuestion.question_id]);
@@ -206,11 +214,11 @@ export default function ManagerPickAnswerQuestion({
       questionResults?.optionsResult || questionResults?.options;
 
     if (questionResults && resultsArray && resultsArray.length > 0) {
-      console.log(
+      debugLog(
         "[PickAnswerQuestion] Checking questionResults:",
         questionResults
       );
-      console.log(
+      debugLog(
         "[PickAnswerQuestion] Current question_id:",
         currentQuestion.question_id
       );
@@ -220,7 +228,7 @@ export default function ManagerPickAnswerQuestion({
       const currentQId = String(currentQuestion.question_id);
 
       if (questResultId === currentQId) {
-        console.log(
+        debugLog(
           "[PickAnswerQuestion] Question IDs match! Updating votes..."
         );
 
@@ -236,22 +244,23 @@ export default function ManagerPickAnswerQuestion({
               0
             : 0;
 
-          console.log(
+          debugLog(
             `[PickAnswerQuestion] Option ${option.option_id}: server=${serverVote}`
           );
 
           return serverVote;
         });
 
-        console.log(
+        debugLog(
           "[PickAnswerQuestion] Votes from questionResults:",
           newVotes
         );
         setVotes(newVotes);
         setShowResults(true);
         setHasReceivedResults(true);
+        setAwaitingServerResults(false);
       } else {
-        console.log(
+        debugLog(
           "[PickAnswerQuestion] Question IDs don't match. Ignoring old results."
         );
       }
@@ -266,7 +275,7 @@ export default function ManagerPickAnswerQuestion({
       currentQuestionIndex
     );
     setNavigationData(newNavigationData);
-    console.log(
+    debugLog(
       "[PollPage] Navigation data to send to server:",
       newNavigationData
     );
@@ -278,14 +287,14 @@ export default function ManagerPickAnswerQuestion({
   };
 
   const handleEnd = () => {
-    console.log("[PickAnswerQuestion] Sending end command to server");
+    debugLog("[PickAnswerQuestion] Sending end command to server");
     sendEnd();
     if (onEndGame) onEndGame();
   };
 
   // Debug: Log state changes
   useEffect(() => {
-    console.log("[PickAnswerQuestion] State update:", {
+    debugLog("[PickAnswerQuestion] State update:", {
       showResults,
       votes,
       totalVotes: votes.reduce((sum, v) => sum + v, 0),
@@ -293,17 +302,17 @@ export default function ManagerPickAnswerQuestion({
     });
   }, [showResults, votes, timer]);
 
-  // تایمر
+  // ØªØ§ÛŒÙ…Ø±
   useEffect(() => {
     if (!isRemoteReady) return; // don't start timer until remote quiz is ready
     if (showResults) {
-      console.log(
+      debugLog(
         "[PickAnswerQuestion] Timer skipped - results already showing"
       );
       return;
     }
 
-    console.log(
+    debugLog(
       "[PickAnswerQuestion] Starting timer for",
       currentQuestion.question_time,
       "seconds"
@@ -314,16 +323,10 @@ export default function ManagerPickAnswerQuestion({
       setTimer((t) => {
         if (t <= 1) {
           clearInterval(interval);
-          // Show results when timer ends (fallback if server doesn't send message)
-          console.log("[PickAnswerQuestion] Timer ended, showing results");
-
-          // Use mock data from currentQuestion.options if available
-          const mockVotes = currentQuestion.options.map(
-            (opt) => opt.number_of_submits ?? 0
-          );
-          console.log("[PickAnswerQuestion] Using mock votes:", mockVotes);
-          setVotes(mockVotes);
-          setShowResults(true);
+          // Wait for authoritative server results; do not render mock votes.
+          if (!hasReceivedResults) {
+            setAwaitingServerResults(true);
+          }
           return 0;
         }
         return t - 1;
@@ -331,7 +334,7 @@ export default function ManagerPickAnswerQuestion({
     }, 1000);
 
     return () => {
-      console.log("[PickAnswerQuestion] Cleaning up timer");
+      debugLog("[PickAnswerQuestion] Cleaning up timer");
       clearInterval(interval);
     };
   }, [
@@ -339,6 +342,7 @@ export default function ManagerPickAnswerQuestion({
     currentSlide,
     currentQuestion.question_time,
     currentQuestion.options,
+    hasReceivedResults,
     isRemoteReady,
   ]);
 
@@ -394,21 +398,26 @@ export default function ManagerPickAnswerQuestion({
         {/* WebSocket Connection Status */}
         {isRemoteReady ? (
           <>
-            {/* صورت سوال - بالا با فاصله بیشتر */}
+            {/* ØµÙˆØ±Øª Ø³ÙˆØ§Ù„ - Ø¨Ø§Ù„Ø§ Ø¨Ø§ ÙØ§ØµÙ„Ù‡ Ø¨ÛŒØ´ØªØ± */}
             <h2 className="text-4xl lg:text-5xl xl:text-6xl font-bold text-[color:var(--quiz-text)] mb-4 mt-8 text-center px-4 shrink-0">
               {currentQuestion.question_text}
             </h2>
 
-            {/* تایمر */}
+            {/* ØªØ§ÛŒÙ…Ø± */}
             {!showResults && timer > 0 && (
               <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-[color:var(--quiz-text)] pointer-events-none z-10">
                 {timer}
               </div>
             )}
+            {awaitingServerResults && (
+              <div className="absolute top-24 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-4 py-2 text-sm text-[color:var(--quiz-text)]">
+                Waiting for server results...
+              </div>
+            )}
 
-            {/* بخش اصلی - عکس سوال سمت چپ، گزینه‌ها سمت راست */}
+            {/* Ø¨Ø®Ø´ Ø§ØµÙ„ÛŒ - Ø¹Ú©Ø³ Ø³ÙˆØ§Ù„ Ø³Ù…Øª Ú†Ù¾ØŒ Ú¯Ø²ÛŒÙ†Ù‡â€ŒÙ‡Ø§ Ø³Ù…Øª Ø±Ø§Ø³Øª */}
             <div className="flex flex-1 w-full min-h-0 px-4 gap-6">
-              {/* عکس سوال - سمت چپ */}
+              {/* Ø¹Ú©Ø³ Ø³ÙˆØ§Ù„ - Ø³Ù…Øª Ú†Ù¾ */}
               {currentQuestion.image_url && (
                 <div className="flex items-center justify-center w-1/4 shrink-0">
                   <img
@@ -419,7 +428,7 @@ export default function ManagerPickAnswerQuestion({
                 </div>
               )}
 
-              {/* نمودار گزینه‌ها - سمت راست */}
+              {/* Ù†Ù…ÙˆØ¯Ø§Ø± Ú¯Ø²ÛŒÙ†Ù‡â€ŒÙ‡Ø§ - Ø³Ù…Øª Ø±Ø§Ø³Øª */}
               <div
                 className={`flex justify-around items-end flex-1 min-h-0 ${
                   !currentQuestion.image_url ? "w-full" : ""
@@ -429,7 +438,7 @@ export default function ManagerPickAnswerQuestion({
                   const isCorrect = correctIndexes.includes(index);
                   const isSelected = index === selected;
                   const totalVotes = votes.reduce((sum, v) => sum + v, 0);
-                  // ارتفاع فقط وقتی نتایج رسیده نمایش داده میشه
+                  // Ø§Ø±ØªÙØ§Ø¹ ÙÙ‚Ø· ÙˆÙ‚ØªÛŒ Ù†ØªØ§ÛŒØ¬ Ø±Ø³ÛŒØ¯Ù‡ Ù†Ù…Ø§ÛŒØ´ Ø¯Ø§Ø¯Ù‡ Ù…ÛŒØ´Ù‡
                   const height =
                     hasReceivedResults && totalVotes > 0
                       ? (votes[index] / totalVotes) * 100
@@ -441,14 +450,14 @@ export default function ManagerPickAnswerQuestion({
                       key={index}
                       className="flex flex-col items-center justify-end w-1/5 h-full"
                     >
-                      {/* تعداد رای - فقط بعد از دریافت نتایج */}
+                      {/* ØªØ¹Ø¯Ø§Ø¯ Ø±Ø§ÛŒ - ÙÙ‚Ø· Ø¨Ø¹Ø¯ Ø§Ø² Ø¯Ø±ÛŒØ§ÙØª Ù†ØªØ§ÛŒØ¬ */}
                       {hasReceivedResults && (
                         <div className="mb-1 text-center text-2xl lg:text-4xl text-[color:var(--quiz-text)] font-semibold">
                           {votes[index]}
                         </div>
                       )}
 
-                      {/* تصویر گزینه - چسبیده به بالای نوار با عرض یکسان */}
+                      {/* ØªØµÙˆÛŒØ± Ú¯Ø²ÛŒÙ†Ù‡ - Ú†Ø³Ø¨ÛŒØ¯Ù‡ Ø¨Ù‡ Ø¨Ø§Ù„Ø§ÛŒ Ù†ÙˆØ§Ø± Ø¨Ø§ Ø¹Ø±Ø¶ ÛŒÚ©Ø³Ø§Ù† */}
                       {hasImage && (
                         <img
                           src={opt.image_url}
@@ -457,7 +466,7 @@ export default function ManagerPickAnswerQuestion({
                         />
                       )}
 
-                      {/* نوار نمودار - فقط بعد از دریافت نتایج نمایش داده میشه */}
+                      {/* Ù†ÙˆØ§Ø± Ù†Ù…ÙˆØ¯Ø§Ø± - ÙÙ‚Ø· Ø¨Ø¹Ø¯ Ø§Ø² Ø¯Ø±ÛŒØ§ÙØª Ù†ØªØ§ÛŒØ¬ Ù†Ù…Ø§ÛŒØ´ Ø¯Ø§Ø¯Ù‡ Ù…ÛŒØ´Ù‡ */}
                       <div
                         className={`w-3/4 transition-all duration-1000 ${
                           hasImage ? "rounded-b-lg" : "rounded-t-lg"
@@ -480,7 +489,7 @@ export default function ManagerPickAnswerQuestion({
                         }}
                       ></div>
 
-                      {/* متن گزینه */}
+                      {/* Ù…ØªÙ† Ú¯Ø²ÛŒÙ†Ù‡ */}
                       <p className="mt-2 text-[color:var(--quiz-text)] text-xl lg:text-2xl font-semibold text-center">
                         {opt.option_text}
                       </p>
@@ -492,11 +501,11 @@ export default function ManagerPickAnswerQuestion({
           </>
         ) : (
           <div className="flex items-center justify-center w-full flex-1 min-h-0 mb-4 px-4">
-          <div className="text-[color:var(--quiz-text-muted)] text-2xl">Loading quiz…</div>
+          <div className="text-[color:var(--quiz-text-muted)] text-2xl">Loading quizâ€¦</div>
           </div>
         )}
 
-        {/* دکمه‌های رأی دادن */}
+        {/* Ø¯Ú©Ù…Ù‡â€ŒÙ‡Ø§ÛŒ Ø±Ø£ÛŒ Ø¯Ø§Ø¯Ù† */}
         {/* {!voted && !showResults && (
           <div className="flex flex-wrap justify-center gap-4">
             {options.map((opt, index) => (
@@ -543,7 +552,7 @@ export default function ManagerPickAnswerQuestion({
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <span className="text-4xl">🏆</span>
+                <span className="text-4xl">ðŸ†</span>
                 <div>
                   <h2 className="text-white text-3xl font-bold">Leaderboard</h2>
                   <p className="text-gray-400 text-sm">
@@ -555,14 +564,14 @@ export default function ManagerPickAnswerQuestion({
                 onClick={() => setShowLeaderboard(false)}
                 className="text-white hover:text-gray-300 text-3xl border-none bg-transparent cursor-pointer leading-none"
               >
-                ×
+                Ã—
               </button>
             </div>
 
             <div className="space-y-3">
               {(() => {
                 const modalPlayers = modalLeaderboardResults || [];
-                console.log(
+                debugLog(
                   "[PickAnswerQuestion] Modal players:",
                   modalPlayers
                 );
@@ -570,9 +579,9 @@ export default function ManagerPickAnswerQuestion({
                   ...modalPlayers.map((p) => p.total_points || 0),
                   0
                 );
-                console.log("[PickAnswerQuestion] Max score:", maxScore);
+                debugLog("[PickAnswerQuestion] Max score:", maxScore);
 
-                // درصد امتیاز نسبت به نفر اول
+                // Ø¯Ø±ØµØ¯ Ø§Ù…ØªÛŒØ§Ø² Ù†Ø³Ø¨Øª Ø¨Ù‡ Ù†ÙØ± Ø§ÙˆÙ„
                 const calcPercent = (score) => {
                   if (maxScore === 0) return 0;
                   return (score / maxScore) * 100;
@@ -637,3 +646,4 @@ export default function ManagerPickAnswerQuestion({
     </div>
   );
 }
+

@@ -11,6 +11,10 @@ import {
   UserColorList,
 } from "../../../data/mockData";
 
+const debugLog = (...args) => {
+  if (import.meta.env.DEV) console.log(...args);
+};
+
 // Calculate players ready based on the User_adding.type
 function calculatePlayersReady({ type, Users }) {
   // Extendable rule-set; for now, type 1 => count all users
@@ -93,7 +97,7 @@ export default function ManagerJoinPage({
 
   useEffect(() => {
     if (!lastMessage) return;
-    console.log("[JoinPage] Received message:", lastMessage);
+    debugLog("[JoinPage] Received message:", lastMessage);
   }, [lastMessage]);
 
   const handleStart = () => {
@@ -107,7 +111,7 @@ export default function ManagerJoinPage({
       "start",
       currentQuestionIndex
     );
-    console.log(
+    debugLog(
       "[JoinPage2] Starting quiz, navigation data to send to server:",
       newNavigationData
     );
