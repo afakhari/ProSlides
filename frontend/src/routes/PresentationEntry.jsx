@@ -286,13 +286,19 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   }, [remoteQuiz?.music_url, setQuizMusic]);
 
   const {
+    users,
     currentQuestion,
     currentContent,
     leaderboardResults,
     questionResults,
     partialQuestionResults,
     modalLeaderboardResults,
+    lastMessageType,
   } = useServerData();
+  const { isConnected } = useWebSocket();
+  const [managerHasSyncedState, setManagerHasSyncedState] = useState(
+    role !== "manager"
+  );
   useEffect(() => {
     if (role !== "player") return;
     if (currentQuestion || currentContent) {
@@ -304,6 +310,38 @@ function AppPresentation({ roomId, role, initialQuizData }) {
       }
     }
   }, [role, currentQuestion, currentContent, playerActiveSlideSeenKey]);
+
+  useEffect(() => {
+    if (role !== "manager") return;
+    if (managerHasSyncedState) return;
+
+    const hasLiveSignal =
+      lastMessageType != null ||
+      !!currentQuestion ||
+      !!currentContent ||
+      hasLeaderboardEntries(leaderboardResults) ||
+      (Array.isArray(users) && users.length > 0);
+
+    if (hasLiveSignal) {
+      setManagerHasSyncedState(true);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setManagerHasSyncedState(true);
+    }, isConnected ? 1200 : 2200);
+
+    return () => clearTimeout(timer);
+  }, [
+    role,
+    managerHasSyncedState,
+    lastMessageType,
+    currentQuestion,
+    currentContent,
+    leaderboardResults,
+    users,
+    isConnected,
+  ]);
 
   // Sync manager slide index with server question id to avoid UI mismatches
   useEffect(() => {
@@ -496,7 +534,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   if (role === "manager") {
     return (
       <PresentationErrorBoundary key={`manager-${roomId ?? "unknown"}`}>
-        {renderManager()}
+        {managerHasSyncedState ? renderManager() : <Waiting message="Syncing live session..." />}
       </PresentationErrorBoundary>
     );
   }
