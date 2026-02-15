@@ -9,6 +9,8 @@ import { useWebSocket } from "../hooks/useWebSocket";
 import { AudioProvider, useAudio } from "../contexts/AudioContext";
 import { apiFetch } from "../utils/apiFetch";
 import { hasLeaderboardEntries } from "../pages/presentation/utils/leaderboardUtils";
+import { resolveQuestionTimer } from "../pages/presentation/utils/questionTimerSync";
+import { readStoredProfile } from "../pages/presentation/player/playerProfileStorage";
 
 import Waiting from "../pages/loading/LoadingPage";
 import FinalLeaderboard from "../pages/presentation/manager/FinalLeaderboard";
@@ -149,6 +151,9 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   const playerActiveSlideSeenKey = `presentation_player_seen_active_v1:${String(
     roomId || "unknown"
   )}`;
+  const playerLastActiveKey = `presentation_player_last_active_v1:${String(
+    roomId || "unknown"
+  )}`;
   const getInitialSeenActive = () => {
     if (role !== "player") return false;
     try {
@@ -157,10 +162,27 @@ function AppPresentation({ roomId, role, initialQuizData }) {
       return false;
     }
   };
+  const getInitialPlayerLastActive = () => {
+    if (role !== "player") return null;
+    try {
+      const raw = localStorage.getItem(playerLastActiveKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+      if (!["question", "content"].includes(parsed.kind)) return null;
+      if (!parsed.payload || typeof parsed.payload !== "object") return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
   const [data, setData] = useState({ type: "ManagerJoinPage" });
   const [currentSlide, setCurrentSlide] = useState(1);
   const [playerHasSeenActiveSlide, setPlayerHasSeenActiveSlide] = useState(
     getInitialSeenActive
+  );
+  const [playerLastActive, setPlayerLastActive] = useState(
+    getInitialPlayerLastActive
   );
 
   // Fetch full quiz once at top-level and transform to internal shape
@@ -307,7 +329,38 @@ function AppPresentation({ roomId, role, initialQuizData }) {
         // ignore storage errors
       }
     }
-  }, [role, currentQuestion, currentContent, playerActiveSlideSeenKey]);
+    if (currentQuestion) {
+      const snapshot = {
+        kind: "question",
+        payload: currentQuestion,
+        updatedAt: Date.now(),
+      };
+      setPlayerLastActive(snapshot);
+      try {
+        localStorage.setItem(playerLastActiveKey, JSON.stringify(snapshot));
+      } catch {
+        // ignore storage errors
+      }
+    } else if (currentContent) {
+      const snapshot = {
+        kind: "content",
+        payload: currentContent,
+        updatedAt: Date.now(),
+      };
+      setPlayerLastActive(snapshot);
+      try {
+        localStorage.setItem(playerLastActiveKey, JSON.stringify(snapshot));
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, [
+    role,
+    currentQuestion,
+    currentContent,
+    playerActiveSlideSeenKey,
+    playerLastActiveKey,
+  ]);
 
   useEffect(() => {
     if (role !== "manager") return;
@@ -377,9 +430,31 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   // dYYâ€º U^U,OÂ¦UO manager OO3OÂ¦ U^ type:1 OOÃ½ O3OÃ±U^OÃ± U.UOÆ’?OOÃ±O3O_OO O"UÃ˜ U,UOO_OÃ±O"U^OÃ±O_ O"OÃ±U^
   useEffect(() => {
     if (role === "manager" && hasLeaderboardEntries(leaderboardResults)) {
+      if (quiz?.slides?.length) {
+        const currentIdx = Math.max(0, currentSlide - 1);
+        const currentType = quiz.slides[currentIdx]?.slide_type;
+
+        if (currentType !== 3) {
+          let nextLeaderboardIdx = -1;
+          if (quiz.slides[currentIdx + 1]?.slide_type === 3) {
+            nextLeaderboardIdx = currentIdx + 1;
+          } else {
+            nextLeaderboardIdx = quiz.slides.findIndex(
+              (slide, idx) => idx > currentIdx && slide.slide_type === 3
+            );
+          }
+
+          if (
+            nextLeaderboardIdx >= 0 &&
+            currentSlide !== nextLeaderboardIdx + 1
+          ) {
+            setCurrentSlide(nextLeaderboardIdx + 1);
+          }
+        }
+      }
       setData({ type: "ManagerLeaderBoard" });
     }
-  }, [leaderboardResults, role]);
+  }, [leaderboardResults, role, quiz, currentSlide]);
 
   /* ------------------ EXACT NEXT/PREVIOUS FROM YOUR CODE ------------------ */
 
@@ -423,8 +498,24 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   };
 
   /* ---------------- Manager Rendering (EXACT LIKE ORIGINAL) ---------------- */
+  const getManagerRenderType = () => {
+    if (data.type === "ManagerFinalLeaderboard") {
+      return "ManagerFinalLeaderboard";
+    }
+    if (hasLeaderboardEntries(leaderboardResults)) {
+      return "ManagerLeaderBoard";
+    }
+    if (currentContent) {
+      return "ManagerContentSlide";
+    }
+    if (currentQuestion) {
+      return "ManagerPickAnswerQuestion";
+    }
+    return data.type;
+  };
+
   const renderManager = () => {
-    switch (data.type) {
+    switch (getManagerRenderType()) {
       case "ManagerJoinPage":
         return (
           <ManagerJoinPage
@@ -522,6 +613,44 @@ function AppPresentation({ roomId, role, initialQuizData }) {
           quiz={quiz}
         />
       );
+    }
+    if (playerHasSeenActiveSlide && playerLastActive?.payload) {
+      if (playerLastActive.kind === "question") {
+        const fallbackQuestion = playerLastActive.payload;
+        const fallbackTimer = resolveQuestionTimer({
+          question: fallbackQuestion,
+          roomId,
+          role: "player",
+        });
+
+        if (
+          fallbackTimer.totalSeconds > 0 &&
+          fallbackTimer.remainingSeconds > 0
+        ) {
+          return (
+            <PlayerPickAnswerQuestion
+              roomId={roomId}
+              question={fallbackQuestion}
+              result={null}
+              quiz={quiz}
+            />
+          );
+        }
+      }
+
+      if (playerLastActive.kind === "content") {
+        return (
+          <PlayerContentSlide
+            roomId={roomId}
+            quiz={quiz}
+            content={playerLastActive.payload}
+          />
+        );
+      }
+    }
+
+    if (playerHasSeenActiveSlide && readStoredProfile(roomId)) {
+      return <Waiting message="Syncing live session..." />;
     }
     return <PlayerJoinPage roomId={roomId} quiz={quiz} />;
   };  /* ----------- Final Conditional Rendering ----------- */
