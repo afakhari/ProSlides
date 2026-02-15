@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy } from "react";
+import React, { useState, useEffect, useRef, lazy } from "react";
 import { useParams } from "react-router-dom";
 
 import { QuizSetup } from "../data/mockData";
@@ -10,7 +10,11 @@ import { AudioProvider, useAudio } from "../contexts/AudioContext";
 import { apiFetch } from "../utils/apiFetch";
 import { hasLeaderboardEntries } from "../pages/presentation/utils/leaderboardUtils";
 import { resolveQuestionTimer } from "../pages/presentation/utils/questionTimerSync";
-import { readStoredProfile } from "../pages/presentation/player/playerProfileStorage";
+import {
+  createJoinMessage,
+  getPersistedUserIdForRoom,
+  readStoredProfile,
+} from "../pages/presentation/player/playerProfileStorage";
 
 import Waiting from "../pages/loading/LoadingPage";
 import FinalLeaderboard from "../pages/presentation/manager/FinalLeaderboard";
@@ -210,6 +214,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   const [playerLastActive, setPlayerLastActive] = useState(
     getInitialPlayerLastActive
   );
+  const playerResumeJoinSentRef = useRef(false);
 
   // Fetch full quiz once at top-level and transform to internal shape
   const [remoteQuiz, setRemoteQuiz] = useState(initialQuizData || null);
@@ -343,7 +348,58 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     partialQuestionResults,
     modalLeaderboardResults,
   } = useServerData();
-  const { isConnected } = useWebSocket();
+  const { isConnected, connect, sendMessage } = useWebSocket();
+  const hasLeaderboard = hasLeaderboardEntries(leaderboardResults);
+  const playerResumeProfile =
+    role === "player" ? readStoredProfile(roomId) : null;
+  const shouldAutoResumePlayerSession =
+    role === "player" &&
+    !!playerResumeProfile &&
+    playerHasSeenActiveSlide &&
+    !currentQuestion &&
+    !currentContent &&
+    !hasLeaderboard;
+
+  useEffect(() => {
+    if (!shouldAutoResumePlayerSession || !roomId) return;
+    if (isConnected) return;
+
+    try {
+      connect(roomId);
+    } catch (err) {
+      console.error("[PresentationEntry] player resume connect failed:", err);
+    }
+  }, [shouldAutoResumePlayerSession, roomId, isConnected, connect]);
+
+  useEffect(() => {
+    if (!shouldAutoResumePlayerSession) {
+      playerResumeJoinSentRef.current = false;
+      return;
+    }
+    if (!isConnected) {
+      playerResumeJoinSentRef.current = false;
+      return;
+    }
+    if (playerResumeJoinSentRef.current) return;
+    if (!playerResumeProfile) return;
+
+    const ok = sendMessage(
+      createJoinMessage({
+        name: playerResumeProfile.name,
+        avatar: playerResumeProfile.avatar,
+        persistedUserId: getPersistedUserIdForRoom(roomId),
+      })
+    );
+    if (ok) {
+      playerResumeJoinSentRef.current = true;
+    }
+  }, [
+    shouldAutoResumePlayerSession,
+    isConnected,
+    playerResumeProfile,
+    roomId,
+    sendMessage,
+  ]);
   const [managerHasSyncedState, setManagerHasSyncedState] = useState(
     role !== "manager"
   );
@@ -651,7 +707,6 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
   /* ---------------- Player Rendering (Server Driven) ---------------- */
   const renderPlayer = () => {
-    const hasLeaderboard = hasLeaderboardEntries(leaderboardResults);
     if (currentContent) {
       return <PlayerContentSlide roomId={roomId} quiz={quiz} content={currentContent} />;
     }
@@ -720,7 +775,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
       }
     }
 
-    if (playerHasSeenActiveSlide && readStoredProfile(roomId)) {
+    if (playerHasSeenActiveSlide && playerResumeProfile) {
       return <Waiting message="Syncing live session..." />;
     }
     return <PlayerJoinPage roomId={roomId} quiz={quiz} />;
