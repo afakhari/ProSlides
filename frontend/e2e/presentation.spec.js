@@ -208,6 +208,7 @@ async function installMockWebSocket(page, scenario) {
         localStorage.setItem(counterKey, String(nextCount));
         this.connectionIndex = nextCount;
         this.navigationStepByAction = {};
+        this.joinStep = 0;
 
         setTimeout(() => {
           this.readyState = MockWebSocket.OPEN;
@@ -246,6 +247,16 @@ async function installMockWebSocket(page, scenario) {
         if (!msg || typeof msg !== "object") return;
 
         const byRole = scenario[this.role] || {};
+        if (msg.type === 6) {
+          const joinQueue = byRole.join || [];
+          const joinItem = joinQueue[this.joinStep];
+          if (!joinItem) return;
+          this.joinStep += 1;
+          const joinDelay = Number(joinItem?.delay ?? 0);
+          const joinPayload = joinItem?.data;
+          setTimeout(() => this._emitMessage(joinPayload), joinDelay);
+          return;
+        }
         const nav = byRole.navigation || {};
         const navQueue = nav[msg.action] || [];
         const currentStep = Number(this.navigationStepByAction[msg.action] || 0);
@@ -426,6 +437,35 @@ test("manager and player render content slide when websocket sends type 2 conten
   await page.goto("/player/presentation/33");
   await expect(page.getByText("Content Live")).toBeVisible();
   await expect(page.getByText("Runtime content from WS")).toBeVisible();
+});
+
+test("player refresh on leaderboard exits syncing state after auto-resume join", async ({ page }) => {
+  await mockQuizExport(page);
+  await page.addInitScript(() => {
+    const profile = {
+      room_id: "33",
+      name: "resume-player",
+      avatar: "A",
+      user_id: "resume-player-33",
+    };
+    localStorage.setItem("presentation_player_profile_v1", JSON.stringify(profile));
+    localStorage.setItem("player_name", profile.name);
+    localStorage.setItem("character", profile.avatar);
+    localStorage.setItem("user_id", profile.user_id);
+    sessionStorage.setItem("presentation_player_seen_active_v1:33", "1");
+  });
+
+  await installMockWebSocket(page, {
+    player: {
+      first: [],
+      join: [{ delay: 150, data: leaderboardMessage }],
+    },
+  });
+
+  await page.goto("/player/presentation/33");
+  // Depending on timing, player may briefly show syncing or jump directly to leaderboard.
+  await expect(page.getByText("ali")).toBeVisible();
+  await expect(page.locator('input[type="text"]')).toHaveCount(0);
 });
 
 test("player refresh during question stays on question instead of join page", async ({ page }) => {

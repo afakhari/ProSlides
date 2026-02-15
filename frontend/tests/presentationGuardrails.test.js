@@ -92,6 +92,9 @@ test("player should not render leaderboard before seeing an active slide", () =>
   assert.equal(src.includes("resolveQuestionTimer"), true);
   assert.equal(src.includes("return <Waiting message=\"Syncing live session...\" />;"), true);
   assert.equal(src.includes("return <PlayerJoinPage roomId={roomId} quiz={quiz} />;"), true);
+  assert.equal(src.includes("const shouldAutoResumePlayerSession ="), true);
+  assert.equal(src.includes("createJoinMessage({"), true);
+  assert.equal(src.includes("getPersistedUserIdForRoom(roomId)"), true);
 });
 
 test("manager leaderboard state sync updates current slide index for leaderboard slides", () => {
