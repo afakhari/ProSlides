@@ -4,7 +4,9 @@ import Footer from "../../../components/Footer";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 
 export default function ManagerContentSlide({
+  roomId,
   quiz,
+  content,
   currentSlide = 1,
   totalSlides = 1,
   onNext,
@@ -12,10 +14,12 @@ export default function ManagerContentSlide({
 }) {
   const { sendNavigation, sendEnd } = useWebSocket();
   const slide = quiz?.slides?.[currentSlide - 1] || {};
+  const source = content && typeof content === "object" ? content : slide;
 
-  const title = slide.title || "";
-  const text = slide.content_text || "";
-  const image = slide.content_image_url || "";
+  const title = source.title || source.content_title || "";
+  const text = source.content_text || source.text || "";
+  const image =
+    source.content_image_url || source.image_url || source.image || "";
 
   const handleNext = () => {
     sendNavigation("next");
@@ -29,7 +33,7 @@ export default function ManagerContentSlide({
 
   return (
     <div className="min-h-screen w-full" style={{ background: quiz?.background?.color || "#0f172a" }}>
-      <TopBar pageType="quiz" roomId={quiz?.access_code || ""} quiz={quiz} />
+      <TopBar pageType="quiz" roomId={roomId || quiz?.access_code || ""} quiz={quiz} />
 
       <main className="mx-auto max-w-5xl px-6 py-8 text-center text-white">
         {title && <h1 className="mb-4 text-3xl font-bold">{title}</h1>}

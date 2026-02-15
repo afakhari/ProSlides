@@ -21,6 +21,11 @@ const managerQuestionPath =
   "frontend/src/pages/presentation/manager/PickAnswerQuestion.jsx";
 const timerSyncPath =
   "frontend/src/pages/presentation/utils/questionTimerSync.js";
+const serverDataPath = "frontend/src/contexts/ServerDataContext.jsx";
+const managerContentPath =
+  "frontend/src/pages/presentation/manager/ContentSlide.jsx";
+const playerContentPath =
+  "frontend/src/pages/presentation/player/ContentSlide.jsx";
 
 test("manager question page waits for server results and has no mock-vote fallback", () => {
   const src = readFileSync(pickAnswerPath, "utf8");
@@ -161,4 +166,22 @@ test("quiz export mapping keeps order to align runtime leaderboard with question
   const src = readFileSync(presentationEntryPath, "utf8");
   assert.equal(src.includes("order: slide.order ?? q.order ?? null"), true);
   assert.equal(src.includes("order: slide.order ?? null"), true);
+});
+
+test("server data routes type 2 content payloads into currentContent", () => {
+  const src = readFileSync(serverDataPath, "utf8");
+  assert.equal(src.includes("const isContentPayloadMessage = (message) =>"), true);
+  assert.equal(src.includes("if ((!message.type || message.type === 2) && isContentPayloadMessage(message))"), true);
+  assert.equal(src.includes("updateCurrentContent(normalizeContentPayload(message));"), true);
+  assert.equal(src.includes("if (isContentPayloadMessage(message)) {"), true);
+});
+
+test("manager and player content slides can render websocket content payload fields", () => {
+  const managerSrc = readFileSync(managerContentPath, "utf8");
+  const playerSrc = readFileSync(playerContentPath, "utf8");
+  assert.equal(managerSrc.includes("const source = content && typeof content === \"object\" ? content : slide;"), true);
+  assert.equal(managerSrc.includes("source.content_text || source.text"), true);
+  assert.equal(managerSrc.includes("source.content_image_url || source.image_url || source.image"), true);
+  assert.equal(playerSrc.includes("content?.content_text || content?.text"), true);
+  assert.equal(playerSrc.includes("content?.content_image_url || content?.image_url || content?.image"), true);
 });

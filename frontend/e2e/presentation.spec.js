@@ -148,6 +148,15 @@ const question2Message = {
   question_text: "Q2",
 };
 
+const contentMessageType2 = {
+  type: 2,
+  slide_type: 2,
+  slide_id: 103,
+  title: "Content Live",
+  content_text: "Runtime content from WS",
+  content_image_url: "",
+};
+
 const leaderboardMessage = {
   type: 1,
   results: [
@@ -380,6 +389,43 @@ test("manager slide number remains correct when leaderboard slides are encoded a
   await page.getByRole("button", { name: /next|بعدی|اسلاید بعدی/i }).click();
   await expect(page.getByText("Leaderboard")).toBeVisible();
   await expect(page.getByText(/\b4\s*\/\s*4\b/)).toBeVisible();
+});
+
+test("manager and player render content slide when websocket sends type 2 content payload", async ({ page }) => {
+  await mockQuizExport(page);
+  await installMockWebSocket(page, {
+    manager: {
+      first: [{ delay: 80, data: contentMessageType2 }],
+    },
+  });
+
+  await page.goto("/manager/presentation/33");
+  await expect(page.getByText("Content Live")).toBeVisible();
+  await expect(page.getByText("Runtime content from WS")).toBeVisible();
+  await expect(page.getByText(/\b3\s*\/\s*3\b/)).toBeVisible();
+
+  await installMockWebSocket(page, {
+    player: {
+      first: [{ delay: 80, data: contentMessageType2 }],
+    },
+  });
+
+  await page.addInitScript(() => {
+    const profile = {
+      room_id: "33",
+      name: "content-player",
+      avatar: "A",
+      user_id: "content-player-33",
+    };
+    localStorage.setItem("presentation_player_profile_v1", JSON.stringify(profile));
+    localStorage.setItem("player_name", profile.name);
+    localStorage.setItem("character", profile.avatar);
+    localStorage.setItem("user_id", profile.user_id);
+  });
+
+  await page.goto("/player/presentation/33");
+  await expect(page.getByText("Content Live")).toBeVisible();
+  await expect(page.getByText("Runtime content from WS")).toBeVisible();
 });
 
 test("player refresh during question stays on question instead of join page", async ({ page }) => {

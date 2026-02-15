@@ -445,14 +445,23 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
   useEffect(() => {
     if (role !== "manager") return;
-    if (!currentContent || !quiz?.slides?.length) return;
+    if (!currentContent) return;
 
-    const idx = quiz.slides.findIndex(
-      (slide) => slide.slide_id === currentContent.slide_id
-    );
+    if (quiz?.slides?.length) {
+      const incomingOrder =
+        currentContent.order ??
+        currentContent.slide_order ??
+        currentContent.slideOrder ??
+        null;
+      const idx = quiz.slides.findIndex(
+        (slide) =>
+          slide.slide_id === currentContent.slide_id ||
+          (incomingOrder != null && slide.order === incomingOrder)
+      );
 
-    if (idx >= 0 && currentSlide !== idx + 1) {
-      setCurrentSlide(idx + 1);
+      if (idx >= 0 && currentSlide !== idx + 1) {
+        setCurrentSlide(idx + 1);
+      }
     }
 
     if (data.type !== "ManagerContentSlide") {
@@ -623,6 +632,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
             currentSlide={currentSlide}
             totalSlides={totalSlides}
             quiz={quiz}
+            content={currentContent}
             onEndGame={handleEndGame}
           />
         );

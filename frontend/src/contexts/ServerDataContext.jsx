@@ -11,6 +11,39 @@ const debugWarn = (...args) => {
   if (import.meta.env.DEV) console.warn(...args);
 };
 
+const hasNonEmptyString = (value) =>
+  typeof value === "string" && value.trim().length > 0;
+
+const isContentPayloadMessage = (message) => {
+  if (!message || typeof message !== "object") return false;
+  if (message.slide_type === 2) return true;
+
+  const hasQuestionIdentity =
+    message.question_id != null ||
+    Array.isArray(message.options) ||
+    Array.isArray(message.options_result);
+  if (hasQuestionIdentity) return false;
+
+  return (
+    hasNonEmptyString(message.content_text) ||
+    hasNonEmptyString(message.text) ||
+    hasNonEmptyString(message.content_image_url) ||
+    hasNonEmptyString(message.image_url) ||
+    hasNonEmptyString(message.image) ||
+    hasNonEmptyString(message.title) ||
+    hasNonEmptyString(message.content_title)
+  );
+};
+
+const normalizeContentPayload = (message) => ({
+  ...message,
+  slide_type: 2,
+  title: message?.title || message?.content_title || "",
+  content_text: message?.content_text || message?.text || "",
+  content_image_url:
+    message?.content_image_url || message?.image_url || message?.image || "",
+});
+
 export const ServerDataProvider = ({ children }) => {
   const lastProcessedMessageRef = useRef({ signature: null, at: 0 });
   // State برای ذخیره داده‌های دریافتی از سرور
@@ -149,9 +182,9 @@ export const ServerDataProvider = ({ children }) => {
         return;
       }
 
-      // Content slide payload from server (slide_type=2, no `type` field)
-      if (!message.type && message.slide_type === 2) {
-        updateCurrentContent(message);
+      // Content payload can arrive with/without type=2 depending on backend path.
+      if ((!message.type || message.type === 2) && isContentPayloadMessage(message)) {
+        updateCurrentContent(normalizeContentPayload(message));
         return;
       }
 
@@ -180,7 +213,11 @@ export const ServerDataProvider = ({ children }) => {
           break;
 
         case 2: // New Question
-          updateCurrentQuestion(message);
+          if (isContentPayloadMessage(message)) {
+            updateCurrentContent(normalizeContentPayload(message));
+          } else {
+            updateCurrentQuestion(message);
+          }
           break;
 
         case 3: // Partial question result/update (options_result)
