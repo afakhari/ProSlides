@@ -1,0 +1,50 @@
+export const PLAYER_PROFILE_KEY = "presentation_player_profile_v1";
+export const DEFAULT_AVATAR = "🧙";
+
+export const readStoredProfile = (roomId) => {
+  try {
+    const raw = localStorage.getItem(PLAYER_PROFILE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (String(parsed.room_id || "") !== String(roomId || "")) return null;
+    if (!parsed.name || typeof parsed.name !== "string") return null;
+    if (!parsed.avatar || typeof parsed.avatar !== "string") return null;
+
+    return {
+      room_id: String(parsed.room_id),
+      name: parsed.name,
+      avatar: parsed.avatar,
+      user_id: parsed.user_id ? String(parsed.user_id) : null,
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const saveStoredProfile = ({ room_id, name, avatar, user_id }) => {
+  const profile = {
+    room_id: String(room_id || ""),
+    name: String(name || "").trim(),
+    avatar: avatar || DEFAULT_AVATAR,
+    user_id: user_id ? String(user_id) : null,
+  };
+
+  localStorage.setItem(PLAYER_PROFILE_KEY, JSON.stringify(profile));
+  localStorage.setItem("player_name", profile.name);
+  localStorage.setItem("character", profile.avatar);
+  if (profile.user_id) {
+    localStorage.setItem("user_id", profile.user_id);
+  }
+};
+
+export const getPersistedUserIdForRoom = (roomId) =>
+  readStoredProfile(roomId)?.user_id || null;
+
+export const createJoinMessage = ({ name, avatar, persistedUserId }) => ({
+  type: 6,
+  name,
+  character: avatar,
+  ...(persistedUserId ? { user_id: persistedUserId } : {}),
+});

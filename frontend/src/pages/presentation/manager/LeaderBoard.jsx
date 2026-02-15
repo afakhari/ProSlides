@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+﻿import React, { useState, useEffect, useMemo } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
@@ -9,16 +9,19 @@ import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 import { createNextPrevious, DefaultFooterStats } from "../../../data/mockData";
 
+const debugLog = (...args) => {
+  if (import.meta.env.DEV) console.log(...args);
+};
+
 function ManagerLeaderBoard({
   onNext,
-  onPrevious,
   currentSlide = 1,
   totalSlides = 3,
   quiz,
   getLeaderboardForQuestion,
   onEndGame,
 }) {
-  // فقط داده‌های سرور را از useServerData بگیر، و sendNavigation را از useWebSocket
+  // ÙÙ‚Ø· Ø¯Ø§Ø¯Ù‡â€ŒÙ‡Ø§ÛŒ Ø³Ø±ÙˆØ± Ø±Ø§ Ø§Ø² useServerData Ø¨Ú¯ÛŒØ±ØŒ Ùˆ sendNavigation Ø±Ø§ Ø§Ø² useWebSocket
   const { isConnected, sendNavigation, sendEnd } = useWebSocket();
   const {
     managerLastLeaderboard,
@@ -26,7 +29,7 @@ function ManagerLeaderBoard({
     modalLeaderboardResults,
   } = useServerData();
 
-  // حذف state داخلی و فقط استفاده از داده context
+  // Ø­Ø°Ù state Ø¯Ø§Ø®Ù„ÛŒ Ùˆ ÙÙ‚Ø· Ø§Ø³ØªÙØ§Ø¯Ù‡ Ø§Ø² Ø¯Ø§Ø¯Ù‡ context
 
   // Get the question ID from the previous slide (leaderboard usually comes after a question)
   // NOTE: slide indices are 0-based, but currentSlide appears to be 1-based
@@ -43,11 +46,11 @@ function ManagerLeaderBoard({
     previousQuestionId && typeof getLeaderboardForQuestion === "function"
       ? getLeaderboardForQuestion(previousQuestionId)
       : null;
-  // همیشه آخرین لیدربرد معتبر را نگه دار و اگر داده جدید نیامد، پاک نکن
-  // اگر هیچ داده‌ای برای اسلاید فعلی نبود، آخرین لیدربرد معتبر را نمایش بده
+  // Ù‡Ù…ÛŒØ´Ù‡ Ø¢Ø®Ø±ÛŒÙ† Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯ Ù…Ø¹ØªØ¨Ø± Ø±Ø§ Ù†Ú¯Ù‡ Ø¯Ø§Ø± Ùˆ Ø§Ú¯Ø± Ø¯Ø§Ø¯Ù‡ Ø¬Ø¯ÛŒØ¯ Ù†ÛŒØ§Ù…Ø¯ØŒ Ù¾Ø§Ú© Ù†Ú©Ù†
+  // Ø§Ú¯Ø± Ù‡ÛŒÚ† Ø¯Ø§Ø¯Ù‡â€ŒØ§ÛŒ Ø¨Ø±Ø§ÛŒ Ø§Ø³Ù„Ø§ÛŒØ¯ ÙØ¹Ù„ÛŒ Ù†Ø¨ÙˆØ¯ØŒ Ø¢Ø®Ø±ÛŒÙ† Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯ Ù…Ø¹ØªØ¨Ø± Ø±Ø§ Ù†Ù…Ø§ÛŒØ´ Ø¨Ø¯Ù‡
   let dataToUse = leaderboardResults || leaderboardForThisQuestion;
 
-  // اگر داده فعلی خالی است، از آخرین داده معتبر استفاده کن
+  // Ø§Ú¯Ø± Ø¯Ø§Ø¯Ù‡ ÙØ¹Ù„ÛŒ Ø®Ø§Ù„ÛŒ Ø§Ø³ØªØŒ Ø§Ø² Ø¢Ø®Ø±ÛŒÙ† Ø¯Ø§Ø¯Ù‡ Ù…Ø¹ØªØ¨Ø± Ø§Ø³ØªÙØ§Ø¯Ù‡ Ú©Ù†
   if (
     !dataToUse ||
     (Array.isArray(dataToUse) && dataToUse.length === 0) ||
@@ -64,19 +67,19 @@ function ManagerLeaderBoard({
     }
   }
 
-  // فقط داده را از context می‌گیریم و هیچ وقت setPlayers نمی‌زنیم
+  // ÙÙ‚Ø· Ø¯Ø§Ø¯Ù‡ Ø±Ø§ Ø§Ø² context Ù…ÛŒâ€ŒÚ¯ÛŒØ±ÛŒÙ… Ùˆ Ù‡ÛŒÚ† ÙˆÙ‚Øª setPlayers Ù†Ù…ÛŒâ€ŒØ²Ù†ÛŒÙ…
   const results = useMemo(
     () => dataToUse?.results || dataToUse || [],
     [dataToUse]
   );
 
-  console.log("[ManagerLeaderBoard] Render Cycle:");
-  console.log("  - leaderboardResults:", leaderboardResults);
-  console.log("  - managerLastLeaderboard:", managerLastLeaderboard);
-  console.log("  - dataToUse:", dataToUse);
-  console.log("  - derived results:", results);
+  debugLog("[ManagerLeaderBoard] Render Cycle:");
+  debugLog("  - leaderboardResults:", leaderboardResults);
+  debugLog("  - managerLastLeaderboard:", managerLastLeaderboard);
+  debugLog("  - dataToUse:", dataToUse);
+  debugLog("  - derived results:", results);
 
-  // همیشه از rank سرور استفاده کن و هیچوقت index را جایگزین نکن
+  // Ù‡Ù…ÛŒØ´Ù‡ Ø§Ø² rank Ø³Ø±ÙˆØ± Ø§Ø³ØªÙØ§Ø¯Ù‡ Ú©Ù† Ùˆ Ù‡ÛŒÚ†ÙˆÙ‚Øª index Ø±Ø§ Ø¬Ø§ÛŒÚ¯Ø²ÛŒÙ† Ù†Ú©Ù†
   const players = useMemo(
     () =>
       Array.isArray(results)
@@ -93,7 +96,7 @@ function ManagerLeaderBoard({
     [results]
   );
 
-  console.log("[ManagerLeaderBoard DEBUG] players:", players);
+  debugLog("[ManagerLeaderBoard DEBUG] players:", players);
 
   // Calculate current question number and details from currentSlide
   const currentQuestionIndex = currentSlide - 1;
@@ -107,7 +110,7 @@ function ManagerLeaderBoard({
     createNextPrevious(5, null, null)
   );
 
-  // هیچ پیام مستقیمی از سرور پردازش نمی‌شود، فقط داده context استفاده می‌شود
+  // Ù‡ÛŒÚ† Ù¾ÛŒØ§Ù… Ù…Ø³ØªÙ‚ÛŒÙ…ÛŒ Ø§Ø² Ø³Ø±ÙˆØ± Ù¾Ø±Ø¯Ø§Ø²Ø´ Ù†Ù…ÛŒâ€ŒØ´ÙˆØ¯ØŒ ÙÙ‚Ø· Ø¯Ø§Ø¯Ù‡ context Ø§Ø³ØªÙØ§Ø¯Ù‡ Ù…ÛŒâ€ŒØ´ÙˆØ¯
 
   // Handle navigation and update server data
   const handleNext = () => {
@@ -117,7 +120,7 @@ function ManagerLeaderBoard({
       currentQuestionIndex
     );
     setNavigationData(newNavigationData);
-    console.log(
+    debugLog(
       "[LeaderBoard] Navigation data to send to server:",
       newNavigationData
     );
@@ -128,26 +131,8 @@ function ManagerLeaderBoard({
     if (onNext) onNext();
   };
 
-  const handlePrevious = () => {
-    const newNavigationData = createNextPrevious(
-      5,
-      "previous",
-      currentQuestionIndex
-    );
-    setNavigationData(newNavigationData);
-    console.log(
-      "[LeaderBoard] Navigation data to send to server:",
-      newNavigationData
-    );
-
-    // Send navigation to WebSocket
-    sendNavigation("previous");
-
-    if (onPrevious) onPrevious();
-  };
-
   const handleEnd = () => {
-    console.log("[LeaderBoard] Sending end command to server");
+    debugLog("[LeaderBoard] Sending end command to server");
     sendEnd();
     if (onEndGame) onEndGame();
   };
@@ -158,11 +143,12 @@ function ManagerLeaderBoard({
     );
   };
 
-  const maxScore = Math.max(...players.map((p) => p.total_points));
+  const maxScore =
+    players.length > 0 ? Math.max(...players.map((p) => p.total_points)) : 0;
   const minScore = 0;
 
   const calcPercent = (score) => {
-    if (maxScore === minScore) return 100;
+    if (maxScore <= minScore) return score > 0 ? 100 : 0;
     const percent = ((score - minScore) / (maxScore - minScore)) * 99 + 1;
     return Math.max(percent, 1);
   };
@@ -246,16 +232,16 @@ function ManagerLeaderBoard({
               </p>
             </div>
 
-            {/* Scrollable players list — only this area will scroll when long */}
+            {/* Scrollable players list â€” only this area will scroll when long */}
             <div className="mt-6 flex-1 w-full max-w-4xl">
-              {/* Scrollable players list — only this area will scroll when long */}
+              {/* Scrollable players list â€” only this area will scroll when long */}
               <div
                 className="mt-2 flex-1 overflow-auto w-full min-h-0 no-scrollbar"
                 style={{ maxHeight: "calc(100vh - 260px)" }}
               >
                 {players.length === 0 ? (
                   <div className="text-[color:var(--quiz-text-muted)] text-center py-6">
-                    Waiting for leaderboard data…
+                    Waiting for leaderboard dataâ€¦
                   </div>
                 ) : (
                   <ul className="space-y-4 w-full flex flex-col items-stretch py-2">
@@ -337,23 +323,23 @@ function ManagerLeaderBoard({
                                         onClick={() => handleToggleBlur(p.rank)}
                                         className="bg-white/90 text-gray-800 px-2 py-1 rounded-lg text-sm hover:bg-white"
                                       >
-                                        👁️
+                                        ðŸ‘ï¸
                                       </button>
                                       {/* <button
                                         onClick={() =>
-                                          handleClick("✏️ Edit", p.name)
+                                          handleClick("âœï¸ Edit", p.name)
                                         }
                                         className="bg-white/90 text-blue-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
                                       >
-                                        ✏️
+                                        âœï¸
                                       </button>
                                       <button
                                         onClick={() =>
-                                          handleClick("📞 Call", p.name)
+                                          handleClick("ðŸ“ž Call", p.name)
                                         }
                                         className="bg-white/90 text-green-600 px-2 py-1 rounded-lg text-sm hover:bg-white"
                                       >
-                                        📞
+                                        ðŸ“ž
                                       </button> */}
                                     </div>
                                   )}
@@ -395,7 +381,6 @@ function ManagerLeaderBoard({
           isQROpen={showQRModal}
           onShowLeaderboard={() => setShowLeaderboardModal(true)}
           onNext={handleNext}
-          onPrevious={handlePrevious}
           onEnd={handleEnd}
           textColor={textColor}
         />
@@ -412,7 +397,7 @@ function ManagerLeaderBoard({
             >
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <span className="text-4xl">🏆</span>
+                  <span className="text-4xl">ðŸ†</span>
                   <div>
                     <h2 className="text-white text-3xl font-bold">
                       Leaderboard
@@ -426,21 +411,21 @@ function ManagerLeaderBoard({
                   onClick={() => setShowLeaderboardModal(false)}
                   className="text-white hover:text-gray-300 text-3xl border-none bg-transparent cursor-pointer leading-none"
                 >
-                  ×
+                  Ã—
                 </button>
               </div>
 
               <div className="space-y-3">
                 {(() => {
                   const modalPlayers = modalLeaderboardResults || [];
-                  console.log("[LeaderBoard] Modal players:", modalPlayers);
+                  debugLog("[LeaderBoard] Modal players:", modalPlayers);
                   const maxScore = Math.max(
                     ...modalPlayers.map((p) => p.total_points || 0),
                     0
                   );
-                  console.log("[LeaderBoard] Max score:", maxScore);
+                  debugLog("[LeaderBoard] Max score:", maxScore);
 
-                  // درصد امتیاز نسبت به نفر اول
+                  // Ø¯Ø±ØµØ¯ Ø§Ù…ØªÛŒØ§Ø² Ù†Ø³Ø¨Øª Ø¨Ù‡ Ù†ÙØ± Ø§ÙˆÙ„
                   const calcPercent = (score) => {
                     if (maxScore === 0) return 0;
                     return (score / maxScore) * 100;
@@ -512,3 +497,4 @@ function ManagerLeaderBoard({
 }
 
 export default ManagerLeaderBoard;
+

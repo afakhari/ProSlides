@@ -8,7 +8,6 @@ export default function ManagerContentSlide({
   currentSlide = 1,
   totalSlides = 1,
   onNext,
-  onPrevious,
   onEndGame,
 }) {
   const { sendNavigation, sendEnd } = useWebSocket();
@@ -21,11 +20,6 @@ export default function ManagerContentSlide({
   const handleNext = () => {
     sendNavigation("next");
     onNext?.();
-  };
-
-  const handlePrevious = () => {
-    sendNavigation("previous");
-    onPrevious?.();
   };
 
   const handleEnd = () => {
@@ -49,10 +43,9 @@ export default function ManagerContentSlide({
 
       <Footer
         pageType="quiz"
-        currentQuestion={Math.max(currentSlide, 1)}
-        totalQuestions={Math.max(totalSlides, 1)}
+        currentSlide={Math.max(currentSlide, 1)}
+        totalSlides={Math.max(totalSlides, 1)}
         onNext={handleNext}
-        onPrevious={handlePrevious}
         onEnd={handleEnd}
       />
     </div>

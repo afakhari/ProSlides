@@ -11,6 +11,19 @@ import {
   UserColorList,
 } from "../../../data/mockData";
 
+const debugLog = (...args) => {
+  if (import.meta.env.DEV) console.log(...args);
+};
+
+const hashToColorIndex = (value, modulo) => {
+  const str = String(value ?? "");
+  let hash = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return modulo > 0 ? hash % modulo : 0;
+};
+
 // Calculate players ready based on the User_adding.type
 function calculatePlayersReady({ type, Users }) {
   // Extendable rule-set; for now, type 1 => count all users
@@ -57,8 +70,8 @@ export default function ManagerJoinPage({
 
   // Function to get color for a user based on their user_id
   const getUserColor = (userId) => {
-    // Use user_id to deterministically assign a color
-    const colorIndex = userId % colorList.length;
+    // Use stable hashing so both numeric and string IDs get deterministic colors.
+    const colorIndex = hashToColorIndex(userId, colorList.length);
     return colorList[colorIndex];
   };
 
@@ -93,7 +106,7 @@ export default function ManagerJoinPage({
 
   useEffect(() => {
     if (!lastMessage) return;
-    console.log("[JoinPage] Received message:", lastMessage);
+    debugLog("[JoinPage] Received message:", lastMessage);
   }, [lastMessage]);
 
   const handleStart = () => {
@@ -107,7 +120,7 @@ export default function ManagerJoinPage({
       "start",
       currentQuestionIndex
     );
-    console.log(
+    debugLog(
       "[JoinPage2] Starting quiz, navigation data to send to server:",
       newNavigationData
     );

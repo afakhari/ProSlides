@@ -1,13 +1,17 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import EmojiPicker from "emoji-picker-react";
 import { motion as Motion } from "framer-motion";
 import { useWebSocket } from "../../../hooks/useWebSocket";
-import { useServerData } from "../../../hooks/useServerData";
-import {ErrorModal} from "../../quiz/manager/ErrorModal";
+import { ErrorModal } from "../../quiz/manager/ErrorModal";
 import { isLightColor } from "../../../lib/colorUtils";
+import {
+  DEFAULT_AVATAR,
+  createJoinMessage,
+  getPersistedUserIdForRoom,
+  readStoredProfile,
+  saveStoredProfile,
+} from "./playerProfileStorage";
 
-
-// Animation configurations based on emoji categories
 const getEmojiAnimation = (emoji) => {
   const robots = ["🤖", "👾", "🛸"];
   const ghosts = ["👻", "🧙", "🧛", "🧚", "🧞"];
@@ -117,7 +121,6 @@ const getEmojiAnimation = (emoji) => {
     };
   }
 
-  // Default animation for any other emoji
   return {
     initial: { scale: 1, rotate: 0 },
     animate: {
@@ -129,20 +132,33 @@ const getEmojiAnimation = (emoji) => {
 };
 
 export default function PlayerJoinPage({ roomId, quiz }) {
-  const [players, setPlayers] = useState([]);
-  const [name, setName] = useState("");
-  const [avatar, setAvatar] = useState("🧙");
+  const restoredProfile = readStoredProfile(roomId);
+  const [name, setName] = useState(restoredProfile?.name || "");
+  const [avatar, setAvatar] = useState(restoredProfile?.avatar || DEFAULT_AVATAR);
   const [showPicker, setShowPicker] = useState(false);
-  const [joined, setJoined] = useState(false);
+  const [joined, setJoined] = useState(Boolean(restoredProfile));
   const [joinSent, setJoinSent] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(Boolean(restoredProfile));
+
   const { connect, sendMessage, isConnected, lastMessage, connectionError } =
     useWebSocket();
-  const { processMessage } = useServerData();
+
   const [error, _setError] = useState(null);
   const [errorModalOpen, setErrorModalOpen] = useState(false);
 
+  useEffect(() => {
+    const profile = readStoredProfile(roomId);
+    if (!profile) {
+      setJoined(false);
+      setJoinSent(false);
+      return;
+    }
+
+    setName(profile.name);
+    setAvatar(profile.avatar);
+    setJoined(true);
+  }, [roomId]);
 
   const closeErrorModal = () => {
     setErrorModalOpen(false);
@@ -158,42 +174,29 @@ export default function PlayerJoinPage({ roomId, quiz }) {
     }
   }, [isConnected, connectionError]);
 
-
-  // const navigate = useNavigate();
-
-  // Loading from localStorage
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("players");
-      if (stored) setPlayers(JSON.parse(stored));
-      else setPlayers([]);
-    } catch (err) {
-      console.error("Error reading players:", err);
-      setPlayers([]);
-    }
-  }, []);
+    if (!joined) return;
+    if (!roomId) return;
+    if (isConnected) return;
 
-  // Adding new player
+    try {
+      setIsConnecting(true);
+      connect(roomId);
+    } catch (err) {
+      console.error("Failed to reconnect WebSocket:", err);
+      setIsConnecting(false);
+    }
+  }, [joined, roomId, isConnected, connect]);
+
   const savePlayer = () => {
     if (!name.trim()) {
       return alert("لطفاً نام خود را وارد کنید!");
-      // setError("Please enter your name");
-      // setErrorModalOpen(true);
-      // return;
     }
-      
 
-    const newPlayer = {
-      id: players.length + 1,
-      name,
-      avatar,
-    };
-
-    const updatedPlayers = [...players, newPlayer];
-    setPlayers(updatedPlayers);
-    localStorage.setItem("players", JSON.stringify(updatedPlayers));
+    saveStoredProfile({ room_id: roomId, name, avatar });
     setJoined(true);
-    // Connect to WebSocket for players and attempt to send join message
+    setJoinSent(false);
+
     try {
       if (!roomId) {
         console.error("Missing roomId for WebSocket connection");
@@ -203,57 +206,44 @@ export default function PlayerJoinPage({ roomId, quiz }) {
       connect(roomId);
     } catch (err) {
       console.error("Failed to connect WebSocket:", err);
+      setIsConnecting(false);
     }
-    // navigate("/game", { state: newPlayer });
-    //navigate("/", { state: newPlayer });
   };
-  // console.log(inp);
 
-  // When joined and connection is ready, send join message once
   useEffect(() => {
     if (!joined) return;
     if (!isConnected) return;
     if (joinSent) return;
 
-    const msg = {
-      type: 6,
-      name: name,
-      character: avatar,
-    };
+    const msg = createJoinMessage({
+      name,
+      avatar,
+      persistedUserId: getPersistedUserIdForRoom(roomId),
+    });
 
     const ok = sendMessage(msg);
     if (ok) setJoinSent(true);
-    else console.warn("Join message could not be sent - socket not open yet");
-  }, [joined, isConnected, joinSent, name, avatar, sendMessage]);
+  }, [joined, isConnected, joinSent, name, avatar, sendMessage, roomId]);
 
-  // On disconnect, allow join message to be re-sent on next successful reconnect.
   useEffect(() => {
     if (!joined) return;
     if (isConnected) return;
     setJoinSent(false);
   }, [joined, isConnected]);
 
-  // Listen for registration response (type 10) and save user_id to localStorage
   useEffect(() => {
     if (!lastMessage) return;
 
-    // Process message through ServerDataContext
-    processMessage(lastMessage);
-
-    // Type 10: Registration confirmation from server
     if (lastMessage.type === 10) {
-      console.log("[PlayerJoinPage] Registration successful:", lastMessage);
-      localStorage.setItem("user_id", lastMessage.user_id);
-      localStorage.setItem("player_name", lastMessage.name);
-      localStorage.setItem("character", lastMessage.character);
-      console.log(
-        "[PlayerJoinPage] Saved user_id to localStorage:",
-        lastMessage.user_id
-      );
+      saveStoredProfile({
+        room_id: roomId,
+        name: lastMessage.name || name,
+        avatar: lastMessage.character || avatar,
+        user_id: lastMessage.user_id,
+      });
     }
-  }, [lastMessage, processMessage]);
+  }, [lastMessage, roomId, name, avatar]);
 
-  // Calculate dynamic background style from quiz data
   const backgroundStyle = {
     backgroundImage: quiz?.background?.image
       ? `url('${quiz.background.image}')`
@@ -263,8 +253,8 @@ export default function PlayerJoinPage({ roomId, quiz }) {
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
   };
-  const textColor =
-    quiz?.text_color || quiz?.background?.text_color || "#111827";
+
+  const textColor = quiz?.text_color || quiz?.background?.text_color || "#111827";
   const textMutedColor =
     textColor.toLowerCase() === "#111827"
       ? "rgba(17, 24, 39, 0.7)"
@@ -273,7 +263,11 @@ export default function PlayerJoinPage({ roomId, quiz }) {
     !!quiz?.background?.image ||
     isLightColor(quiz?.background?.color || "#1e1e2e");
 
-  // Stay on the waiting screen until the next command arrives
+  const currentPlayer = {
+    name: name || localStorage.getItem("player_name") || "",
+    avatar: avatar || localStorage.getItem("character") || DEFAULT_AVATAR,
+  };
+
   return !joined ? (
     <div
       className="relative min-h-screen w-full"
@@ -287,90 +281,85 @@ export default function PlayerJoinPage({ roomId, quiz }) {
         <div className="pointer-events-none absolute inset-0 bg-black/45" />
       )}
       <div className="relative z-10">
-      <div className="flex flex-col items-center justify-center">
-        <header>
-          <div className="flex items-center justify-center text-[color:var(--quiz-text)] px-6 py-7 rounded-t-xl placeholder-gray-500">
-            <div className="shrink-0">
-              <p className="text-3xl">Proslides</p>
-            </div>
-          </div>
-        </header>
-        
-        {connectionError && (
-          <div className="mt-2 rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-100">
-            خطای اتصال. لطفاً دوباره تلاش کنید.
-          </div>
-        )}
-        <div className="flex flex-col items-center mt-7 justify-around w-4/5 max-w-2xl text-[color:var(--quiz-text)]">
-          {/* Set name */}
-          <div className="w-full">
-            <h1 className="text-right text-2xl font-extrabold">
-              نام خود را وارد کنید
-            </h1>
-          </div>
-          <input
-            className="bg-white px-4 py-2 w-full rounded text-center text-lg font-bold placeholder-gray-400 text-gray-900"
-value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-
-          {/* Choosing Avatar */}
-          <div className="mt-12 w-full">
-            <h1 className="text-right text-2xl font-extrabold">
-              یک آواتار انتخاب کنید
-            </h1>
-          </div>
-          <div className="flex flex-col items-center relative">
-            <Motion.div
-              key={avatar} // Re-mount on avatar change to trigger animation
-              className="text-9xl mb-2 cursor-pointer select-none"
-              onClick={() => {
-                setIsAnimating(true);
-                setTimeout(() => setIsAnimating(false), 1000);
-              }}
-              {...getEmojiAnimation(avatar)}
-              animate={
-                isAnimating
-                  ? getEmojiAnimation(avatar).animate
-                  : getEmojiAnimation(avatar).initial
-              }
-            >
-              {avatar}
-            </Motion.div>
-            <button
-              onClick={() => setShowPicker(!showPicker)}
-              className="font-medium underline hover:text-purple-900 text-2xl"
-            >
-              تغییر آواتار
-            </button>
-
-            {/* Emoji Picker */}
-            {showPicker && (
-              <div className="absolute mt-4 z-10">
-                <EmojiPicker
-                  onEmojiClick={(emojiData) => {
-                    setAvatar(emojiData.emoji);
-                    setShowPicker(false);
-                  }}
-                  theme="light"
-                  searchDisabled={false}
-                  width={300}
-                  height={400}
-                />
+        <div className="flex flex-col items-center justify-center">
+          <header>
+            <div className="flex items-center justify-center text-[color:var(--quiz-text)] px-6 py-7 rounded-t-xl placeholder-gray-500">
+              <div className="shrink-0">
+                <p className="text-3xl">Proslides</p>
               </div>
-            )}
-          </div>
+            </div>
+          </header>
 
-          {/*Join Button */}
-          <button
-            onClick={savePlayer}
-            className="mt-12 bg-purple-700 w-full text-white px-10 py-3 rounded-lg hover:bg-purple-800 transition disabled:opacity-70 disabled:cursor-not-allowed"
-            disabled={isConnecting}
-          >
-            {isConnecting ? "در حال اتصال..." : "ورود به بازی"}
-          </button>
+          {connectionError && (
+            <div className="mt-2 rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-100">
+              خطای اتصال. لطفاً دوباره تلاش کنید.
+            </div>
+          )}
+
+          <div className="flex flex-col items-center mt-7 justify-around w-4/5 max-w-2xl text-[color:var(--quiz-text)]">
+            <div className="w-full">
+              <h1 className="text-right text-2xl font-extrabold">نام خود را وارد کنید</h1>
+            </div>
+            <input
+              className="bg-white px-4 py-2 w-full rounded text-center text-lg font-bold placeholder-gray-400 text-gray-900"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+
+            <div className="mt-12 w-full">
+              <h1 className="text-right text-2xl font-extrabold">یک آواتار انتخاب کنید</h1>
+            </div>
+
+            <div className="flex flex-col items-center relative">
+              <Motion.div
+                key={avatar}
+                className="text-9xl mb-2 cursor-pointer select-none"
+                onClick={() => {
+                  setIsAnimating(true);
+                  setTimeout(() => setIsAnimating(false), 1000);
+                }}
+                {...getEmojiAnimation(avatar)}
+                animate={
+                  isAnimating
+                    ? getEmojiAnimation(avatar).animate
+                    : getEmojiAnimation(avatar).initial
+                }
+              >
+                {avatar}
+              </Motion.div>
+
+              <button
+                onClick={() => setShowPicker(!showPicker)}
+                className="font-medium underline hover:text-purple-900 text-2xl"
+              >
+                تغییر آواتار
+              </button>
+
+              {showPicker && (
+                <div className="absolute mt-4 z-10">
+                  <EmojiPicker
+                    onEmojiClick={(emojiData) => {
+                      setAvatar(emojiData.emoji);
+                      setShowPicker(false);
+                    }}
+                    theme="light"
+                    searchDisabled={false}
+                    width={300}
+                    height={400}
+                  />
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={savePlayer}
+              className="mt-12 bg-purple-700 w-full text-white px-10 py-3 rounded-lg hover:bg-purple-800 transition disabled:opacity-70 disabled:cursor-not-allowed"
+              disabled={isConnecting}
+            >
+              {isConnecting ? "در حال اتصال..." : "ورود به بازی"}
+            </button>
+          </div>
         </div>
-      </div>
       </div>
     </div>
   ) : (
@@ -386,69 +375,53 @@ value={name}
         <div className="pointer-events-none absolute inset-0 bg-black/45" />
       )}
       <div className="relative z-10">
-      <header>
-        <div className="flex items-center justify-center text-[color:var(--quiz-text)] px-6 py-7 rounded-t-xl">
-          <div className="shrink-0">
-            <p className="text-3xl">Proslides</p>
+        <header>
+          <div className="flex items-center justify-center text-[color:var(--quiz-text)] px-6 py-7 rounded-t-xl">
+            <div className="shrink-0">
+              <p className="text-3xl">Proslides</p>
+            </div>
           </div>
-        </div>
-      </header>
-      
-      {connectionError && (
-        <div className="mt-2 flex justify-center">
-          <div className="rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-100">
-            خطای اتصال. لطفاً دوباره تلاش کنید.
+        </header>
+
+        {connectionError && (
+          <div className="mt-2 flex justify-center">
+            <div className="rounded-lg bg-red-500/20 px-3 py-2 text-xs text-red-100">
+              خطای اتصال. لطفاً دوباره تلاش کنید.
+            </div>
           </div>
+        )}
+
+        <div className="flex flex-col items-center justify-center h-full">
+          <div className="flex items-center space-x-4 px-6 py-3 rounded-2xl m-4 text-[color:var(--quiz-text)]">
+            <Motion.span
+              className="text-5xl cursor-pointer select-none"
+              onClick={() => {
+                setIsAnimating(true);
+                setTimeout(() => setIsAnimating(false), 1000);
+              }}
+              {...getEmojiAnimation(currentPlayer.avatar)}
+              animate={
+                isAnimating
+                  ? getEmojiAnimation(currentPlayer.avatar).animate
+                  : getEmojiAnimation(currentPlayer.avatar).initial
+              }
+            >
+              {currentPlayer.avatar}
+            </Motion.span>
+            <span className="text-2xl font-semibold">{currentPlayer.name}</span>
+          </div>
+
+          <h4 className="text-3xl text-center mb-6 m-8 text-[color:var(--quiz-text)]">
+            آماده بازی شوید!
+          </h4>
+
+          <h3 className="mb-6 text-[color:var(--quiz-text-muted)]">
+            آزمون به‌زودی شروع می‌شود.
+          </h3>
         </div>
-      )}
-      <div className="flex flex-col items-center justify-center h-full">
-        <div className="flex items-center space-x-4 px-6 py-3 rounded-2xl m-4 text-[color:var(--quiz-text)]">
-          <Motion.span
-            className="text-5xl cursor-pointer select-none"
-            onClick={() => {
-              setIsAnimating(true);
-              setTimeout(() => setIsAnimating(false), 1000);
-            }}
-            {...getEmojiAnimation(players[players.length - 1].avatar)}
-            animate={
-              isAnimating
-                ? getEmojiAnimation(players[players.length - 1].avatar).animate
-                : getEmojiAnimation(players[players.length - 1].avatar).initial
-            }
-          >
-            {players[players.length - 1].avatar}
-          </Motion.span>
-          <span className="text-2xl font-semibold">
-            {players[players.length - 1].name}
-          </span>
-        </div>
-        <br />
-        <br />
 
-        <h4 className="text-3xl text-center mb-6 m-8 text-[color:var(--quiz-text)]">
-          آماده بازی شوید!
-        </h4>
-
-        <h3 className="mb-6 text-[color:var(--quiz-text-muted)]">
-          آزمون به‌زودی شروع می‌شود.
-        </h3>
-
-        {/* <button
-          className="mt-6 bg-purple-700 text-white px-8 py-3 rounded-lg hover:bg-purple-800 transition"
-          onClick={() => console.log(players)}
-        >
-          start Game
-        </button> */}
+        <ErrorModal isOpen={errorModalOpen} onClose={closeErrorModal} message={error} />
       </div>
-
-
-      <ErrorModal
-        isOpen={errorModalOpen}
-        onClose={closeErrorModal}
-        message={error}
-      />
-
-    </div>
     </div>
   );
 }
