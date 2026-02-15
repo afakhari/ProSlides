@@ -40,6 +40,32 @@ const PlayerContentSlide = lazy(() =>
   import("../pages/presentation/player/ContentSlide")
 );
 
+const isQuestionSlide = (slide) =>
+  !!slide &&
+  typeof slide === "object" &&
+  (slide.slide_type === 1 || slide.question_id != null);
+
+const hasContentPayload = (slide) =>
+  !!slide &&
+  typeof slide === "object" &&
+  (String(slide.title || "").trim().length > 0 ||
+    String(slide.content_text || "").trim().length > 0 ||
+    String(slide.content_image_url || "").trim().length > 0);
+
+const isLeaderboardSlide = (slide) => {
+  if (!slide || typeof slide !== "object") return false;
+  if (slide.slide_type === 3) return true;
+  if (isQuestionSlide(slide)) return false;
+  // Some payloads encode leaderboard as slide_type=2 without content fields.
+  return slide.slide_type === 2 && !hasContentPayload(slide);
+};
+
+const isContentSlide = (slide) =>
+  !!slide &&
+  typeof slide === "object" &&
+  !isQuestionSlide(slide) &&
+  hasContentPayload(slide);
+
 export default function PresentationEntry({ mode }) {
   return (
     <ServerDataProvider>
@@ -235,6 +261,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
               return {
                 slide_type: 1,
                 slide_id: slide.slide_id,
+                order: slide.order ?? q.order ?? null,
                 question_id: q.question_id,
                 question_text: q.text,
                 question_title: q.title || "",
@@ -265,6 +292,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
             return {
               slide_type: slide.slide_type || 2,
               slide_id: slide.slide_id,
+              order: slide.order ?? null,
               title: slide.title || "",
               content_text: slide.content_text || "",
               content_image_url: slide.content_image_url || "",
@@ -442,24 +470,37 @@ function AppPresentation({ roomId, role, initialQuizData }) {
       let nextLeaderboardIdx = -1;
 
       if (lastManagerQuestionSlideIndex != null) {
-        const immediateIdx = lastManagerQuestionSlideIndex + 1;
-        if (quiz.slides[immediateIdx]?.slide_type === 3) {
-          nextLeaderboardIdx = immediateIdx;
-        } else {
+        const questionOrder =
+          quiz.slides[lastManagerQuestionSlideIndex]?.order ?? null;
+        if (questionOrder != null) {
           nextLeaderboardIdx = quiz.slides.findIndex(
             (slide, idx) =>
-              idx > lastManagerQuestionSlideIndex && slide.slide_type === 3
+              idx !== lastManagerQuestionSlideIndex &&
+              !isQuestionSlide(slide) &&
+              slide.order === questionOrder
           );
+        }
+
+        if (nextLeaderboardIdx < 0) {
+          const immediateIdx = lastManagerQuestionSlideIndex + 1;
+          if (isLeaderboardSlide(quiz.slides[immediateIdx])) {
+            nextLeaderboardIdx = immediateIdx;
+          } else {
+            nextLeaderboardIdx = quiz.slides.findIndex(
+              (slide, idx) =>
+                idx > lastManagerQuestionSlideIndex && isLeaderboardSlide(slide)
+            );
+          }
         }
       }
 
       if (nextLeaderboardIdx < 0) {
         const currentIdx = Math.max(0, currentSlide - 1);
-        if (quiz.slides[currentIdx]?.slide_type === 3) {
+        if (isLeaderboardSlide(quiz.slides[currentIdx])) {
           nextLeaderboardIdx = currentIdx;
         } else {
           nextLeaderboardIdx = quiz.slides.findIndex(
-            (slide) => slide.slide_type === 3
+            (slide) => isLeaderboardSlide(slide)
           );
         }
       }
@@ -499,11 +540,11 @@ function AppPresentation({ roomId, role, initialQuizData }) {
       // Keep slide numbering server-driven and avoid optimistic index jumps.
       const nextSlide = quiz.slides[currentSlide];
       if (!nextSlide) return;
-      if (nextSlide.slide_type === 3) {
+      if (isLeaderboardSlide(nextSlide)) {
         setData({ type: "ManagerLeaderBoard" });
-      } else if (nextSlide.slide_type === 2) {
+      } else if (isContentSlide(nextSlide)) {
         setData({ type: "ManagerContentSlide" });
-      } else if (nextSlide.slide_type === 1) {
+      } else if (isQuestionSlide(nextSlide)) {
         setData({ type: "ManagerPickAnswerQuestion" });
       }
     }
