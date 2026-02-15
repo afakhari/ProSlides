@@ -78,10 +78,22 @@ test("manager route waits for initial live sync before rendering join flow", () 
 test("player should not render leaderboard before seeing an active slide", () => {
   const src = readFileSync(presentationEntryPath, "utf8");
   assert.equal(src.includes("const [playerHasSeenActiveSlide, setPlayerHasSeenActiveSlide]"), true);
+  assert.equal(src.includes("const [playerLastActive, setPlayerLastActive]"), true);
   assert.equal(src.includes("if (currentQuestion || currentContent)"), true);
   assert.equal(src.includes("if (hasLeaderboard && playerHasSeenActiveSlide)"), true);
   assert.equal(src.includes("sessionStorage.setItem(playerActiveSlideSeenKey, \"1\")"), true);
+  assert.equal(src.includes("localStorage.getItem(playerLastActiveKey)"), true);
+  assert.equal(src.includes("localStorage.setItem(playerLastActiveKey, JSON.stringify(snapshot))"), true);
+  assert.equal(src.includes("resolveQuestionTimer"), true);
+  assert.equal(src.includes("return <Waiting message=\"Syncing live session...\" />;"), true);
   assert.equal(src.includes("return <PlayerJoinPage roomId={roomId} quiz={quiz} />;"), true);
+});
+
+test("manager leaderboard state sync updates current slide index for leaderboard slides", () => {
+  const src = readFileSync(presentationEntryPath, "utf8");
+  assert.equal(src.includes("let nextLeaderboardIdx = -1;"), true);
+  assert.equal(src.includes("nextLeaderboardIdx = currentIdx + 1;"), true);
+  assert.equal(src.includes("setCurrentSlide(nextLeaderboardIdx + 1);"), true);
 });
 
 test("access-code route uses unified PresentationEntry resolver", () => {
