@@ -3,14 +3,16 @@ import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
 import { isLightColor } from "../../../lib/colorUtils";
 
-const ANSWER_QUEUE_KEY = "presentation_answer_queue_v1";
+const LEGACY_ANSWER_QUEUE_KEY = "presentation_answer_queue_v1";
+const getAnswerQueueKey = (roomId) =>
+  `presentation_answer_queue_v2:${String(roomId || "unknown")}`;
 
 const getAnswerKey = (answer) =>
   `${answer.user_id}:${answer.question_id}:${answer.run_id ?? "na"}`;
 
-const readQueuedAnswers = () => {
+const readQueuedAnswers = (roomId) => {
   try {
-    const raw = localStorage.getItem(ANSWER_QUEUE_KEY);
+    const raw = localStorage.getItem(getAnswerQueueKey(roomId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
@@ -19,31 +21,45 @@ const readQueuedAnswers = () => {
   }
 };
 
-const writeQueuedAnswers = (items) => {
+const writeQueuedAnswers = (roomId, items) => {
   if (!Array.isArray(items) || items.length === 0) {
-    localStorage.removeItem(ANSWER_QUEUE_KEY);
+    localStorage.removeItem(getAnswerQueueKey(roomId));
     return;
   }
-  localStorage.setItem(ANSWER_QUEUE_KEY, JSON.stringify(items));
+  localStorage.setItem(getAnswerQueueKey(roomId), JSON.stringify(items));
 };
 
-const queueAnswer = (answer) => {
+const queueAnswer = (roomId, answer) => {
   const key = getAnswerKey(answer);
-  const current = readQueuedAnswers();
+  const current = readQueuedAnswers(roomId);
   const next = current.filter((item) => getAnswerKey(item) !== key);
   next.push(answer);
-  writeQueuedAnswers(next);
+  writeQueuedAnswers(roomId, next);
 };
 
-const removeQueuedAnswer = (answer) => {
+const removeQueuedAnswer = (roomId, answer) => {
   const key = getAnswerKey(answer);
-  const current = readQueuedAnswers();
+  const current = readQueuedAnswers(roomId);
   const next = current.filter((item) => getAnswerKey(item) !== key);
-  writeQueuedAnswers(next);
+  writeQueuedAnswers(roomId, next);
 };
 
-const flushQueuedAnswers = (sendMessage) => {
-  const current = readQueuedAnswers();
+const isSameQuestion = (queued, questionId, runId) => {
+  if (queued?.question_id == null || questionId == null) return false;
+  if (String(queued.question_id) !== String(questionId)) return false;
+  if (runId == null) return true;
+  return String(queued.run_id ?? "na") === String(runId);
+};
+
+const pruneQueuedAnswersForCurrentQuestion = (roomId, questionId, runId) => {
+  const current = readQueuedAnswers(roomId);
+  if (current.length === 0) return;
+  const next = current.filter((item) => isSameQuestion(item, questionId, runId));
+  writeQueuedAnswers(roomId, next);
+};
+
+const flushQueuedAnswers = (roomId, sendMessage, questionId, runId) => {
+  const current = readQueuedAnswers(roomId);
   if (current.length === 0) {
     return { sentKeys: [], remaining: 0 };
   }
@@ -53,6 +69,11 @@ const flushQueuedAnswers = (sendMessage) => {
   let socketFailed = false;
 
   for (const answer of current) {
+    if (!isSameQuestion(answer, questionId, runId)) {
+      remaining.push(answer);
+      continue;
+    }
+
     if (socketFailed) {
       remaining.push(answer);
       continue;
@@ -67,11 +88,12 @@ const flushQueuedAnswers = (sendMessage) => {
     }
   }
 
-  writeQueuedAnswers(remaining);
+  writeQueuedAnswers(roomId, remaining);
   return { sentKeys, remaining: remaining.length };
 };
 
 export default function PlayerPickAnswerQuestion({
+  roomId,
   question,
   result: propResult,
   quiz,
@@ -81,6 +103,10 @@ export default function PlayerPickAnswerQuestion({
 
   const questionId = question?.question_id;
   const questionTime = question?.question_time ?? 0;
+  const runId =
+    Number.isFinite(question?.run_id) || typeof question?.run_id === "number"
+      ? question.run_id
+      : null;
 
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [submitted, setSubmitted] = useState(false);
@@ -102,6 +128,16 @@ export default function PlayerPickAnswerQuestion({
     matchQuestionResult(propResult) ||
     matchQuestionResult(questionResults) ||
     matchQuestionResult(partialQuestionResults);
+
+  useEffect(() => {
+    // Migration safety: drop old global queue to avoid stale cross-session answers.
+    localStorage.removeItem(LEGACY_ANSWER_QUEUE_KEY);
+  }, []);
+
+  useEffect(() => {
+    if (!roomId || questionId == null) return;
+    pruneQueuedAnswersForCurrentQuestion(roomId, questionId, runId);
+  }, [roomId, questionId, runId]);
 
   useEffect(() => {
     if (!question) return;
@@ -138,7 +174,12 @@ export default function PlayerPickAnswerQuestion({
   useEffect(() => {
     if (!isConnected) return;
 
-    const { sentKeys, remaining } = flushQueuedAnswers(sendMessage);
+    const { sentKeys, remaining } = flushQueuedAnswers(
+      roomId,
+      sendMessage,
+      questionId,
+      runId
+    );
     if (sentKeys.length === 0) return;
 
     const currentUserId = localStorage.getItem("user_id");
@@ -156,7 +197,7 @@ export default function PlayerPickAnswerQuestion({
       setSubmitState("sent");
       setSubmitMessage("پاسخ شما ارسال شد.");
     }
-  }, [isConnected, sendMessage, questionId, submitState]);
+  }, [isConnected, sendMessage, roomId, questionId, runId, submitState]);
 
   const handleSelect = (option) => {
     if (submitted || timeLeft <= 0) return;
@@ -186,10 +227,6 @@ export default function PlayerPickAnswerQuestion({
     }
 
     const elapsedSeconds = (Date.now() - startTime.current) / 1000;
-    const runId =
-      Number.isFinite(question?.run_id) || typeof question?.run_id === "number"
-        ? question.run_id
-        : null;
 
     const options = question.options || [];
     const answer = {
@@ -205,13 +242,13 @@ export default function PlayerPickAnswerQuestion({
     };
 
     if (isConnected && sendMessage(answer)) {
-      removeQueuedAnswer(answer);
+      removeQueuedAnswer(roomId, answer);
       setSubmitState("sent");
       setSubmitMessage("پاسخ شما ارسال شد.");
       return;
     }
 
-    queueAnswer(answer);
+    queueAnswer(roomId, answer);
     setSubmitState("queued");
     setSubmitMessage("اتصال قطع است؛ پاسخ ذخیره شد و پس از اتصال ارسال می‌شود.");
   };

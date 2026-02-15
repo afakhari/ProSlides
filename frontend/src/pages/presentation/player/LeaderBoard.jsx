@@ -77,14 +77,15 @@ function PlayerLeaderBoard({ players, quiz }) {
     setCurrentUserId(userId);
   }, []);
 
-  const maxScore = Math.max(
-    ...validPlayers.map((p) => parseFloat(p.total_points) || 0)
-  );
+  const maxScore =
+    validPlayers.length > 0
+      ? Math.max(...validPlayers.map((p) => parseFloat(p.total_points) || 0))
+      : 0;
   const minScore = 0;
 
   const calcPercent = (score) => {
     const val = parseFloat(score) || 0;
-    if (maxScore <= minScore) return 100;
+    if (maxScore <= minScore) return val > 0 ? 100 : 0;
     // Calculate percentage relative to max score
     const percent = (val / maxScore) * 100;
     return Math.max(percent, 1);

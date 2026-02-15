@@ -148,6 +148,7 @@ function PresentationRouter() {
 function AppPresentation({ roomId, role, initialQuizData }) {
   const [data, setData] = useState({ type: "ManagerJoinPage" });
   const [currentSlide, setCurrentSlide] = useState(1);
+  const [playerHasSeenActiveSlide, setPlayerHasSeenActiveSlide] = useState(false);
 
   // Fetch full quiz once at top-level and transform to internal shape
   const [remoteQuiz, setRemoteQuiz] = useState(initialQuizData || null);
@@ -278,7 +279,16 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     questionResults,
     partialQuestionResults,
     modalLeaderboardResults,
-  } = useServerData();
+  } = useServerData();  useEffect(() => {
+    if (role !== "player") return;
+    if (currentQuestion || currentContent) {
+      setPlayerHasSeenActiveSlide(true);
+    }
+  }, [role, currentQuestion, currentContent]);
+  useEffect(() => {
+    if (role !== "player") return;
+    setPlayerHasSeenActiveSlide(false);
+  }, [role, roomId]);
 
   // Sync manager slide index with server question id to avoid UI mismatches
   useEffect(() => {
@@ -317,7 +327,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     }
   }, [role, currentContent, quiz, currentSlide, data.type]);
 
-  // dYY› U^U,O¦UO manager OO3O¦ U^ type:1 OOý O3OñU^Oñ U.UOƒ?OOñO3O_OO O"UØ U,UOO_OñO"U^OñO_ O"OñU^
+  // dYYâ€º U^U,OÂ¦UO manager OO3OÂ¦ U^ type:1 OOÃ½ O3OÃ±U^OÃ± U.UOÆ’?OOÃ±O3O_OO O"UÃ˜ U,UOO_OÃ±O"U^OÃ±O_ O"OÃ±U^
   useEffect(() => {
     if (role === "manager" && hasLeaderboardEntries(leaderboardResults)) {
       setData({ type: "ManagerLeaderBoard" });
@@ -432,22 +442,10 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
   /* ---------------- Player Rendering (Server Driven) ---------------- */
   const renderPlayer = () => {
-    // dYY› OU^U, U,UOO_OñO"U^OñO_ OñU^ U+Uc UcU+ - OU_UØ type:1 OñO3UOO_UØ O"OO'UØOO U,UOO_OñO"U^OñO_ U+O'U^U+ O"O_UØ
-    if (leaderboardResults) {
-      return (
-        <PlayerLeaderBoard
-          roomId={roomId}
-          players={leaderboardResults.results || leaderboardResults}
-          quiz={quiz}
-        />
-      );
-    }
-
+    const hasLeaderboard = hasLeaderboardEntries(leaderboardResults);
     if (currentContent) {
       return <PlayerContentSlide roomId={roomId} quiz={quiz} content={currentContent} />;
     }
-
-    // O"O1O_ O3U^OU, OñU^ U+Uc UcU+
     if (currentQuestion) {
       const hasMatchingQuestion = (candidate) =>
         !!candidate &&
@@ -468,11 +466,18 @@ function AppPresentation({ roomId, role, initialQuizData }) {
         />
       );
     }
-
+    // Do not show stale leaderboard to a fresh player before the quiz has actually started.
+    if (hasLeaderboard && playerHasSeenActiveSlide) {
+      return (
+        <PlayerLeaderBoard
+          roomId={roomId}
+          players={leaderboardResults.results || leaderboardResults}
+          quiz={quiz}
+        />
+      );
+    }
     return <PlayerJoinPage roomId={roomId} quiz={quiz} />;
-  };
-
-  /* ----------- Final Conditional Rendering ----------- */
+  };  /* ----------- Final Conditional Rendering ----------- */
   if (role === "manager") {
     return (
       <PresentationErrorBoundary key={`manager-${roomId ?? "unknown"}`}>
