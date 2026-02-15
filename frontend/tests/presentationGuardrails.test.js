@@ -64,6 +64,13 @@ test("manager join next-action prefers server state over forcing question slide"
   assert.equal(src.includes("if (currentQuestion)"), true);
 });
 
+test("manager route waits for initial live sync before rendering join flow", () => {
+  const src = readFileSync(presentationEntryPath, "utf8");
+  assert.equal(src.includes("const [managerHasSyncedState, setManagerHasSyncedState]"), true);
+  assert.equal(src.includes("Waiting message=\"Syncing live session...\""), true);
+  assert.equal(src.includes("lastMessageType != null"), true);
+});
+
 test("player should not render leaderboard before seeing an active slide", () => {
   const src = readFileSync(presentationEntryPath, "utf8");
   assert.equal(src.includes("const [playerHasSeenActiveSlide, setPlayerHasSeenActiveSlide]"), true);

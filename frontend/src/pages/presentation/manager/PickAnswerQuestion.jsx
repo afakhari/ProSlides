@@ -52,7 +52,11 @@ export default function ManagerPickAnswerQuestion({
 }) {
   const { isConnected, sendNavigation, sendEnd, lastMessage, type8Message } =
     useWebSocket();
-  const { questionResults, modalLeaderboardResults } = useServerData();
+  const {
+    questionResults,
+    modalLeaderboardResults,
+    currentQuestion: liveCurrentQuestion,
+  } = useServerData();
 
   // Calculate current question number and details from currentSlide
   const currentQuestionIndex = currentSlide - 1;
@@ -62,32 +66,46 @@ export default function ManagerPickAnswerQuestion({
   const currentQuestion = normalizeQuestion(
     isRemoteReady ? quiz?.slides?.[currentSlide - 1] : null
   );
+  const liveQuestionMatchesSlide =
+    liveCurrentQuestion?.question_id != null &&
+    currentQuestion.question_id != null &&
+    String(liveCurrentQuestion.question_id) ===
+      String(currentQuestion.question_id);
+  const timerSourceQuestion =
+    liveQuestionMatchesSlide && typeof liveCurrentQuestion === "object"
+      ? {
+          ...currentQuestion,
+          ...liveCurrentQuestion,
+          // Keep normalized options from slide for stable rendering/mapping.
+          options: currentQuestion.options,
+        }
+      : currentQuestion;
   const timerSyncQuestion = useMemo(
     () => ({
-      question_id: currentQuestion.question_id,
-      run_id: currentQuestion.run_id,
-      question_time: currentQuestion.question_time,
-      remaining_time: currentQuestion.remaining_time,
-      remaining_seconds: currentQuestion.remaining_seconds,
-      time_left: currentQuestion.time_left,
-      time_left_seconds: currentQuestion.time_left_seconds,
-      started_at: currentQuestion.started_at,
-      start_time: currentQuestion.start_time,
-      question_started_at: currentQuestion.question_started_at,
-      question_start_time: currentQuestion.question_start_time,
+      question_id: timerSourceQuestion.question_id,
+      run_id: timerSourceQuestion.run_id,
+      question_time: timerSourceQuestion.question_time,
+      remaining_time: timerSourceQuestion.remaining_time,
+      remaining_seconds: timerSourceQuestion.remaining_seconds,
+      time_left: timerSourceQuestion.time_left,
+      time_left_seconds: timerSourceQuestion.time_left_seconds,
+      started_at: timerSourceQuestion.started_at,
+      start_time: timerSourceQuestion.start_time,
+      question_started_at: timerSourceQuestion.question_started_at,
+      question_start_time: timerSourceQuestion.question_start_time,
     }),
     [
-      currentQuestion.question_id,
-      currentQuestion.run_id,
-      currentQuestion.question_time,
-      currentQuestion.remaining_time,
-      currentQuestion.remaining_seconds,
-      currentQuestion.time_left,
-      currentQuestion.time_left_seconds,
-      currentQuestion.started_at,
-      currentQuestion.start_time,
-      currentQuestion.question_started_at,
-      currentQuestion.question_start_time,
+      timerSourceQuestion.question_id,
+      timerSourceQuestion.run_id,
+      timerSourceQuestion.question_time,
+      timerSourceQuestion.remaining_time,
+      timerSourceQuestion.remaining_seconds,
+      timerSourceQuestion.time_left,
+      timerSourceQuestion.time_left_seconds,
+      timerSourceQuestion.started_at,
+      timerSourceQuestion.start_time,
+      timerSourceQuestion.question_started_at,
+      timerSourceQuestion.question_start_time,
     ]
   );
   const questionOptions = currentQuestion.options;
@@ -374,13 +392,13 @@ export default function ManagerPickAnswerQuestion({
 
     debugLog(
       "[PickAnswerQuestion] Starting timer for",
-      currentQuestion.question_time,
+      timerSyncQuestion.question_time,
       "seconds"
     );
 
     const interval = setInterval(() => {
       const elapsed = (Date.now() - questionAnchorStartMs) / 1000;
-      const left = Math.max(0, currentQuestion.question_time - elapsed);
+      const left = Math.max(0, timerSyncQuestion.question_time - elapsed);
       setTimer(left);
       if (left <= 0) {
         clearInterval(interval);
@@ -397,7 +415,7 @@ export default function ManagerPickAnswerQuestion({
   }, [
     showResults,
     currentSlide,
-    currentQuestion.question_time,
+    timerSyncQuestion.question_time,
     questionAnchorStartMs,
     questionOptions,
     hasReceivedResults,
