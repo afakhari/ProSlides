@@ -327,9 +327,13 @@ function AppPresentation({ roomId, role, initialQuizData }) {
       return;
     }
 
+    if (isConnected) {
+      return;
+    }
+
     const timer = setTimeout(() => {
       setManagerHasSyncedState(true);
-    }, isConnected ? 1200 : 2200);
+    }, 2200);
 
     return () => clearTimeout(timer);
   }, [

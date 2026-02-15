@@ -36,7 +36,7 @@ const getTimerStateKey = (roomId, role) =>
     roomId || "unknown"
   )}`;
 
-const readTimerState = (roomId, role) => {
+const readTimerBucket = (roomId, role) => {
   try {
     const raw = localStorage.getItem(getTimerStateKey(roomId, role));
     if (!raw) return null;
@@ -48,9 +48,57 @@ const readTimerState = (roomId, role) => {
   }
 };
 
+const readTimerState = (roomId, role, identity) => {
+  const bucket = readTimerBucket(roomId, role);
+  if (!bucket) return null;
+
+  // v2: bucketed by identity.
+  if (bucket.entries && typeof bucket.entries === "object") {
+    const entry = bucket.entries[identity];
+    if (entry && typeof entry === "object") {
+      return entry;
+    }
+    return null;
+  }
+
+  // v1 legacy: single identity payload.
+  if (
+    bucket.identity === identity &&
+    Number.isFinite(Number(bucket.startMs))
+  ) {
+    return bucket;
+  }
+  return null;
+};
+
 const writeTimerState = (roomId, role, state) => {
   try {
-    localStorage.setItem(getTimerStateKey(roomId, role), JSON.stringify(state));
+    const bucket = readTimerBucket(roomId, role);
+    const entries =
+      bucket?.entries && typeof bucket.entries === "object"
+        ? { ...bucket.entries }
+        : {};
+
+    entries[state.identity] = state;
+
+    // Keep storage bounded.
+    const sorted = Object.values(entries).sort(
+      (a, b) => Number(b?.updatedAt ?? 0) - Number(a?.updatedAt ?? 0)
+    );
+    const top = sorted.slice(0, 20);
+    const nextEntries = {};
+    for (const item of top) {
+      if (!item?.identity) continue;
+      nextEntries[item.identity] = item;
+    }
+
+    localStorage.setItem(
+      getTimerStateKey(roomId, role),
+      JSON.stringify({
+        version: 2,
+        entries: nextEntries,
+      })
+    );
   } catch {
     // ignore storage errors
   }
@@ -88,7 +136,7 @@ export const resolveQuestionTimer = ({ question, roomId, role, nowMs = Date.now(
     remainingSeconds = Math.max(0, totalSeconds - elapsed);
     anchorStartMs = explicitStartMs;
   } else {
-    const persisted = readTimerState(roomId, role);
+    const persisted = readTimerState(roomId, role, identity);
     if (
       persisted &&
       persisted.identity === identity &&
