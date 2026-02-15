@@ -31,6 +31,12 @@ const parseTimestampMs = (value) => {
 const buildIdentity = (question) =>
   `${String(question?.question_id ?? "na")}:${String(question?.run_id ?? "na")}`;
 
+const buildQuestionOnlyIdentity = (question) =>
+  `${String(question?.question_id ?? "na")}:na`;
+
+const hasRunId = (question) =>
+  question?.run_id != null && String(question.run_id).trim() !== "";
+
 const getTimerStateKey = (roomId, role) =>
   `presentation_question_timer_v1:${String(role || "unknown")}:${String(
     roomId || "unknown"
@@ -71,6 +77,39 @@ const readTimerState = (roomId, role, identity) => {
   return null;
 };
 
+const readLatestTimerStateForQuestion = (roomId, role, questionId) => {
+  if (questionId == null) return null;
+  const bucket = readTimerBucket(roomId, role);
+  if (!bucket) return null;
+  const prefix = `${String(questionId)}:`;
+
+  if (bucket.entries && typeof bucket.entries === "object") {
+    let latest = null;
+    for (const [entryIdentity, entry] of Object.entries(bucket.entries)) {
+      if (!entryIdentity.startsWith(prefix)) continue;
+      if (!entry || typeof entry !== "object") continue;
+      if (!Number.isFinite(Number(entry.startMs))) continue;
+      if (
+        !latest ||
+        Number(entry.updatedAt ?? 0) > Number(latest.updatedAt ?? 0)
+      ) {
+        latest = entry;
+      }
+    }
+    if (latest) return latest;
+  }
+
+  if (
+    typeof bucket.identity === "string" &&
+    bucket.identity.startsWith(prefix) &&
+    Number.isFinite(Number(bucket.startMs))
+  ) {
+    return bucket;
+  }
+
+  return null;
+};
+
 const writeTimerState = (roomId, role, state) => {
   try {
     const bucket = readTimerBucket(roomId, role);
@@ -107,6 +146,8 @@ const writeTimerState = (roomId, role, state) => {
 export const resolveQuestionTimer = ({ question, roomId, role, nowMs = Date.now() }) => {
   const totalSeconds = Math.max(0, toNumber(question?.question_time) ?? 0);
   const identity = buildIdentity(question);
+  const questionOnlyIdentity = buildQuestionOnlyIdentity(question);
+  const runIdPresent = hasRunId(question);
 
   // Prefer explicit remaining-time fields from server when available.
   const explicitRemainingSeconds = pickFirstNumber(question, [
@@ -136,10 +177,13 @@ export const resolveQuestionTimer = ({ question, roomId, role, nowMs = Date.now(
     remainingSeconds = Math.max(0, totalSeconds - elapsed);
     anchorStartMs = explicitStartMs;
   } else {
-    const persisted = readTimerState(roomId, role, identity);
+    const persisted =
+      readTimerState(roomId, role, identity) ||
+      (!runIdPresent
+        ? readLatestTimerStateForQuestion(roomId, role, question?.question_id)
+        : null);
     if (
       persisted &&
-      persisted.identity === identity &&
       Number.isFinite(Number(persisted.startMs))
     ) {
       anchorStartMs = Number(persisted.startMs);
@@ -160,6 +204,14 @@ export const resolveQuestionTimer = ({ question, roomId, role, nowMs = Date.now(
     totalSeconds,
     updatedAt: nowMs,
   });
+  if (runIdPresent && questionOnlyIdentity !== identity) {
+    writeTimerState(roomId, role, {
+      identity: questionOnlyIdentity,
+      startMs: anchorStartMs,
+      totalSeconds,
+      updatedAt: nowMs,
+    });
+  }
 
   return {
     identity,

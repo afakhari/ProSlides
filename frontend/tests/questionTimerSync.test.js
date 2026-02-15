@@ -65,3 +65,38 @@ test("timer state is stored per identity and not clobbered by temporary identity
   assert.equal(resumed.remainingSeconds < 20, true);
   assert.equal(resumed.remainingSeconds > 0, true);
 });
+
+test("timer without run_id reuses latest question timer anchor", () => {
+  globalThis.localStorage = createStorage();
+
+  const roomId = "33";
+  const role = "manager";
+
+  const seeded = resolveQuestionTimer({
+    question: {
+      question_id: 22,
+      run_id: 900,
+      question_time: 30,
+      remaining_seconds: 24,
+    },
+    roomId,
+    role,
+    nowMs: 200000,
+  });
+  assert.equal(Math.round(seeded.remainingSeconds), 24);
+
+  // Simulate refresh payload that lost run_id but still references same question.
+  const resumedWithoutRunId = resolveQuestionTimer({
+    question: {
+      question_id: 22,
+      question_time: 30,
+    },
+    roomId,
+    role,
+    nowMs: 201000,
+  });
+
+  assert.equal(resumedWithoutRunId.identity, "22:na");
+  assert.equal(resumedWithoutRunId.remainingSeconds < 30, true);
+  assert.equal(resumedWithoutRunId.remainingSeconds > 0, true);
+});
