@@ -3,6 +3,14 @@ import React, { createContext, useState, useCallback, useRef } from "react";
 
 export const ServerDataContext = createContext(null);
 
+const debugLog = (...args) => {
+  if (import.meta.env.DEV) console.log(...args);
+};
+
+const debugWarn = (...args) => {
+  if (import.meta.env.DEV) console.warn(...args);
+};
+
 export const ServerDataProvider = ({ children }) => {
   const lastProcessedMessageRef = useRef({ signature: null, at: 0 });
   // State برای ذخیره داده‌های دریافتی از سرور
@@ -27,7 +35,7 @@ export const ServerDataProvider = ({ children }) => {
       lastMessageType: 7,
       lastUpdateTime: new Date().toISOString(),
     }));
-    console.log("[ServerData] Users updated:", users);
+    debugLog("[ServerData] Users updated:", users);
   }, []);
 
   // تابع برای به‌روزرسانی نتایج سوال (Type 8)
@@ -38,7 +46,7 @@ export const ServerDataProvider = ({ children }) => {
       lastMessageType: 8,
       lastUpdateTime: new Date().toISOString(),
     }));
-    console.log("[ServerData] Question results updated:", results);
+    debugLog("[ServerData] Question results updated:", results);
   }, []);
 
   // تابع برای به‌روزرسانی نتایج جزئی (Type 3)
@@ -49,7 +57,7 @@ export const ServerDataProvider = ({ children }) => {
       lastMessageType: 3,
       lastUpdateTime: new Date().toISOString(),
     }));
-    console.log(
+    debugLog(
       "[ServerData] Partial question results (type 3) updated:",
       results
     );
@@ -66,7 +74,7 @@ export const ServerDataProvider = ({ children }) => {
       lastMessageType: 1,
       lastUpdateTime: new Date().toISOString(),
     }));
-    console.log("[ServerData] Leaderboard updated:", results);
+    debugLog("[ServerData] Leaderboard updated:", results);
   }, []);
 
   // تابع برای به‌روزرسانی لیدربورد modal (Type 12)
@@ -77,7 +85,7 @@ export const ServerDataProvider = ({ children }) => {
       lastMessageType: 12,
       lastUpdateTime: new Date().toISOString(),
     }));
-    console.log("[ServerData] Modal Leaderboard (Type 12) updated:", results);
+    debugLog("[ServerData] Modal Leaderboard (Type 12) updated:", results);
   }, []);
 
   // تابع برای به‌روزرسانی سوال فعلی (Type 2)
@@ -93,7 +101,7 @@ export const ServerDataProvider = ({ children }) => {
       lastMessageType: 2,
       lastUpdateTime: new Date().toISOString(),
     }));
-    console.log("[ServerData] Current question updated:", question);
+    debugLog("[ServerData] Current question updated:", question);
   }, []);
 
   const updateCurrentContent = useCallback((content) => {
@@ -106,7 +114,7 @@ export const ServerDataProvider = ({ children }) => {
       lastMessageType: 2,
       lastUpdateTime: new Date().toISOString(),
     }));
-    console.log("[ServerData] Current content updated:", content);
+    debugLog("[ServerData] Current content updated:", content);
   }, []);
 
   // تابع کلی برای پردازش پیام از WebSocket
@@ -132,7 +140,7 @@ export const ServerDataProvider = ({ children }) => {
 
       // اگر پیام فقط results دارد و type ندارد، آن را به عنوان لیدربورد در نظر بگیر
       if (!message.type && message.results && Array.isArray(message.results)) {
-        console.log(
+        debugLog(
           "[ServerData] Leaderboard message received (no type field):",
           message.results.length,
           "players"
@@ -152,22 +160,22 @@ export const ServerDataProvider = ({ children }) => {
       switch (message.type) {
         case 1: // Leaderboard Results
         case 11: // Leaderboard Results (Type 11)
-          console.log("[ServerData] Type 1/11 received, message:", message);
+          debugLog("[ServerData] Type 1/11 received, message:", message);
           if (message.results) {
             updateLeaderboard(message.results);
           } else {
-            console.warn(
+            debugWarn(
               "[ServerData] Type 1/11 received but no results field"
             );
           }
           break;
 
         case 12: // Modal Leaderboard Results
-          console.log("[ServerData] Type 12 received, message:", message);
+          debugLog("[ServerData] Type 12 received, message:", message);
           if (message.results) {
             updateModalLeaderboard(message.results);
           } else {
-            console.warn("[ServerData] Type 12 received but no results field");
+            debugWarn("[ServerData] Type 12 received but no results field");
           }
           break;
 
@@ -199,7 +207,7 @@ export const ServerDataProvider = ({ children }) => {
           break;
 
         default:
-          console.log("[ServerData] Unhandled message type:", message.type);
+          debugLog("[ServerData] Unhandled message type:", message.type);
       }
     },
     [
@@ -227,7 +235,7 @@ export const ServerDataProvider = ({ children }) => {
       lastMessageType: null,
       lastUpdateTime: null,
     });
-    console.log("[ServerData] Data cleared");
+    debugLog("[ServerData] Data cleared");
   }, []);
 
   const value = {
