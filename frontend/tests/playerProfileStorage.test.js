@@ -47,7 +47,7 @@ test("saveStoredProfile persists normalized room-scoped profile", () => {
 });
 
 test("readStoredProfile returns null for different room", () => {
-  saveStoredProfile({ room_id: 33, name: "ali", avatar: "🦊", user_id: "u1" });
+  saveStoredProfile({ room_id: 33, name: "ali", avatar: "A", user_id: "u1" });
   assert.equal(readStoredProfile(44), null);
 });
 
@@ -59,32 +59,46 @@ test("readStoredProfile returns null for malformed payload", () => {
 test("createJoinMessage includes persisted user_id only when present", () => {
   const withId = createJoinMessage({
     name: "ali",
-    avatar: "🦊",
+    avatar: "A",
     persistedUserId: "u-1",
   });
   assert.deepEqual(withId, {
     type: 6,
     name: "ali",
-    character: "🦊",
+    character: "A",
     user_id: "u-1",
   });
 
   const withoutId = createJoinMessage({
     name: "ali",
-    avatar: "🦊",
+    avatar: "A",
     persistedUserId: "",
   });
   assert.deepEqual(withoutId, {
     type: 6,
     name: "ali",
-    character: "🦊",
+    character: "A",
   });
 });
 
 test("getPersistedUserIdForRoom returns id only for matching room", () => {
-  saveStoredProfile({ room_id: 33, name: "ali", avatar: "🦊", user_id: "u-33" });
+  saveStoredProfile({ room_id: 33, name: "ali", avatar: "A", user_id: "u-33" });
   assert.equal(getPersistedUserIdForRoom(33), "u-33");
   assert.equal(getPersistedUserIdForRoom(44), null);
+});
+
+test("saveStoredProfile keeps existing user_id when update payload omits it", () => {
+  saveStoredProfile({ room_id: 33, name: "ali", avatar: "A", user_id: "u-33" });
+  saveStoredProfile({ room_id: 33, name: "ali2", avatar: "B" });
+  assert.equal(getPersistedUserIdForRoom(33), "u-33");
+});
+
+test("getPersistedUserIdForRoom falls back to legacy storage for same room profile", () => {
+  saveStoredProfile({ room_id: 33, name: "ali", avatar: "A", user_id: "u-33" });
+  const raw = JSON.parse(globalThis.localStorage.getItem(PLAYER_PROFILE_KEY));
+  raw.user_id = null;
+  globalThis.localStorage.setItem(PLAYER_PROFILE_KEY, JSON.stringify(raw));
+  assert.equal(getPersistedUserIdForRoom(33), "u-33");
 });
 
 test("createClientUserId creates non-empty id", () => {

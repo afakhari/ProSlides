@@ -57,6 +57,8 @@ test("manager join page clears stale state and waits for sync before start", () 
   assert.equal(src.includes("clearData();"), false);
   assert.equal(src.includes("const [hasSyncedState, setHasSyncedState]"), true);
   assert.equal(src.includes("if (!hasSyncedState)"), true);
+  assert.equal(src.includes("if (isConnected) return;"), true);
+  assert.equal(src.includes("Syncing live session..."), true);
 });
 
 test("manager join next-action prefers server state over forcing question slide", () => {
@@ -79,7 +81,7 @@ test("player should not render leaderboard before seeing an active slide", () =>
   assert.equal(src.includes("if (currentQuestion || currentContent)"), true);
   assert.equal(src.includes("if (hasLeaderboard && playerHasSeenActiveSlide)"), true);
   assert.equal(src.includes("sessionStorage.setItem(playerActiveSlideSeenKey, \"1\")"), true);
-  assert.equal(src.includes("requireProfileSelection={shouldPromptPlayerProfileSelection}"), true);
+  assert.equal(src.includes("return <PlayerJoinPage roomId={roomId} quiz={quiz} />;"), true);
 });
 
 test("access-code route uses unified PresentationEntry resolver", () => {
@@ -113,9 +115,9 @@ test("player and manager question timers use persisted timer sync", () => {
   assert.equal(timerSyncSrc.includes("const looksStale ="), true);
 });
 
-test("player join supports forcing profile selection for a new run", () => {
+test("player join allows manual profile reset for a new run", () => {
   const src = readFileSync(playerJoinPath, "utf8");
-  assert.equal(src.includes("requireProfileSelection = false"), true);
-  assert.equal(src.includes("Boolean(restoredProfile) && !requireProfileSelection"), true);
-  assert.equal(src.includes("setJoined(!requireProfileSelection);"), true);
+  assert.equal(src.includes("const [isConnecting, setIsConnecting] = useState(false);"), true);
+  assert.equal(src.includes("const handleChangeProfile = () =>"), true);
+  assert.equal(src.includes("localStorage.removeItem(\"presentation_player_profile_v1\")"), true);
 });

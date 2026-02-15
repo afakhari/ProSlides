@@ -35,11 +35,18 @@ export const readStoredProfile = (roomId) => {
 };
 
 export const saveStoredProfile = ({ room_id, name, avatar, user_id }) => {
+  const roomIdStr = String(room_id || "");
+  const existing = readStoredProfile(roomIdStr);
+  const normalizedUserId =
+    user_id != null && String(user_id).trim() !== ""
+      ? String(user_id)
+      : existing?.user_id || null;
+
   const profile = {
-    room_id: String(room_id || ""),
+    room_id: roomIdStr,
     name: String(name || "").trim(),
     avatar: avatar || DEFAULT_AVATAR,
-    user_id: user_id ? String(user_id) : null,
+    user_id: normalizedUserId,
   };
 
   localStorage.setItem(PLAYER_PROFILE_KEY, JSON.stringify(profile));
@@ -50,8 +57,14 @@ export const saveStoredProfile = ({ room_id, name, avatar, user_id }) => {
   }
 };
 
-export const getPersistedUserIdForRoom = (roomId) =>
-  readStoredProfile(roomId)?.user_id || null;
+export const getPersistedUserIdForRoom = (roomId) => {
+  const profile = readStoredProfile(roomId);
+  if (!profile) return null;
+  if (profile.user_id) return profile.user_id;
+
+  const legacyUserId = localStorage.getItem("user_id");
+  return legacyUserId ? String(legacyUserId) : null;
+};
 
 export const createJoinMessage = ({ name, avatar, persistedUserId }) => ({
   type: 6,
