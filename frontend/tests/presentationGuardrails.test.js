@@ -107,11 +107,11 @@ test("manager leaderboard state sync updates current slide index for leaderboard
   assert.equal(src.includes("setCurrentSlide(nextLeaderboardIdx + 1);"), true);
 });
 
-test("manager navigation does not optimistically increment slide index", () => {
+test("manager navigation optimistically increments for leaderboard next slide", () => {
   const src = readFileSync(presentationEntryPath, "utf8");
   assert.equal(
     src.includes("setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));"),
-    false
+    true
   );
   assert.equal(src.includes("const nextSlide = quiz.slides[currentSlide];"), true);
   assert.equal(src.includes("if (isLeaderboardSlide(nextSlide))"), true);

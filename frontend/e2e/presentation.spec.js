@@ -334,7 +334,7 @@ test("manager leaderboard slide number stays aligned with leaderboard slide", as
   await expect(page.getByText(/\b2\s*\/\s*3\b/)).toBeVisible();
 });
 
-test("manager slide number advances only after server confirms next state", async ({ page }) => {
+test("manager slide number increments immediately on next when next slide is leaderboard", async ({ page }) => {
   await mockQuizExport(page);
   await installMockWebSocket(page, {
     manager: {
@@ -351,11 +351,11 @@ test("manager slide number advances only after server confirms next state", asyn
 
   await page.getByRole("button", { name: /next|بعدی|اسلاید بعدی/i }).click();
 
-  // Before server emits leaderboard, UI must still show slide 1/3.
+  // Before server emits leaderboard, UI should already show 2/3.
   await page.waitForTimeout(250);
-  await expect(page.getByText(/\b1\s*\/\s*3\b/)).toBeVisible();
+  await expect(page.getByText(/\b2\s*\/\s*3\b/)).toBeVisible();
 
-  // After server emits leaderboard, slide number should move to 2/3.
+  // After server emits leaderboard, slide number should remain 2/3 (no double jump).
   await expect(page.getByText("Leaderboard")).toBeVisible();
   await expect(page.getByText(/\b2\s*\/\s*3\b/)).toBeVisible();
 });

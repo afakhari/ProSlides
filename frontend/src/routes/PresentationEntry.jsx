@@ -546,11 +546,12 @@ function AppPresentation({ roomId, role, initialQuizData }) {
       }
       setData({ type: "ManagerPickAnswerQuestion" });
     } else {
-      // Keep slide numbering server-driven and avoid optimistic index jumps.
+      // For question -> leaderboard, update index immediately for better presenter UX.
       const nextSlide = quiz.slides[currentSlide];
       if (!nextSlide) return;
       if (isLeaderboardSlide(nextSlide)) {
         setData({ type: "ManagerLeaderBoard" });
+        setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
       } else if (isContentSlide(nextSlide)) {
         setData({ type: "ManagerContentSlide" });
       } else if (isQuestionSlide(nextSlide)) {
