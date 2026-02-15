@@ -2,9 +2,10 @@ import React from "react";
 import TopBar from "../../../components/TopBar";
 
 export default function PlayerContentSlide({ roomId, quiz, content }) {
-  const title = content?.title || "";
-  const text = content?.content_text || "";
-  const image = content?.content_image_url || "";
+  const title = content?.title || content?.content_title || "";
+  const text = content?.content_text || content?.text || "";
+  const image =
+    content?.content_image_url || content?.image_url || content?.image || "";
 
   return (
     <div className="min-h-screen w-full" style={{ background: quiz?.background?.color || "#0f172a" }}>

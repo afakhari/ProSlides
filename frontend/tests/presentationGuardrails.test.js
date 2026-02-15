@@ -21,6 +21,11 @@ const managerQuestionPath =
   "frontend/src/pages/presentation/manager/PickAnswerQuestion.jsx";
 const timerSyncPath =
   "frontend/src/pages/presentation/utils/questionTimerSync.js";
+const serverDataPath = "frontend/src/contexts/ServerDataContext.jsx";
+const managerContentPath =
+  "frontend/src/pages/presentation/manager/ContentSlide.jsx";
+const playerContentPath =
+  "frontend/src/pages/presentation/player/ContentSlide.jsx";
 
 test("manager question page waits for server results and has no mock-vote fallback", () => {
   const src = readFileSync(pickAnswerPath, "utf8");
@@ -94,16 +99,23 @@ test("manager leaderboard state sync updates current slide index for leaderboard
   assert.equal(src.includes("let nextLeaderboardIdx = -1;"), true);
   assert.equal(src.includes("const immediateIdx = lastManagerQuestionSlideIndex + 1;"), true);
   assert.equal(src.includes("setLastManagerQuestionSlideIndex(idx);"), true);
+  assert.equal(src.includes("const isLeaderboardSlide = (slide) =>"), true);
+  assert.equal(src.includes("return slide.slide_type === 2 && !hasContentPayload(slide);"), true);
+  assert.equal(src.includes("const questionOrder ="), true);
+  assert.equal(src.includes("slide.order === questionOrder"), true);
+  assert.equal(src.includes("idx > lastManagerQuestionSlideIndex && isLeaderboardSlide(slide)"), true);
   assert.equal(src.includes("setCurrentSlide(nextLeaderboardIdx + 1);"), true);
 });
 
-test("manager navigation does not optimistically increment slide index", () => {
+test("manager navigation optimistically increments for leaderboard next slide", () => {
   const src = readFileSync(presentationEntryPath, "utf8");
   assert.equal(
     src.includes("setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));"),
-    false
+    true
   );
   assert.equal(src.includes("const nextSlide = quiz.slides[currentSlide];"), true);
+  assert.equal(src.includes("if (isLeaderboardSlide(nextSlide))"), true);
+  assert.equal(src.includes("} else if (isContentSlide(nextSlide))"), true);
 });
 
 test("access-code route uses unified PresentationEntry resolver", () => {
@@ -148,4 +160,28 @@ test("manager leaderboard resolves previous question and prefers question-specif
   const src = readFileSync(managerLeaderboardPath, "utf8");
   assert.equal(src.includes("const questionSlideIndex = currentSlide - 2;"), true);
   assert.equal(src.includes("let dataToUse = leaderboardForThisQuestion || leaderboardResults;"), true);
+});
+
+test("quiz export mapping keeps order to align runtime leaderboard with question order", () => {
+  const src = readFileSync(presentationEntryPath, "utf8");
+  assert.equal(src.includes("order: slide.order ?? q.order ?? null"), true);
+  assert.equal(src.includes("order: slide.order ?? null"), true);
+});
+
+test("server data routes type 2 content payloads into currentContent", () => {
+  const src = readFileSync(serverDataPath, "utf8");
+  assert.equal(src.includes("const isContentPayloadMessage = (message) =>"), true);
+  assert.equal(src.includes("if ((!message.type || message.type === 2) && isContentPayloadMessage(message))"), true);
+  assert.equal(src.includes("updateCurrentContent(normalizeContentPayload(message));"), true);
+  assert.equal(src.includes("if (isContentPayloadMessage(message)) {"), true);
+});
+
+test("manager and player content slides can render websocket content payload fields", () => {
+  const managerSrc = readFileSync(managerContentPath, "utf8");
+  const playerSrc = readFileSync(playerContentPath, "utf8");
+  assert.equal(managerSrc.includes("const source = content && typeof content === \"object\" ? content : slide;"), true);
+  assert.equal(managerSrc.includes("source.content_text || source.text"), true);
+  assert.equal(managerSrc.includes("source.content_image_url || source.image_url || source.image"), true);
+  assert.equal(playerSrc.includes("content?.content_text || content?.text"), true);
+  assert.equal(playerSrc.includes("content?.content_image_url || content?.image_url || content?.image"), true);
 });

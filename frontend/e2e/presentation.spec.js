@@ -11,6 +11,7 @@ const quizExportPayload = {
     {
       slide_id: 101,
       slide_type: 1,
+      order: 1,
       show_leaderboard_after: true,
       leaderboard: [],
       question: {
@@ -34,14 +35,93 @@ const quizExportPayload = {
     {
       slide_id: 102,
       slide_type: 3,
+      order: 1,
       title: "Leaderboard",
       leaderboard: [],
     },
     {
       slide_id: 103,
       slide_type: 2,
+      order: 2,
       title: "Content",
       content_text: "Content slide",
+      content_image_url: "",
+      leaderboard: [],
+    },
+  ],
+};
+
+const quizExportPayloadLeaderboardAsType2 = {
+  quiz_id: 33,
+  title: "E2E Quiz Type2 Leaderboard",
+  access_code: "E2E33",
+  background: { color: "#1e1e2e", image: "", text_color: "#ffffff" },
+  music_url: "",
+  text_color: "#ffffff",
+  slides: [
+    {
+      slide_id: 201,
+      slide_type: 1,
+      order: 1,
+      show_leaderboard_after: true,
+      leaderboard: [],
+      question: {
+        question_id: 201,
+        text: "Q1",
+        title: "Q1",
+        time_limit: 30,
+        max_point: 100,
+        min_point: 10,
+        access_code: "E2E33",
+        question_type: "single",
+        image_url: "",
+        faster_answers_more_points: true,
+        partial_scoring: false,
+        options: [
+          { option_id: 11, text: "A", is_correct: true, votes: 0, image_url: "", order: 1 },
+          { option_id: 12, text: "B", is_correct: false, votes: 0, image_url: "", order: 2 },
+        ],
+      },
+    },
+    {
+      slide_id: 202,
+      slide_type: 2,
+      order: 1,
+      title: "",
+      content_text: "",
+      content_image_url: "",
+      leaderboard: [],
+    },
+    {
+      slide_id: 203,
+      slide_type: 1,
+      order: 2,
+      show_leaderboard_after: true,
+      leaderboard: [],
+      question: {
+        question_id: 203,
+        text: "Q2",
+        title: "Q2",
+        time_limit: 30,
+        max_point: 100,
+        min_point: 10,
+        access_code: "E2E33",
+        question_type: "single",
+        image_url: "",
+        faster_answers_more_points: true,
+        partial_scoring: false,
+        options: [
+          { option_id: 21, text: "A", is_correct: true, votes: 0, image_url: "", order: 1 },
+          { option_id: 22, text: "B", is_correct: false, votes: 0, image_url: "", order: 2 },
+        ],
+      },
+    },
+    {
+      slide_id: 204,
+      slide_type: 2,
+      order: 2,
+      title: "",
+      content_text: "",
       content_image_url: "",
       leaderboard: [],
     },
@@ -62,6 +142,21 @@ const questionMessage = {
   ],
 };
 
+const question2Message = {
+  ...questionMessage,
+  question_id: 203,
+  question_text: "Q2",
+};
+
+const contentMessageType2 = {
+  type: 2,
+  slide_type: 2,
+  slide_id: 103,
+  title: "Content Live",
+  content_text: "Runtime content from WS",
+  content_image_url: "",
+};
+
 const leaderboardMessage = {
   type: 1,
   results: [
@@ -69,12 +164,12 @@ const leaderboardMessage = {
   ],
 };
 
-async function mockQuizExport(page) {
+async function mockQuizExport(page, payload = quizExportPayload) {
   await page.route("**/quizzes/33/export/**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(quizExportPayload),
+      body: JSON.stringify(payload),
     });
   });
 }
@@ -112,6 +207,7 @@ async function installMockWebSocket(page, scenario) {
         const nextCount = Number(localStorage.getItem(counterKey) || "0") + 1;
         localStorage.setItem(counterKey, String(nextCount));
         this.connectionIndex = nextCount;
+        this.navigationStepByAction = {};
 
         setTimeout(() => {
           this.readyState = MockWebSocket.OPEN;
@@ -152,11 +248,13 @@ async function installMockWebSocket(page, scenario) {
         const byRole = scenario[this.role] || {};
         const nav = byRole.navigation || {};
         const navQueue = nav[msg.action] || [];
-        for (const item of navQueue) {
-          const delay = Number(item?.delay ?? 0);
-          const payload = item?.data;
-          setTimeout(() => this._emitMessage(payload), delay);
-        }
+        const currentStep = Number(this.navigationStepByAction[msg.action] || 0);
+        const item = navQueue[currentStep];
+        if (!item) return;
+        this.navigationStepByAction[msg.action] = currentStep + 1;
+        const delay = Number(item?.delay ?? 0);
+        const payload = item?.data;
+        setTimeout(() => this._emitMessage(payload), delay);
       }
 
       close() {
@@ -236,7 +334,7 @@ test("manager leaderboard slide number stays aligned with leaderboard slide", as
   await expect(page.getByText(/\b2\s*\/\s*3\b/)).toBeVisible();
 });
 
-test("manager slide number advances only after server confirms next state", async ({ page }) => {
+test("manager slide number increments immediately on next when next slide is leaderboard", async ({ page }) => {
   await mockQuizExport(page);
   await installMockWebSocket(page, {
     manager: {
@@ -253,13 +351,81 @@ test("manager slide number advances only after server confirms next state", asyn
 
   await page.getByRole("button", { name: /next|بعدی|اسلاید بعدی/i }).click();
 
-  // Before server emits leaderboard, UI must still show slide 1/3.
+  // Before server emits leaderboard, UI should already show 2/3.
   await page.waitForTimeout(250);
-  await expect(page.getByText(/\b1\s*\/\s*3\b/)).toBeVisible();
+  await expect(page.getByText(/\b2\s*\/\s*3\b/)).toBeVisible();
 
-  // After server emits leaderboard, slide number should move to 2/3.
+  // After server emits leaderboard, slide number should remain 2/3 (no double jump).
   await expect(page.getByText("Leaderboard")).toBeVisible();
   await expect(page.getByText(/\b2\s*\/\s*3\b/)).toBeVisible();
+});
+
+test("manager slide number remains correct when leaderboard slides are encoded as type 2", async ({ page }) => {
+  await mockQuizExport(page, quizExportPayloadLeaderboardAsType2);
+  await installMockWebSocket(page, {
+    manager: {
+      first: [
+        { delay: 100, data: { ...questionMessage, question_id: 201, question_text: "Q1" } },
+        { delay: 650, data: leaderboardMessage },
+      ],
+      navigation: {
+        next: [
+          { delay: 350, data: question2Message },
+          { delay: 350, data: leaderboardMessage },
+        ],
+      },
+    },
+  });
+
+  await page.goto("/manager/presentation/33");
+
+  await expect(page.getByText("Leaderboard")).toBeVisible();
+  await expect(page.getByText(/\b2\s*\/\s*4\b/)).toBeVisible();
+
+  await page.getByRole("button", { name: /next|بعدی|اسلاید بعدی/i }).click();
+  await expect(page.getByText("Q2")).toBeVisible();
+  await expect(page.getByText(/\b3\s*\/\s*4\b/)).toBeVisible();
+
+  await page.getByRole("button", { name: /next|بعدی|اسلاید بعدی/i }).click();
+  await expect(page.getByText("Leaderboard")).toBeVisible();
+  await expect(page.getByText(/\b4\s*\/\s*4\b/)).toBeVisible();
+});
+
+test("manager and player render content slide when websocket sends type 2 content payload", async ({ page }) => {
+  await mockQuizExport(page);
+  await installMockWebSocket(page, {
+    manager: {
+      first: [{ delay: 80, data: contentMessageType2 }],
+    },
+  });
+
+  await page.goto("/manager/presentation/33");
+  await expect(page.getByText("Content Live")).toBeVisible();
+  await expect(page.getByText("Runtime content from WS")).toBeVisible();
+  await expect(page.getByText(/\b3\s*\/\s*3\b/)).toBeVisible();
+
+  await installMockWebSocket(page, {
+    player: {
+      first: [{ delay: 80, data: contentMessageType2 }],
+    },
+  });
+
+  await page.addInitScript(() => {
+    const profile = {
+      room_id: "33",
+      name: "content-player",
+      avatar: "A",
+      user_id: "content-player-33",
+    };
+    localStorage.setItem("presentation_player_profile_v1", JSON.stringify(profile));
+    localStorage.setItem("player_name", profile.name);
+    localStorage.setItem("character", profile.avatar);
+    localStorage.setItem("user_id", profile.user_id);
+  });
+
+  await page.goto("/player/presentation/33");
+  await expect(page.getByText("Content Live")).toBeVisible();
+  await expect(page.getByText("Runtime content from WS")).toBeVisible();
 });
 
 test("player refresh during question stays on question instead of join page", async ({ page }) => {
