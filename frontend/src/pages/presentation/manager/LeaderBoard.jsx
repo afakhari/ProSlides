@@ -33,8 +33,8 @@ function ManagerLeaderBoard({
 
   // Get the question ID from the previous slide (leaderboard usually comes after a question)
   // NOTE: slide indices are 0-based, but currentSlide appears to be 1-based
-  // When on a leaderboard slide, the question before it is always at currentSlide - 1
-  const questionSlideIndex = currentSlide - 1;
+  // When on a leaderboard slide, the question before it is at currentSlide - 2 (0-based).
+  const questionSlideIndex = currentSlide - 2;
   const questionSlide =
     questionSlideIndex >= 0 && quiz?.slides
       ? quiz.slides[questionSlideIndex]
@@ -48,7 +48,7 @@ function ManagerLeaderBoard({
       : null;
   // Ù‡Ù…ÛŒØ´Ù‡ Ø¢Ø®Ø±ÛŒÙ† Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯ Ù…Ø¹ØªØ¨Ø± Ø±Ø§ Ù†Ú¯Ù‡ Ø¯Ø§Ø± Ùˆ Ø§Ú¯Ø± Ø¯Ø§Ø¯Ù‡ Ø¬Ø¯ÛŒØ¯ Ù†ÛŒØ§Ù…Ø¯ØŒ Ù¾Ø§Ú© Ù†Ú©Ù†
   // Ø§Ú¯Ø± Ù‡ÛŒÚ† Ø¯Ø§Ø¯Ù‡â€ŒØ§ÛŒ Ø¨Ø±Ø§ÛŒ Ø§Ø³Ù„Ø§ÛŒØ¯ ÙØ¹Ù„ÛŒ Ù†Ø¨ÙˆØ¯ØŒ Ø¢Ø®Ø±ÛŒÙ† Ù„ÛŒØ¯Ø±Ø¨Ø±Ø¯ Ù…Ø¹ØªØ¨Ø± Ø±Ø§ Ù†Ù…Ø§ÛŒØ´ Ø¨Ø¯Ù‡
-  let dataToUse = leaderboardResults || leaderboardForThisQuestion;
+  let dataToUse = leaderboardForThisQuestion || leaderboardResults;
 
   // Ø§Ú¯Ø± Ø¯Ø§Ø¯Ù‡ ÙØ¹Ù„ÛŒ Ø®Ø§Ù„ÛŒ Ø§Ø³ØªØŒ Ø§Ø² Ø¢Ø®Ø±ÛŒÙ† Ø¯Ø§Ø¯Ù‡ Ù…Ø¹ØªØ¨Ø± Ø§Ø³ØªÙØ§Ø¯Ù‡ Ú©Ù†
   if (

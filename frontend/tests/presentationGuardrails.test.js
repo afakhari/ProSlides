@@ -92,8 +92,18 @@ test("player should not render leaderboard before seeing an active slide", () =>
 test("manager leaderboard state sync updates current slide index for leaderboard slides", () => {
   const src = readFileSync(presentationEntryPath, "utf8");
   assert.equal(src.includes("let nextLeaderboardIdx = -1;"), true);
-  assert.equal(src.includes("nextLeaderboardIdx = currentIdx + 1;"), true);
+  assert.equal(src.includes("const immediateIdx = lastManagerQuestionSlideIndex + 1;"), true);
+  assert.equal(src.includes("setLastManagerQuestionSlideIndex(idx);"), true);
   assert.equal(src.includes("setCurrentSlide(nextLeaderboardIdx + 1);"), true);
+});
+
+test("manager navigation does not optimistically increment slide index", () => {
+  const src = readFileSync(presentationEntryPath, "utf8");
+  assert.equal(
+    src.includes("setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));"),
+    false
+  );
+  assert.equal(src.includes("const nextSlide = quiz.slides[currentSlide];"), true);
 });
 
 test("access-code route uses unified PresentationEntry resolver", () => {
@@ -132,4 +142,10 @@ test("player join allows manual profile reset for a new run", () => {
   assert.equal(src.includes("const [isConnecting, setIsConnecting] = useState(false);"), true);
   assert.equal(src.includes("const handleChangeProfile = () =>"), true);
   assert.equal(src.includes("localStorage.removeItem(\"presentation_player_profile_v1\")"), true);
+});
+
+test("manager leaderboard resolves previous question and prefers question-specific data", () => {
+  const src = readFileSync(managerLeaderboardPath, "utf8");
+  assert.equal(src.includes("const questionSlideIndex = currentSlide - 2;"), true);
+  assert.equal(src.includes("let dataToUse = leaderboardForThisQuestion || leaderboardResults;"), true);
 });

@@ -62,6 +62,13 @@ const questionMessage = {
   ],
 };
 
+const leaderboardMessage = {
+  type: 1,
+  results: [
+    { user_id: "u1", name: "ali", character: "A", total_points: 50, new_points: 50, rank: 1 },
+  ],
+};
+
 async function mockQuizExport(page) {
   await page.route("**/quizzes/33/export/**", async (route) => {
     await route.fulfill({
@@ -225,6 +232,32 @@ test("manager leaderboard slide number stays aligned with leaderboard slide", as
   });
 
   await page.goto("/manager/presentation/33");
+  await expect(page.getByText("Leaderboard")).toBeVisible();
+  await expect(page.getByText(/\b2\s*\/\s*3\b/)).toBeVisible();
+});
+
+test("manager slide number advances only after server confirms next state", async ({ page }) => {
+  await mockQuizExport(page);
+  await installMockWebSocket(page, {
+    manager: {
+      first: [{ delay: 100, data: questionMessage }],
+      navigation: {
+        next: [{ delay: 900, data: leaderboardMessage }],
+      },
+    },
+  });
+
+  await page.goto("/manager/presentation/33");
+  await expect(page.getByText("What is 2 + 2?")).toBeVisible();
+  await expect(page.getByText(/\b1\s*\/\s*3\b/)).toBeVisible();
+
+  await page.getByRole("button", { name: /next|بعدی|اسلاید بعدی/i }).click();
+
+  // Before server emits leaderboard, UI must still show slide 1/3.
+  await page.waitForTimeout(250);
+  await expect(page.getByText(/\b1\s*\/\s*3\b/)).toBeVisible();
+
+  // After server emits leaderboard, slide number should move to 2/3.
   await expect(page.getByText("Leaderboard")).toBeVisible();
   await expect(page.getByText(/\b2\s*\/\s*3\b/)).toBeVisible();
 });
