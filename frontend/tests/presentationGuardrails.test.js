@@ -10,6 +10,11 @@ const managerJoinPath =
   "frontend/src/pages/presentation/manager/JoinPage.jsx";
 const presentationEntryPath =
   "frontend/src/routes/PresentationEntry.jsx";
+const appPath = "frontend/src/App.jsx";
+const playerLeaderboardPath =
+  "frontend/src/pages/presentation/player/LeaderBoard.jsx";
+const playerQuestionPath =
+  "frontend/src/pages/presentation/player/PickAnswerQuestion.jsx";
 
 test("manager question page waits for server results and has no mock-vote fallback", () => {
   const src = readFileSync(pickAnswerPath, "utf8");
@@ -41,9 +46,44 @@ test("manager join page avoids resending start when session is already active", 
   assert.equal(src.includes("if (sessionInProgress)"), true);
 });
 
+test("manager join page clears stale state and waits for sync before start", () => {
+  const src = readFileSync(managerJoinPath, "utf8");
+  assert.equal(src.includes("clearData();"), true);
+  assert.equal(src.includes("const [hasSyncedState, setHasSyncedState]"), true);
+  assert.equal(src.includes("if (!hasSyncedState)"), true);
+});
+
 test("manager join next-action prefers server state over forcing question slide", () => {
   const src = readFileSync(presentationEntryPath, "utf8");
   assert.equal(src.includes("if (hasLeaderboardEntries(leaderboardResults))"), true);
   assert.equal(src.includes("if (currentContent)"), true);
   assert.equal(src.includes("if (currentQuestion)"), true);
+});
+
+test("player should not render leaderboard before seeing an active slide", () => {
+  const src = readFileSync(presentationEntryPath, "utf8");
+  assert.equal(src.includes("const [playerHasSeenActiveSlide, setPlayerHasSeenActiveSlide]"), true);
+  assert.equal(src.includes("if (currentQuestion || currentContent)"), true);
+  assert.equal(src.includes("if (hasLeaderboard && playerHasSeenActiveSlide)"), true);
+});
+
+test("access-code route uses unified PresentationEntry resolver", () => {
+  const src = readFileSync(appPath, "utf8");
+  assert.equal(
+    src.includes('<Route path="/:accessCode" element={<PresentationEntry mode="accessCode" />} />'),
+    true
+  );
+});
+
+test("player leaderboard guards maxScore for empty players list", () => {
+  const src = readFileSync(playerLeaderboardPath, "utf8");
+  assert.equal(src.includes("validPlayers.length > 0"), true);
+  assert.equal(src.includes("if (maxScore <= minScore) return val > 0 ? 100 : 0;"), true);
+});
+
+test("player answer queue is room-scoped and pruned by current question", () => {
+  const src = readFileSync(playerQuestionPath, "utf8");
+  assert.equal(src.includes("presentation_answer_queue_v2:"), true);
+  assert.equal(src.includes("pruneQueuedAnswersForCurrentQuestion"), true);
+  assert.equal(src.includes("localStorage.removeItem(LEGACY_ANSWER_QUEUE_KEY)"), true);
 });

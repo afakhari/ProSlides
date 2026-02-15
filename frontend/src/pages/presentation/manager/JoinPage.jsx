@@ -47,6 +47,7 @@ export default function ManagerJoinPage({
     currentQuestion,
     currentContent,
     leaderboardResults,
+    clearData,
   } = useServerData();
 
   const [page, setPage] = useState("lobby"); // 'lobby' | 'quiz'
@@ -59,6 +60,7 @@ export default function ManagerJoinPage({
   const [centerOffset, setCenterOffset] = useState({ x: 0, y: 0 });
   const [hiddenUsers, setHiddenUsers] = useState(new Set()); // Track which users have been clicked
   const [showQRModal, setShowQRModal] = useState(false); // State for QR modal
+  const [hasSyncedState, setHasSyncedState] = useState(false);
   const [_navigationData, setNavigationData] = useState(
     createNextPrevious(5, null, null)
   ); // State for tracking navigation (to be sent to server)
@@ -78,6 +80,26 @@ export default function ManagerJoinPage({
     !!currentQuestion ||
     !!currentContent ||
     hasLeaderboard;
+
+  useEffect(() => {
+    // Reset stale presentation data from any previous round before syncing live state.
+    clearData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!hasSyncedState && lastMessage) {
+      setHasSyncedState(true);
+    }
+  }, [lastMessage, hasSyncedState]);
+
+  useEffect(() => {
+    if (hasSyncedState) return;
+    const timer = setTimeout(() => {
+      setHasSyncedState(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [hasSyncedState]);
 
   // List of 10 vibrant colors for user names
   const colorList = UserColorList;
@@ -128,6 +150,10 @@ export default function ManagerJoinPage({
     if (sessionInProgress) {
       setStartError("Session is already in progress. Resuming current slide...");
       onNext?.();
+      return;
+    }
+    if (!hasSyncedState) {
+      setStartError("Syncing live session state. Please wait a moment.");
       return;
     }
     if (!isConnected) {
@@ -407,9 +433,13 @@ export default function ManagerJoinPage({
                   <button
                     className="inline-flex items-center gap-1.5 bg-linear-to-br from-purple-800 to-purple-600 text-white px-8! py-3! rounded-lg border-none cursor-pointer font-semibold text-base shadow-lg shadow-purple-600/40 transition-all duration-150 hover:-translate-y-1 hover:scale-110 hover:shadow-xl hover:shadow-purple-600/50 after:content-['⏵'] after:text-sm after:ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleStart}
-                    disabled={!isConnected || sessionInProgress}
+                    disabled={!isConnected || sessionInProgress || !hasSyncedState}
                   >
-                    {sessionInProgress ? "Resuming..." : "Start"}
+                    {sessionInProgress
+                      ? "Resuming..."
+                      : !hasSyncedState
+                      ? "Syncing..."
+                      : "Start"}
                   </button>
                 </div>
                 {startError && (

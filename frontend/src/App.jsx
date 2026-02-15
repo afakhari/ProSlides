@@ -56,7 +56,7 @@ export default function App() {
           />
           <Route path="/" element={<LandingPage />} />
           {/* Access code route - resolves access code to quiz_id and redirects to player presentation */}
-          <Route path="/:accessCode" element={<AccessCodeResolver />} />
+          <Route path="/:accessCode" element={<PresentationEntry mode="accessCode" />} />
           {/* Manager/Role panel (supports both /manager and any role param) */}
           <Route path="/:role/panel" element={<HomePage />} />
           <Route path="/:role/panel/:roomId" element={<EditorPage />} />
