@@ -146,9 +146,22 @@ function PresentationRouter() {
 
 /* ------------------------ Main Flow ------------------------ */
 function AppPresentation({ roomId, role, initialQuizData }) {
+  const playerActiveSlideSeenKey = `presentation_player_seen_active_v1:${String(
+    roomId || "unknown"
+  )}`;
+  const getInitialSeenActive = () => {
+    if (role !== "player") return false;
+    try {
+      return sessionStorage.getItem(playerActiveSlideSeenKey) === "1";
+    } catch {
+      return false;
+    }
+  };
   const [data, setData] = useState({ type: "ManagerJoinPage" });
   const [currentSlide, setCurrentSlide] = useState(1);
-  const [playerHasSeenActiveSlide, setPlayerHasSeenActiveSlide] = useState(false);
+  const [playerHasSeenActiveSlide, setPlayerHasSeenActiveSlide] = useState(
+    getInitialSeenActive
+  );
 
   // Fetch full quiz once at top-level and transform to internal shape
   const [remoteQuiz, setRemoteQuiz] = useState(initialQuizData || null);
@@ -279,16 +292,18 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     questionResults,
     partialQuestionResults,
     modalLeaderboardResults,
-  } = useServerData();  useEffect(() => {
+  } = useServerData();
+  useEffect(() => {
     if (role !== "player") return;
     if (currentQuestion || currentContent) {
       setPlayerHasSeenActiveSlide(true);
+      try {
+        sessionStorage.setItem(playerActiveSlideSeenKey, "1");
+      } catch {
+        // ignore storage errors
+      }
     }
-  }, [role, currentQuestion, currentContent]);
-  useEffect(() => {
-    if (role !== "player") return;
-    setPlayerHasSeenActiveSlide(false);
-  }, [role, roomId]);
+  }, [role, currentQuestion, currentContent, playerActiveSlideSeenKey]);
 
   // Sync manager slide index with server question id to avoid UI mismatches
   useEffect(() => {

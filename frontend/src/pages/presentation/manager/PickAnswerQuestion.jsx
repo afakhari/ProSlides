@@ -1,8 +1,9 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
 import { getColorForUser, isLightColor } from "../../../lib/colorUtils";
+import { resolveQuestionTimer } from "../utils/questionTimerSync";
 // LeaderboardModal was removed; modal UI now lives on Manager LeaderBoard page
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { useServerData } from "../../../hooks/useServerData";
@@ -41,6 +42,7 @@ const normalizeQuestion = (question) => {
 };
 
 export default function ManagerPickAnswerQuestion({
+  roomId,
   onNext,
   currentSlide = 1,
   totalSlides = 5,
@@ -59,6 +61,34 @@ export default function ManagerPickAnswerQuestion({
 
   const currentQuestion = normalizeQuestion(
     isRemoteReady ? quiz?.slides?.[currentSlide - 1] : null
+  );
+  const timerSyncQuestion = useMemo(
+    () => ({
+      question_id: currentQuestion.question_id,
+      run_id: currentQuestion.run_id,
+      question_time: currentQuestion.question_time,
+      remaining_time: currentQuestion.remaining_time,
+      remaining_seconds: currentQuestion.remaining_seconds,
+      time_left: currentQuestion.time_left,
+      time_left_seconds: currentQuestion.time_left_seconds,
+      started_at: currentQuestion.started_at,
+      start_time: currentQuestion.start_time,
+      question_started_at: currentQuestion.question_started_at,
+      question_start_time: currentQuestion.question_start_time,
+    }),
+    [
+      currentQuestion.question_id,
+      currentQuestion.run_id,
+      currentQuestion.question_time,
+      currentQuestion.remaining_time,
+      currentQuestion.remaining_seconds,
+      currentQuestion.time_left,
+      currentQuestion.time_left_seconds,
+      currentQuestion.started_at,
+      currentQuestion.start_time,
+      currentQuestion.question_started_at,
+      currentQuestion.question_start_time,
+    ]
   );
   const questionOptions = currentQuestion.options;
   const currentOptionCount = questionOptions.length;
@@ -80,6 +110,7 @@ export default function ManagerPickAnswerQuestion({
   const [awaitingServerResults, setAwaitingServerResults] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [questionAnchorStartMs, setQuestionAnchorStartMs] = useState(Date.now());
   const [_navigationData, setNavigationData] = useState(
     createNextPrevious(5, null, null)
   ); // State for tracking navigation (to be sent to server)
@@ -88,17 +119,25 @@ export default function ManagerPickAnswerQuestion({
   // Reset state when slide changes (new question)
   useEffect(() => {
     if (!isRemoteReady) return;
+    const resolvedTimer = resolveQuestionTimer({
+      question: timerSyncQuestion,
+      roomId,
+      role: "manager",
+    });
     debugLog("[PickAnswerQuestion] Slide changed to:", currentSlide);
     debugLog("[PickAnswerQuestion] Resetting state...");
     setShowResults(false);
     setVotes(new Array(currentOptionCount).fill(0));
-    setTimer(currentQuestion.question_time);
+    setTimer(resolvedTimer.remainingSeconds);
+    setQuestionAnchorStartMs(resolvedTimer.anchorStartMs);
     setHasReceivedResults(false);
     setAwaitingServerResults(false);
   }, [
     currentSlide,
     currentOptionCount,
+    timerSyncQuestion,
     currentQuestion.question_time,
+    roomId,
     isRemoteReady,
   ]);
 
@@ -338,21 +377,18 @@ export default function ManagerPickAnswerQuestion({
       currentQuestion.question_time,
       "seconds"
     );
-    setTimer(currentQuestion.question_time);
 
     const interval = setInterval(() => {
-      setTimer((t) => {
-        if (t <= 1) {
-          clearInterval(interval);
-          // Wait for authoritative server results; do not render mock votes.
-          if (!hasReceivedResults) {
-            setAwaitingServerResults(true);
-          }
-          return 0;
+      const elapsed = (Date.now() - questionAnchorStartMs) / 1000;
+      const left = Math.max(0, currentQuestion.question_time - elapsed);
+      setTimer(left);
+      if (left <= 0) {
+        clearInterval(interval);
+        if (!hasReceivedResults) {
+          setAwaitingServerResults(true);
         }
-        return t - 1;
-      });
-    }, 1000);
+      }
+    }, 250);
 
     return () => {
       debugLog("[PickAnswerQuestion] Cleaning up timer");
@@ -362,6 +398,7 @@ export default function ManagerPickAnswerQuestion({
     showResults,
     currentSlide,
     currentQuestion.question_time,
+    questionAnchorStartMs,
     questionOptions,
     hasReceivedResults,
     isRemoteReady,
@@ -427,7 +464,7 @@ export default function ManagerPickAnswerQuestion({
             {/* ØªØ§ÛŒÙ…Ø± */}
             {!showResults && timer > 0 && (
               <div className="absolute inset-0 flex items-center justify-center text-8xl font-bold text-[color:var(--quiz-text)] pointer-events-none z-10">
-                {timer}
+                {Math.ceil(timer)}
               </div>
             )}
             {awaitingServerResults && (
@@ -667,4 +704,5 @@ export default function ManagerPickAnswerQuestion({
     </div>
   );
 }
+
 
