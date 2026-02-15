@@ -18,6 +18,28 @@ const debugLog = (...args) => {
   if (import.meta.env.DEV) console.log(...args);
 };
 
+const EMPTY_QUESTION = {
+  slide_type: 1,
+  question_id: null,
+  question_text: "",
+  question_time: 0,
+  max_point: 0,
+  min_point: 0,
+  image_url: "",
+  options: [],
+};
+
+const normalizeQuestion = (question) => {
+  if (!question || typeof question !== "object") {
+    return EMPTY_QUESTION;
+  }
+  return {
+    ...EMPTY_QUESTION,
+    ...question,
+    options: Array.isArray(question.options) ? question.options : [],
+  };
+};
+
 export default function ManagerPickAnswerQuestion({
   onNext,
   currentSlide = 1,
@@ -35,33 +57,25 @@ export default function ManagerPickAnswerQuestion({
   // const questionNumber = currentQuestionIndex + 1;
   // const totalQuestions = QuizSetup.slides.length;
 
-  const currentQuestion = isRemoteReady
-    ? quiz.slides[currentSlide - 1]
-    : {
-        slide_type: 1,
-        question_id: null,
-        question_text: "",
-        question_time: 0,
-        max_point: 0,
-        min_point: 0,
-        options: [],
-      };
-  const options = currentQuestion.options?.map((opt) => opt.option_text) || [];
+  const currentQuestion = normalizeQuestion(
+    isRemoteReady ? quiz?.slides?.[currentSlide - 1] : null
+  );
+  const questionOptions = currentQuestion.options;
+  const currentOptionCount = questionOptions.length;
+  const options = questionOptions.map((opt) => opt.option_text);
 
   // Ù¾ÛŒØ¯Ø§ Ú©Ø±Ø¯Ù† Ù‡Ù…Ù‡ Ú¯Ø²ÛŒÙ†Ù‡â€ŒÙ‡Ø§ÛŒ ØµØ­ÛŒØ­ (Ù†Ù‡ ÙÙ‚Ø· ÛŒÚ©ÛŒ)
   const correctIndexes =
-    currentQuestion?.options?.reduce((arr, opt, idx) => {
+    questionOptions.reduce((arr, opt, idx) => {
       if (opt.answer === true) arr.push(idx);
       return arr;
-    }, []) ?? [];
+    }, []);
 
   const [selected] = useState(null);
   const [voted] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [timer, setTimer] = useState(currentQuestion.question_time);
-  const [votes, setVotes] = useState(
-    new Array(currentQuestion.options.length).fill(0)
-  );
+  const [votes, setVotes] = useState(new Array(currentOptionCount).fill(0));
   const [hasReceivedResults, setHasReceivedResults] = useState(false);
   const [awaitingServerResults, setAwaitingServerResults] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
@@ -77,13 +91,13 @@ export default function ManagerPickAnswerQuestion({
     debugLog("[PickAnswerQuestion] Slide changed to:", currentSlide);
     debugLog("[PickAnswerQuestion] Resetting state...");
     setShowResults(false);
-    setVotes(new Array(currentQuestion.options.length).fill(0));
+    setVotes(new Array(currentOptionCount).fill(0));
     setTimer(currentQuestion.question_time);
     setHasReceivedResults(false);
     setAwaitingServerResults(false);
   }, [
     currentSlide,
-    currentQuestion.options.length,
+    currentOptionCount,
     currentQuestion.question_time,
     isRemoteReady,
   ]);
@@ -96,6 +110,7 @@ export default function ManagerPickAnswerQuestion({
 
     // Type 8: Question Results - Ù…Ø³ØªÙ‚ÛŒÙ… Ø§Ø¹Ù…Ø§Ù„ Ú©Ù†
     if (lastMessage.type === 8) {
+      if (currentQuestion.question_id == null) return;
       debugLog("[PickAnswerQuestion] ===== TYPE 8 RECEIVED =====");
       debugLog(
         "[PickAnswerQuestion] Current question_id:",
@@ -107,7 +122,7 @@ export default function ManagerPickAnswerQuestion({
       );
       debugLog(
         "[PickAnswerQuestion] Current options:",
-        currentQuestion.options?.map((o) => o.option_id)
+        questionOptions.map((o) => o.option_id)
       );
       debugLog(
         "[PickAnswerQuestion] Server options:",
@@ -121,7 +136,7 @@ export default function ManagerPickAnswerQuestion({
       const serverResults = lastMessage.options || lastMessage.submit || [];
 
       // Ø§Ú¯Ù‡ currentQuestion.options Ø®Ø§Ù„ÛŒ ÛŒØ§ undefined Ø¨Ø§Ø´Ù‡ØŒ Ù…Ø³ØªÙ‚ÛŒÙ… Ø§Ø² serverResults Ø§Ø³ØªÙØ§Ø¯Ù‡ Ú©Ù†
-      if (!currentQuestion.options || currentQuestion.options.length === 0) {
+      if (questionOptions.length === 0) {
         debugLog(
           "[PickAnswerQuestion] No current options, using server results directly"
         );
@@ -133,7 +148,7 @@ export default function ManagerPickAnswerQuestion({
       }
 
       // ÙÙ‚Ø· Ø§Ø² Ø¯Ø§Ø¯Ù‡ Ø³Ø±ÙˆØ± Ø§Ø³ØªÙØ§Ø¯Ù‡ Ú©Ù†
-      const newVotes = currentQuestion.options.map((option) => {
+      const newVotes = questionOptions.map((option) => {
         const serverResult = serverResults.find(
           (s) => String(s.option_id) === String(option.option_id)
         );
@@ -155,13 +170,14 @@ export default function ManagerPickAnswerQuestion({
     }
   }, [
     lastMessage,
-    currentQuestion.options,
+    questionOptions,
     currentQuestion.question_id,
   ]);
 
   // âœ… useEffect Ù…Ø®ØµÙˆØµ type8Message - Ø§ÛŒÙ† Ú¯Ù… Ù†Ù…ÛŒØ´Ù‡!
   useEffect(() => {
     if (!type8Message) return;
+    if (currentQuestion.question_id == null) return;
 
     // Ú†Ú© Ú©Ù† Ú©Ù‡ question_id Ù…Ú† Ø¨Ø§Ø´Ù‡ - Ø§Ú¯Ù‡ Ù†Ù‡ØŒ Ù†Ø§Ø¯ÛŒØ¯Ù‡ Ø¨Ú¯ÛŒØ±
     const msgQId = String(type8Message.question_id);
@@ -186,7 +202,7 @@ export default function ManagerPickAnswerQuestion({
     const serverResults = type8Message.options || [];
 
     // Ø§Ú¯Ù‡ options Ø®Ø§Ù„ÛŒÙ‡ØŒ Ù…Ø³ØªÙ‚ÛŒÙ… Ø§Ø³ØªÙØ§Ø¯Ù‡ Ú©Ù†
-    if (!currentQuestion.options || currentQuestion.options.length === 0) {
+    if (questionOptions.length === 0) {
       const newVotes = serverResults.map((s) => s.number_of_submits || 0);
       debugLog("[PickAnswerQuestion] Direct votes:", newVotes);
       setVotes(newVotes);
@@ -195,7 +211,7 @@ export default function ManagerPickAnswerQuestion({
     }
 
     // Ù…Ù¾ Ú©Ù† Ø¨Ù‡ options ÙØ¹Ù„ÛŒ
-    const newVotes = currentQuestion.options.map((option) => {
+    const newVotes = questionOptions.map((option) => {
       const serverResult = serverResults.find(
         (s) => String(s.option_id) === String(option.option_id)
       );
@@ -205,7 +221,7 @@ export default function ManagerPickAnswerQuestion({
     debugLog("[PickAnswerQuestion] Votes from type8Message:", newVotes);
     setVotes(newVotes);
     setShowResults(true);
-  }, [type8Message, currentQuestion.options, currentQuestion.question_id]);
+  }, [type8Message, questionOptions, currentQuestion.question_id]);
 
   // Update votes from questionResults in ServerDataContext
   useEffect(() => {
@@ -213,7 +229,12 @@ export default function ManagerPickAnswerQuestion({
     const resultsArray =
       questionResults?.optionsResult || questionResults?.options;
 
-    if (questionResults && resultsArray && resultsArray.length > 0) {
+    if (
+      questionResults &&
+      resultsArray &&
+      resultsArray.length > 0 &&
+      currentQuestion.question_id != null
+    ) {
       debugLog(
         "[PickAnswerQuestion] Checking questionResults:",
         questionResults
@@ -233,7 +254,7 @@ export default function ManagerPickAnswerQuestion({
         );
 
         // Use server results directly (do NOT add to mock/initial data)
-        const newVotes = currentQuestion.options.map((option) => {
+        const newVotes = questionOptions.map((option) => {
           // Get server data - use String comparison for option_id
           const serverResult = resultsArray.find(
             (s) => String(s.option_id) === String(option.option_id)
@@ -265,7 +286,7 @@ export default function ManagerPickAnswerQuestion({
         );
       }
     }
-  }, [questionResults, currentQuestion.options, currentQuestion.question_id]);
+  }, [questionResults, questionOptions, currentQuestion.question_id]);
 
   // Handle navigation and update server data
   const handleNext = () => {
@@ -341,7 +362,7 @@ export default function ManagerPickAnswerQuestion({
     showResults,
     currentSlide,
     currentQuestion.question_time,
-    currentQuestion.options,
+    questionOptions,
     hasReceivedResults,
     isRemoteReady,
   ]);
@@ -434,7 +455,7 @@ export default function ManagerPickAnswerQuestion({
                   !currentQuestion.image_url ? "w-full" : ""
                 }`}
               >
-                {currentQuestion.options.map((opt, index) => {
+                {questionOptions.map((opt, index) => {
                   const isCorrect = correctIndexes.includes(index);
                   const isSelected = index === selected;
                   const totalVotes = votes.reduce((sum, v) => sum + v, 0);

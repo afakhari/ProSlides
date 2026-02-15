@@ -143,11 +143,12 @@ function ManagerLeaderBoard({
     );
   };
 
-  const maxScore = Math.max(...players.map((p) => p.total_points));
+  const maxScore =
+    players.length > 0 ? Math.max(...players.map((p) => p.total_points)) : 0;
   const minScore = 0;
 
   const calcPercent = (score) => {
-    if (maxScore === minScore) return 100;
+    if (maxScore <= minScore) return score > 0 ? 100 : 0;
     const percent = ((score - minScore) / (maxScore - minScore)) * 99 + 1;
     return Math.max(percent, 1);
   };
