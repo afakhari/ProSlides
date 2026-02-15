@@ -15,6 +15,8 @@ const playerLeaderboardPath =
   "frontend/src/pages/presentation/player/LeaderBoard.jsx";
 const playerQuestionPath =
   "frontend/src/pages/presentation/player/PickAnswerQuestion.jsx";
+const playerJoinPath =
+  "frontend/src/pages/presentation/player/JoinPage.jsx";
 const managerQuestionPath =
   "frontend/src/pages/presentation/manager/PickAnswerQuestion.jsx";
 const timerSyncPath =
@@ -52,7 +54,7 @@ test("manager join page avoids resending start when session is already active", 
 
 test("manager join page clears stale state and waits for sync before start", () => {
   const src = readFileSync(managerJoinPath, "utf8");
-  assert.equal(src.includes("clearData();"), true);
+  assert.equal(src.includes("clearData();"), false);
   assert.equal(src.includes("const [hasSyncedState, setHasSyncedState]"), true);
   assert.equal(src.includes("if (!hasSyncedState)"), true);
 });
@@ -68,7 +70,7 @@ test("manager route waits for initial live sync before rendering join flow", () 
   const src = readFileSync(presentationEntryPath, "utf8");
   assert.equal(src.includes("const [managerHasSyncedState, setManagerHasSyncedState]"), true);
   assert.equal(src.includes("Waiting message=\"Syncing live session...\""), true);
-  assert.equal(src.includes("lastMessageType != null"), true);
+  assert.equal(src.includes("isConnected ? 2500 : 3500"), true);
 });
 
 test("player should not render leaderboard before seeing an active slide", () => {
@@ -77,6 +79,7 @@ test("player should not render leaderboard before seeing an active slide", () =>
   assert.equal(src.includes("if (currentQuestion || currentContent)"), true);
   assert.equal(src.includes("if (hasLeaderboard && playerHasSeenActiveSlide)"), true);
   assert.equal(src.includes("sessionStorage.setItem(playerActiveSlideSeenKey, \"1\")"), true);
+  assert.equal(src.includes("requireProfileSelection={shouldPromptPlayerProfileSelection}"), true);
 });
 
 test("access-code route uses unified PresentationEntry resolver", () => {
@@ -108,4 +111,11 @@ test("player and manager question timers use persisted timer sync", () => {
   assert.equal(managerSrc.includes("resolveQuestionTimer"), true);
   assert.equal(managerSrc.includes("questionAnchorStartMs"), true);
   assert.equal(timerSyncSrc.includes("const looksStale ="), true);
+});
+
+test("player join supports forcing profile selection for a new run", () => {
+  const src = readFileSync(playerJoinPath, "utf8");
+  assert.equal(src.includes("requireProfileSelection = false"), true);
+  assert.equal(src.includes("Boolean(restoredProfile) && !requireProfileSelection"), true);
+  assert.equal(src.includes("setJoined(!requireProfileSelection);"), true);
 });

@@ -47,7 +47,6 @@ export default function ManagerJoinPage({
     currentQuestion,
     currentContent,
     leaderboardResults,
-    clearData,
   } = useServerData();
 
   const [page, setPage] = useState("lobby"); // 'lobby' | 'quiz'
@@ -80,12 +79,6 @@ export default function ManagerJoinPage({
     !!currentQuestion ||
     !!currentContent ||
     hasLeaderboard;
-
-  useEffect(() => {
-    // Reset stale presentation data from any previous round before syncing live state.
-    clearData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (!hasSyncedState && lastMessage) {

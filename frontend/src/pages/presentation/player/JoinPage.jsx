@@ -132,12 +132,14 @@ const getEmojiAnimation = (emoji) => {
   };
 };
 
-export default function PlayerJoinPage({ roomId, quiz }) {
+export default function PlayerJoinPage({ roomId, quiz, requireProfileSelection = false }) {
   const restoredProfile = readStoredProfile(roomId);
   const [name, setName] = useState(restoredProfile?.name || "");
   const [avatar, setAvatar] = useState(restoredProfile?.avatar || DEFAULT_AVATAR);
   const [showPicker, setShowPicker] = useState(false);
-  const [joined, setJoined] = useState(Boolean(restoredProfile));
+  const [joined, setJoined] = useState(
+    Boolean(restoredProfile) && !requireProfileSelection
+  );
   const [joinSent, setJoinSent] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isConnecting, setIsConnecting] = useState(Boolean(restoredProfile));
@@ -158,8 +160,11 @@ export default function PlayerJoinPage({ roomId, quiz }) {
 
     setName(profile.name);
     setAvatar(profile.avatar);
-    setJoined(true);
-  }, [roomId]);
+    setJoined(!requireProfileSelection);
+    if (requireProfileSelection) {
+      setJoinSent(false);
+    }
+  }, [roomId, requireProfileSelection]);
 
   const closeErrorModal = () => {
     setErrorModalOpen(false);

@@ -286,14 +286,12 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   }, [remoteQuiz?.music_url, setQuizMusic]);
 
   const {
-    users,
     currentQuestion,
     currentContent,
     leaderboardResults,
     questionResults,
     partialQuestionResults,
     modalLeaderboardResults,
-    lastMessageType,
   } = useServerData();
   const { isConnected } = useWebSocket();
   const [managerHasSyncedState, setManagerHasSyncedState] = useState(
@@ -316,34 +314,26 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     if (managerHasSyncedState) return;
 
     const hasLiveSignal =
-      lastMessageType != null ||
       !!currentQuestion ||
       !!currentContent ||
-      hasLeaderboardEntries(leaderboardResults) ||
-      (Array.isArray(users) && users.length > 0);
+      hasLeaderboardEntries(leaderboardResults);
 
     if (hasLiveSignal) {
       setManagerHasSyncedState(true);
       return;
     }
 
-    if (isConnected) {
-      return;
-    }
-
     const timer = setTimeout(() => {
       setManagerHasSyncedState(true);
-    }, 2200);
+    }, isConnected ? 2500 : 3500);
 
     return () => clearTimeout(timer);
   }, [
     role,
     managerHasSyncedState,
-    lastMessageType,
     currentQuestion,
     currentContent,
     leaderboardResults,
-    users,
     isConnected,
   ]);
 
@@ -500,6 +490,8 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   /* ---------------- Player Rendering (Server Driven) ---------------- */
   const renderPlayer = () => {
     const hasLeaderboard = hasLeaderboardEntries(leaderboardResults);
+    const shouldPromptPlayerProfileSelection =
+      playerHasSeenActiveSlide && !currentQuestion && !currentContent && !hasLeaderboard;
     if (currentContent) {
       return <PlayerContentSlide roomId={roomId} quiz={quiz} content={currentContent} />;
     }
@@ -533,7 +525,13 @@ function AppPresentation({ roomId, role, initialQuizData }) {
         />
       );
     }
-    return <PlayerJoinPage roomId={roomId} quiz={quiz} />;
+    return (
+      <PlayerJoinPage
+        roomId={roomId}
+        quiz={quiz}
+        requireProfileSelection={shouldPromptPlayerProfileSelection}
+      />
+    );
   };  /* ----------- Final Conditional Rendering ----------- */
   if (role === "manager") {
     return (
