@@ -319,6 +319,8 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   const [managerHasSyncedState, setManagerHasSyncedState] = useState(
     role !== "manager"
   );
+  const [lastManagerQuestionSlideIndex, setLastManagerQuestionSlideIndex] =
+    useState(null);
   useEffect(() => {
     if (role !== "player") return;
     if (currentQuestion || currentContent) {
@@ -401,8 +403,11 @@ function AppPresentation({ roomId, role, initialQuizData }) {
         String(currentQuestion.question_id ?? "")
     );
 
-    if (idx >= 0 && currentSlide !== idx + 1) {
-      setCurrentSlide(idx + 1);
+    if (idx >= 0) {
+      setLastManagerQuestionSlideIndex(idx);
+      if (currentSlide !== idx + 1) {
+        setCurrentSlide(idx + 1);
+      }
     }
 
     if (data.type !== "ManagerPickAnswerQuestion") {
@@ -429,32 +434,49 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
   // dYYâ€º U^U,OÂ¦UO manager OO3OÂ¦ U^ type:1 OOÃ½ O3OÃ±U^OÃ± U.UOÆ’?OOÃ±O3O_OO O"UÃ˜ U,UOO_OÃ±O"U^OÃ±O_ O"OÃ±U^
   useEffect(() => {
-    if (role === "manager" && hasLeaderboardEntries(leaderboardResults)) {
-      if (quiz?.slides?.length) {
-        const currentIdx = Math.max(0, currentSlide - 1);
-        const currentType = quiz.slides[currentIdx]?.slide_type;
+    if (role !== "manager" || !hasLeaderboardEntries(leaderboardResults)) {
+      return;
+    }
 
-        if (currentType !== 3) {
-          let nextLeaderboardIdx = -1;
-          if (quiz.slides[currentIdx + 1]?.slide_type === 3) {
-            nextLeaderboardIdx = currentIdx + 1;
-          } else {
-            nextLeaderboardIdx = quiz.slides.findIndex(
-              (slide, idx) => idx > currentIdx && slide.slide_type === 3
-            );
-          }
+    if (quiz?.slides?.length) {
+      let nextLeaderboardIdx = -1;
 
-          if (
-            nextLeaderboardIdx >= 0 &&
-            currentSlide !== nextLeaderboardIdx + 1
-          ) {
-            setCurrentSlide(nextLeaderboardIdx + 1);
-          }
+      if (lastManagerQuestionSlideIndex != null) {
+        const immediateIdx = lastManagerQuestionSlideIndex + 1;
+        if (quiz.slides[immediateIdx]?.slide_type === 3) {
+          nextLeaderboardIdx = immediateIdx;
+        } else {
+          nextLeaderboardIdx = quiz.slides.findIndex(
+            (slide, idx) =>
+              idx > lastManagerQuestionSlideIndex && slide.slide_type === 3
+          );
         }
       }
-      setData({ type: "ManagerLeaderBoard" });
+
+      if (nextLeaderboardIdx < 0) {
+        const currentIdx = Math.max(0, currentSlide - 1);
+        if (quiz.slides[currentIdx]?.slide_type === 3) {
+          nextLeaderboardIdx = currentIdx;
+        } else {
+          nextLeaderboardIdx = quiz.slides.findIndex(
+            (slide) => slide.slide_type === 3
+          );
+        }
+      }
+
+      if (nextLeaderboardIdx >= 0 && currentSlide !== nextLeaderboardIdx + 1) {
+        setCurrentSlide(nextLeaderboardIdx + 1);
+      }
     }
-  }, [leaderboardResults, role, quiz, currentSlide]);
+
+    setData({ type: "ManagerLeaderBoard" });
+  }, [
+    leaderboardResults,
+    role,
+    quiz,
+    currentSlide,
+    lastManagerQuestionSlideIndex,
+  ]);
 
   /* ------------------ EXACT NEXT/PREVIOUS FROM YOUR CODE ------------------ */
 
@@ -474,11 +496,9 @@ function AppPresentation({ roomId, role, initialQuizData }) {
       }
       setData({ type: "ManagerPickAnswerQuestion" });
     } else {
+      // Keep slide numbering server-driven and avoid optimistic index jumps.
       const nextSlide = quiz.slides[currentSlide];
-      if (!nextSlide) {
-        setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
-        return;
-      }
+      if (!nextSlide) return;
       if (nextSlide.slide_type === 3) {
         setData({ type: "ManagerLeaderBoard" });
       } else if (nextSlide.slide_type === 2) {
@@ -486,7 +506,6 @@ function AppPresentation({ roomId, role, initialQuizData }) {
       } else if (nextSlide.slide_type === 1) {
         setData({ type: "ManagerPickAnswerQuestion" });
       }
-      setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
     }
   };
 
