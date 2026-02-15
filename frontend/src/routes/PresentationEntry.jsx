@@ -490,8 +490,6 @@ function AppPresentation({ roomId, role, initialQuizData }) {
   /* ---------------- Player Rendering (Server Driven) ---------------- */
   const renderPlayer = () => {
     const hasLeaderboard = hasLeaderboardEntries(leaderboardResults);
-    const shouldPromptPlayerProfileSelection =
-      playerHasSeenActiveSlide && !currentQuestion && !currentContent && !hasLeaderboard;
     if (currentContent) {
       return <PlayerContentSlide roomId={roomId} quiz={quiz} content={currentContent} />;
     }
@@ -525,13 +523,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
         />
       );
     }
-    return (
-      <PlayerJoinPage
-        roomId={roomId}
-        quiz={quiz}
-        requireProfileSelection={shouldPromptPlayerProfileSelection}
-      />
-    );
+    return <PlayerJoinPage roomId={roomId} quiz={quiz} />;
   };  /* ----------- Final Conditional Rendering ----------- */
   if (role === "manager") {
     return (

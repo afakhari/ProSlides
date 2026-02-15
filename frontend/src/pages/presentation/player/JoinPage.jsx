@@ -132,17 +132,15 @@ const getEmojiAnimation = (emoji) => {
   };
 };
 
-export default function PlayerJoinPage({ roomId, quiz, requireProfileSelection = false }) {
+export default function PlayerJoinPage({ roomId, quiz }) {
   const restoredProfile = readStoredProfile(roomId);
   const [name, setName] = useState(restoredProfile?.name || "");
   const [avatar, setAvatar] = useState(restoredProfile?.avatar || DEFAULT_AVATAR);
   const [showPicker, setShowPicker] = useState(false);
-  const [joined, setJoined] = useState(
-    Boolean(restoredProfile) && !requireProfileSelection
-  );
+  const [joined, setJoined] = useState(Boolean(restoredProfile));
   const [joinSent, setJoinSent] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(Boolean(restoredProfile));
+  const [isConnecting, setIsConnecting] = useState(false);
 
   const { connect, sendMessage, isConnected, lastMessage, connectionError } =
     useWebSocket();
@@ -160,11 +158,8 @@ export default function PlayerJoinPage({ roomId, quiz, requireProfileSelection =
 
     setName(profile.name);
     setAvatar(profile.avatar);
-    setJoined(!requireProfileSelection);
-    if (requireProfileSelection) {
-      setJoinSent(false);
-    }
-  }, [roomId, requireProfileSelection]);
+    setJoined(true);
+  }, [roomId]);
 
   const closeErrorModal = () => {
     setErrorModalOpen(false);
@@ -215,6 +210,20 @@ export default function PlayerJoinPage({ roomId, quiz, requireProfileSelection =
       console.error("Failed to connect WebSocket:", err);
       setIsConnecting(false);
     }
+  };
+
+  const handleChangeProfile = () => {
+    try {
+      localStorage.removeItem("presentation_player_profile_v1");
+      localStorage.removeItem("player_name");
+      localStorage.removeItem("character");
+      localStorage.removeItem("user_id");
+    } catch {
+      // ignore storage errors
+    }
+    setJoinSent(false);
+    setJoined(false);
+    setIsConnecting(false);
   };
 
   useEffect(() => {
@@ -425,6 +434,13 @@ export default function PlayerJoinPage({ roomId, quiz, requireProfileSelection =
           <h3 className="mb-6 text-[color:var(--quiz-text-muted)]">
             آزمون به‌زودی شروع می‌شود.
           </h3>
+
+          <button
+            onClick={handleChangeProfile}
+            className="mt-2 rounded-lg border border-white/30 bg-black/25 px-4 py-2 text-sm text-[color:var(--quiz-text)] hover:bg-black/40"
+          >
+            تغییر نام و آواتار
+          </button>
         </div>
 
         <ErrorModal isOpen={errorModalOpen} onClose={closeErrorModal} message={error} />

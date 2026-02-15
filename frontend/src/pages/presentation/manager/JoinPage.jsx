@@ -88,11 +88,12 @@ export default function ManagerJoinPage({
 
   useEffect(() => {
     if (hasSyncedState) return;
+    if (isConnected) return;
     const timer = setTimeout(() => {
       setHasSyncedState(true);
     }, 2000);
     return () => clearTimeout(timer);
-  }, [hasSyncedState]);
+  }, [hasSyncedState, isConnected]);
 
   // List of 10 vibrant colors for user names
   const colorList = UserColorList;
@@ -318,6 +319,17 @@ export default function ManagerJoinPage({
       {needsOverlay && (
         <div className="pointer-events-none absolute inset-0 bg-black/45" />
       )}
+      {!hasSyncedState ? (
+        <div className="relative z-10 flex min-h-screen w-full items-center justify-center">
+          <div
+            className={`rounded-2xl px-6 py-4 text-lg font-semibold ${
+              isTextDark ? "bg-white/85 text-gray-900" : "bg-gray-900/80 text-white"
+            }`}
+          >
+            Syncing live session...
+          </div>
+        </div>
+      ) : (
       <div
         className={`relative z-10 w-full pt-16! sm:pt-36 md:pt-40 pb-24 px-4 sm:px-3 flex ${
           showQRModal ? "justify-end" : "justify-center"
@@ -460,6 +472,7 @@ export default function ManagerJoinPage({
 
         {/* Leaderboard modal removed - manager LeaderBoard page now contains modal UI */}
       </div>
+      )}
     </div>
   );
 }
