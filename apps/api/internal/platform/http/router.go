@@ -11,10 +11,23 @@ import (
 )
 
 func NewRouter(cfg config.Config, dependencies ...dependency.Dependency) http.Handler {
+	return newRouter(cfg, dependencies, nil)
+}
+
+// NewRouterWithRoutes composes optional domain routes without coupling the
+// platform HTTP package to any domain module.
+func NewRouterWithRoutes(cfg config.Config, dependencies []dependency.Dependency, registrars ...func(*http.ServeMux)) http.Handler {
+	return newRouter(cfg, dependencies, registrars)
+}
+
+func newRouter(cfg config.Config, dependencies []dependency.Dependency, registrars []func(*http.ServeMux)) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", health)
 	mux.HandleFunc("GET /readyz", readiness(cfg, dependencies))
 	mux.HandleFunc("GET /api/v1/version", version(cfg))
+	for _, register := range registrars {
+		register(mux)
+	}
 	return requestID(recoverer(mux))
 }
 

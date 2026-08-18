@@ -10,7 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/proslides/proslides/internal/identity"
 	"github.com/proslides/proslides/internal/platform/config"
+	"github.com/proslides/proslides/internal/platform/dependency"
 	platformhttp "github.com/proslides/proslides/internal/platform/http"
 	"github.com/proslides/proslides/internal/platform/postgres"
 	"github.com/proslides/proslides/internal/platform/redis"
@@ -48,8 +50,10 @@ func main() {
 	}()
 
 	server := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           platformhttp.NewRouter(cfg, postgresClient, redisClient),
+		Addr: cfg.HTTPAddr,
+		Handler: platformhttp.NewRouterWithRoutes(cfg, []dependency.Dependency{postgresClient, redisClient},
+			identity.NewHTTP(identity.NewService(identity.NewPostgresStore(postgresClient.Pool()), cfg.SessionTTL), cfg.Environment == "production").Register,
+		),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       75 * time.Second,
 	}

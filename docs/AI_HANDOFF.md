@@ -85,6 +85,10 @@ bcrypt, and generates opaque session/CSRF values while retaining only their
 SHA-256 hashes for persistence. Repository and HTTP session handlers remain
 pending.
 
+The register/login/logout/me handlers are now wired into the API composition
+root. Their PostgreSQL-backed runtime and route behavior still require
+integration tests before identity is marked complete.
+
 ### Scope
 
 1. Add an OpenAPI design for account registration/sign-in/sign-out/current-user
