@@ -82,12 +82,16 @@ below must be completed before calling this phase done.
 
 The identity core validates/normalizes registration data, hashes passwords with
 bcrypt, and generates opaque session/CSRF values while retaining only their
-SHA-256 hashes for persistence. Repository and HTTP session handlers remain
-pending.
+SHA-256 hashes for persistence. The PostgreSQL store and register/login/logout/
+me handlers are wired into the API composition root.
 
-The register/login/logout/me handlers are now wired into the API composition
-root. Their PostgreSQL-backed runtime and route behavior still require
-integration tests before identity is marked complete.
+Authentication is **not complete yet**. The Go test suite passes, migration
+startup is implemented, and Compose successfully builds/runs the service. The
+remaining mandatory proof is an end-to-end runtime suite covering successful
+register, login, authenticated `me`, CSRF-protected logout, revoked-session
+rejection, duplicate email, invalid credentials, and invalid/missing CSRF.
+Do not start content, quiz, or live-engine work until those tests pass and are
+recorded here.
 
 ### Scope
 
@@ -113,6 +117,14 @@ message queue, UI rewrite, database reset, or destructive Compose operation.
 - Secrets and credentials are absent from logs and responses.
 - The implementation is committed and pushed on the feature branch with CI
   result reported.
+
+### Current exact next task
+
+Create an automated integration test script or Go integration test which starts
+the Compose stack, applies migrations through normal startup, and verifies the
+complete auth matrix above. Fix any runtime failure it exposes, rerun the full
+matrix, then update `AGENTS.md`, this document, OpenAPI, and API README with
+the verified behavior before marking Phase 1a complete.
 
 ## Commands and verification matrix
 

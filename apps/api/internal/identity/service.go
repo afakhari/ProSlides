@@ -21,8 +21,8 @@ func PrepareRegistration(input Registration) (Account, error) {
 	if len(email) > 320 || len(name) == 0 || len(name) > 100 || len(input.Password) < 12 || len(input.Password) > 128 {
 		return Account{}, ErrInvalidRegistration
 	}
-	parsed, err := mail.ParseAddress(email)
-	if err != nil || parsed.Address != email {
+	_, err := mail.ParseAddress(email)
+	if err != nil {
 		return Account{}, ErrInvalidRegistration
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)

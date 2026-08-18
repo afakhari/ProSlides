@@ -34,3 +34,10 @@ each readiness check. Never place real credentials in `.env.example` or Git.
 
 API contract changes begin in `openapi/openapi.yaml`. See the repository root
 `AGENTS.md` and `docs/AI_HANDOFF.md` before changing code.
+
+## Authentication status
+
+The API contains contract-defined register, login, logout, and current-user
+routes using opaque server-side sessions and CSRF cookies. Treat this feature as
+in progress until the Compose-backed end-to-end auth matrix documented in
+`docs/AI_HANDOFF.md` has passed.
