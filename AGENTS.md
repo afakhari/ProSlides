@@ -169,7 +169,7 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 | 2026-08-18 | Added the AI execution handoff and completed the local verification matrix | Web lint, 12 web unit tests, web build, Go tests, Compose syntax, and diff hygiene passed; `npm ci` reports 20 dependency vulnerabilities for later reviewed remediation. |
 | 2026-08-18 | Added PostgreSQL/Redis clients and truthful `/readyz` | `healthz` remains process-only; `readyz` reports only safe per-dependency states and returns 503 on missing, failed, or timed-out dependencies. |
 | 2026-08-18 | Replaced blocked `gcr.io` runtime image with Docker Hub Alpine non-root runtime | Docker build and real Compose `healthz`/`readyz` passed with PostgreSQL and Redis. |
-| 2026-08-18 | Began identity boundary with forward-only opaque-session schema | `0002_identity_sessions.sql` and `SESSION_TTL` added; HTTP auth behavior is not implemented yet. |
+| 2026-08-18 | Began identity boundary with forward-only opaque-session schema and OpenAPI contract | `0002_identity_sessions.sql`, `SESSION_TTL`, and register/login/logout/me contract added; HTTP auth behavior is not implemented yet. |
 
 ## References
 

@@ -76,8 +76,9 @@ contract-first, durable in PostgreSQL, and independent from quiz/live modules.
 
 `migrations/0002_identity_sessions.sql` creates opaque server-side sessions and
 a case-insensitive email uniqueness index. `SESSION_TTL` is configured with a
-default of `168h`. No auth HTTP endpoint exists yet; the remaining scope below
-must be completed before calling this phase done.
+default of `168h`. The OpenAPI contract defines register, login, logout, and
+current-user behavior. No auth HTTP endpoint exists yet; the remaining scope
+below must be completed before calling this phase done.
 
 ### Scope
 

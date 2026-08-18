@@ -44,6 +44,76 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Version'
+  /api/v1/auth/register:
+    post:
+      operationId: registerAccount
+      summary: Create an account and start an authenticated session.
+      description: Sets an HttpOnly session cookie and a readable CSRF cookie. Passwords are never returned or logged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Account created and session established.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409':
+          description: An account already uses this email address.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/v1/auth/login:
+    post:
+      operationId: loginAccount
+      summary: Start an authenticated session.
+      description: Sets an HttpOnly session cookie and a readable CSRF cookie.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Session established.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUser' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/auth/logout:
+    post:
+      operationId: logoutAccount
+      summary: End the current authenticated session.
+      description: Requires the session cookie and `X-CSRF-Token` equal to the CSRF cookie value.
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204': { description: Session ended, whether or not it had already expired. }
+        '403': { $ref: '#/components/responses/CSRFError' }
+  /api/v1/auth/me:
+    get:
+      operationId: getCurrentUser
+      summary: Return the account represented by the current session cookie.
+      responses:
+        '200':
+          description: Current authenticated account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /api/v1/live/sessions/{sessionId}/events:
     get:
       operationId: subscribeLiveSession
@@ -64,6 +134,11 @@ paths:
                 type: string
 components:
   parameters:
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema: { type: string }
     SessionId:
       name: sessionId
       in: path
@@ -72,6 +147,31 @@ components:
         type: string
         format: uuid
   schemas:
+    RegisterRequest:
+      type: object
+      required: [email, display_name, password]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        display_name: { type: string, minLength: 1, maxLength: 100 }
+        password: { type: string, format: password, minLength: 12, maxLength: 128 }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        password: { type: string, format: password, maxLength: 128 }
+    CurrentUser:
+      type: object
+      required: [id, email, display_name]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
     Health:
       type: object
       required: [status]
@@ -98,3 +198,19 @@ components:
         service: { type: string }
         environment: { type: string }
         api_version: { type: string }
+  responses:
+    ValidationError:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: No valid current session exists.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    CSRFError:
+      description: The CSRF header and cookie do not match a valid current session.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
