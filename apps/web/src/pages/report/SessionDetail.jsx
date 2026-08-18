@@ -2,7 +2,9 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Home, LogOut, Search, Trophy } from "lucide-react";
 import { apiFetch } from "../../utils/apiFetch";
-import { clearAuthStorage, getRefreshToken } from "../../utils/auth";
+import { clearAuthStorage } from "../../utils/auth";
+import { quizService } from "../../services/quizService";
+import { getRosterPage } from "../../live/liveApi";
 
 export default function SessionDetail() {
   const { quizId } = useParams();
@@ -19,13 +21,14 @@ export default function SessionDetail() {
   const [participantSearchQuery, setParticipantSearchQuery] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [quizTitle, setQuizTitle] = useState("");
+  const [sessionId, setSessionId] = useState("");
+  const [nextCursor, setNextCursor] = useState("");
+  const [hasMore, setHasMore] = useState(false);
 
   const fetchQuizTitle = useCallback(async () => {
     if (!quizId) return;
     try {
-      const response = await apiFetch(`/quizzes/${quizId}/`);
-      if (!response.ok) return;
-      const data = await response.json();
+      const data = await quizService.getQuiz(quizId);
       if (data?.title) {
         setQuizTitle(data.title);
       }
@@ -42,32 +45,31 @@ export default function SessionDetail() {
         } else {
           setLoading(true);
         }
-        const response = await apiFetch(
-          `/quizzes/${quizId}/final-leaderboard/`
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (data?.quiz_title) {
-          setQuizTitle(data.quiz_title);
-        } else {
-          fetchQuizTitle();
-        }
-        setLeaderboardData(data.leaderboard || []);
+        const locator = await quizService.getLatestSession(quizId);
+        const page = await getRosterPage(locator.session_id, "score", "", 100);
+        setSessionId(locator.session_id);
+        setLeaderboardData(page.items.map((item, index) => ({
+          player_id: item.participant_id,
+          player_name: item.display_name,
+          avatar: item.avatar || "",
+          score: item.score,
+          rank: index + 1,
+        })));
+        setNextCursor(page.next_cursor || "");
+        setHasMore(page.has_more);
+        fetchQuizTitle();
         setError(null);
 
-        const updatedAt = data?.updated_at ? new Date(data.updated_at) : null;
-        setLastUpdated(
-          updatedAt && !Number.isNaN(updatedAt.valueOf())
-            ? updatedAt
-            : new Date()
-        );
+        setLastUpdated(new Date());
       } catch (err) {
-        console.error("Error fetching leaderboard:", err);
-        setError(err.message);
+        if (err?.response?.status === 404 || err?.status === 404) {
+          setLeaderboardData([]);
+          setHasMore(false);
+          setError(null);
+        } else {
+          console.error("Error fetching leaderboard:", err);
+          setError(err.message);
+        }
       } finally {
         if (isManualRefresh) {
           setIsRefreshing(false);
@@ -89,6 +91,30 @@ export default function SessionDetail() {
     return () => clearInterval(intervalId);
   }, [fetchLeaderboard, fetchQuizTitle, quizId]);
 
+  const loadMore = async () => {
+    if (!sessionId || !nextCursor || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const page = await getRosterPage(sessionId, "score", nextCursor, 100);
+      setLeaderboardData((current) => [
+        ...current,
+        ...page.items.map((item, index) => ({
+          player_id: item.participant_id,
+          player_name: item.display_name,
+          avatar: item.avatar || "",
+          score: item.score,
+          rank: current.length + index + 1,
+        })),
+      ]);
+      setNextCursor(page.next_cursor || "");
+      setHasMore(page.has_more);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const filteredParticipants = leaderboardData.filter((participant) =>
     String(participant.player_name || "")
       .toLowerCase()
@@ -108,15 +134,9 @@ export default function SessionDetail() {
   const handleLogout = async () => {
     setShowProfileMenu(false);
     try {
-      const refresh = getRefreshToken();
-      if (refresh) {
-        const response = await apiFetch("/auth/logout/", {
-          method: "POST",
-          json: { refresh },
-        });
-        if (!response.ok) {
-          console.warn("Logout request failed:", response.statusText);
-        }
+      const response = await apiFetch("/auth/logout", { method: "POST" });
+      if (!response.ok) {
+        console.warn("Logout request failed:", response.statusText);
       }
     } catch (err) {
       console.warn("Logout error:", err);
@@ -548,6 +568,15 @@ export default function SessionDetail() {
                     <div className="text-sm text-slate-600 mt-6">
                       Total {totalParticipants} participant(s)
                     </div>
+                    {hasMore && (
+                      <button
+                        onClick={loadMore}
+                        disabled={isRefreshing}
+                        className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        {isRefreshing ? "Loading..." : "Load 100 more"}
+                      </button>
+                    )}
                   </>
                 )}
               </div>

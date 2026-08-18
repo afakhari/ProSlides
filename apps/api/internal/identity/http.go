@@ -18,6 +18,49 @@ func (h *HTTP) Register(m *http.ServeMux) {
 	m.HandleFunc("POST /api/v1/auth/login", h.login)
 	m.HandleFunc("POST /api/v1/auth/logout", h.logout)
 	m.HandleFunc("GET /api/v1/auth/me", h.me)
+	m.HandleFunc("POST /api/v1/auth/password/reset", h.requestPasswordReset)
+	m.HandleFunc("POST /api/v1/auth/password/reset/confirm", h.confirmPasswordReset)
+}
+
+func (h *HTTP) requestPasswordReset(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if json.NewDecoder(r.Body).Decode(&body) != nil {
+		errJSON(w, 400, "invalid_request")
+		return
+	}
+	err := h.service.RequestPasswordReset(r.Context(), body.Email)
+	if errors.Is(err, ErrInvalidPasswordReset) {
+		errJSON(w, 400, "invalid_request")
+		return
+	}
+	if errors.Is(err, ErrPasswordResetUnavailable) {
+		errJSON(w, 503, "password_reset_unavailable")
+		return
+	}
+	if err != nil {
+		errJSON(w, 500, "internal_error")
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *HTTP) confirmPasswordReset(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		UID         string `json:"uid"`
+		Token       string `json:"token"`
+		NewPassword string `json:"new_password"`
+	}
+	if json.NewDecoder(r.Body).Decode(&body) != nil {
+		errJSON(w, 400, "invalid_request")
+		return
+	}
+	if err := h.service.ConfirmPasswordReset(r.Context(), body.UID, body.Token, body.NewPassword); err != nil {
+		errJSON(w, 400, "invalid_or_expired_reset")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type credentials struct {
@@ -59,7 +102,7 @@ func (h *HTTP) auth(w http.ResponseWriter, a Authenticated, e error, successStat
 	http.SetCookie(w, &http.Cookie{Name: "proslides_session", Value: a.Secrets.Token, Path: "/", Expires: exp, HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode})
 	http.SetCookie(w, &http.Cookie{Name: "proslides_csrf", Value: a.Secrets.CSRFToken, Path: "/", Expires: exp, Secure: h.secure, SameSite: http.SameSiteLaxMode})
 	w.WriteHeader(successStatus)
-	json.NewEncoder(w).Encode(map[string]string{"id": a.User.ID, "email": a.User.Email, "display_name": a.User.DisplayName})
+	json.NewEncoder(w).Encode(map[string]any{"id": a.User.ID, "email": a.User.Email, "display_name": a.User.DisplayName, "is_active": true})
 }
 func (h *HTTP) me(w http.ResponseWriter, r *http.Request) {
 	c, e := r.Cookie("proslides_session")
@@ -72,7 +115,7 @@ func (h *HTTP) me(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, 401, "unauthorized")
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]string{"id": s.User.ID, "email": s.User.Email, "display_name": s.User.DisplayName})
+	json.NewEncoder(w).Encode(map[string]any{"id": s.User.ID, "email": s.User.Email, "display_name": s.User.DisplayName, "is_active": true})
 }
 func (h *HTTP) logout(w http.ResponseWriter, r *http.Request) {
 	s, _ := r.Cookie("proslides_session")

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { buildApiUrl } from "../utils/api";
-import { getAuthHeaders } from "../utils/auth";
+import { quizService } from "../services/quizService";
 import ShareMenu from "./ShareMenu";
 
 
@@ -48,25 +46,14 @@ export default function QuizHeader({
 
     setIsUpdating(true);
     try {
-      const response = await axios.patch(
-        buildApiUrl(`/quizzes/${quizId}/`),
-        {
-          title: trimmedTitle,
-        },
-        {
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
-        }
-      );
-
-      if (response.status === 200) {
-        if (setNameSelectionNotice) {
-          setNameSelectionNotice("Quiz name changed successfully.");
-          setTimeout(() => {
-            setNameSelectionNotice(null);
-          }, 2500);
-        } else {
-          alert("Quiz name changed successfully.");
-        }
+      await quizService.updateQuiz(quizId, { title: trimmedTitle });
+      if (setNameSelectionNotice) {
+        setNameSelectionNotice("Quiz name changed successfully.");
+        setTimeout(() => {
+          setNameSelectionNotice(null);
+        }, 2500);
+      } else {
+        alert("Quiz name changed successfully.");
       }
     } catch (error) {
       // Return to previous name
@@ -197,11 +184,13 @@ export default function QuizHeader({
           {/* --------------- Share Button --------------- */}
           <button
             onClick={() => setShowShareModal(true)}
+            disabled={!accessCode}
+            title={accessCode ? "Share" : "The join code is generated when the presentation starts"}
             className="flex items-center gap-2 px-5 py-2.5 
                     bg-gradient-to-r from-pink-600 to-purple-700 
                     hover:from-pink-650 hover:to-purple-800
                     text-white font-semibold rounded-xl shadow-lg shadow-pink-300/40
-                    transition active:scale-95
+                    transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50
                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           >
             Share

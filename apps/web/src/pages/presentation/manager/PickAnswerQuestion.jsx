@@ -357,7 +357,16 @@ export default function ManagerPickAnswerQuestion({
       newNavigationData
     );
 
-    const ok = await sendNavigation("next");
+    const currentDefinition = quiz?.slides?.[currentSlide - 1];
+    const nextSlide = quiz?.slides?.[currentSlide];
+    if (!currentDefinition?.show_leaderboard_after && !nextSlide) {
+      if (await sendEnd()) onEndGame?.();
+      return;
+    }
+    const ok = await sendNavigation(
+      "next",
+      currentDefinition?.show_leaderboard_after ? {} : { slide: nextSlide },
+    );
     if (!ok) return;
 
   };

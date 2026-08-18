@@ -16,7 +16,7 @@ import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 
 export default function EditorPage() {
   const { roomId } = useParams();
-  const quizId = parseInt(roomId, 10);
+  const quizId = roomId?.trim() || "";
 
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -131,7 +131,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         slide.slide_type === 1 &&
         (!slide.question ||
           typeof slide.question !== "object" ||
-          Object.keys(slide.question).length === 0)
+          Object.keys(slide.question).length === 0 ||
+          !Array.isArray(slide.question.options) ||
+          slide.question.options.length < 2 ||
+          slide.question.options.some((option) => !String(option.text || option.option_text || "").trim()) ||
+          slide.question.options.filter((option) => option.is_correct).length < 1 ||
+          (slide.question.question_type === "single" &&
+            slide.question.options.filter((option) => option.is_correct).length !== 1))
     );
     if (missingQuestion) {
       return {

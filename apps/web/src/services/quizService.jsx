@@ -1,406 +1,244 @@
-// This component manages the connection to the back-end components of the pages/quiz/manger folder
+// Compatibility adapter between the existing editor view-model and the Go presentation contract.
+import { apiFetch } from "../utils/apiFetch";
 
-import axios from "axios";
-import { buildApiUrl, getApiBase } from "../utils/api";
-import {
-  clearAuthStorage,
-  getAuthHeaders,
-  getRefreshToken,
-  notifyAuthExpired,
-  notifyAppNotice,
-} from "../utils/auth";
-
-
-const api = axios.create({ baseURL: getApiBase() });
-const isAuthFailureStatus = (status) => status === 401 || status === 419;
-const isForbiddenStatus = (status) => status === 403;
-const isRateLimitStatus = (status) => status === 429;
-
-let refreshPromise = null;
-
-const refreshAccessToken = async () => {
-  if (refreshPromise) return refreshPromise;
-
-  refreshPromise = (async () => {
-    const refresh = getRefreshToken();
-    if (!refresh) return null;
-
-    const response = await fetch(buildApiUrl("/auth/token/refresh/"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh }),
-    });
-
-    if (!response.ok) {
-      clearAuthStorage();
-      return null;
-    }
-
-    const payload = await response.json().catch(() => null);
-    if (payload?.access) {
-      localStorage.setItem("auth.access", payload.access);
-      return payload.access;
-    }
-
-    clearAuthStorage();
-    return null;
-  })();
-
-  try {
-    return await refreshPromise;
-  } finally {
-    refreshPromise = null;
+const parseResponse = async (response) => {
+  if (response.status === 204) return null;
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = new Error(payload?.error || `HTTP ${response.status}`);
+    error.response = { status: response.status, data: payload };
+    throw error;
   }
+  return payload;
 };
 
-api.interceptors.request.use((config) => {
-  config.headers = { ...config.headers, ...getAuthHeaders() };
-  return config;
+const request = async (path, options) => parseResponse(await apiFetch(path, options));
+const newID = () => globalThis.crypto.randomUUID();
+
+const normalizeOption = (option, index) => ({
+  option_id: String(option?.id ?? option?.option_id ?? index),
+  text: option?.text ?? option?.option_text ?? "",
+  option_text: option?.text ?? option?.option_text ?? "",
+  is_correct: option?.is_correct === true,
+  image_url: option?.image_url || "",
+  order: Number(option?.order ?? index + 1),
 });
 
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const status = error?.response?.status;
-    const originalRequest = error?.config;
-
-    if (isAuthFailureStatus(status) && originalRequest && !originalRequest._retry) {
-      originalRequest._retry = true;
-      const refreshToken = getRefreshToken();
-      if (!refreshToken) {
-        clearAuthStorage();
-        if (!originalRequest?.silent) {
-          notifyAuthExpired("auth-required");
-        }
-        return Promise.reject(error);
-      }
-      const newAccess = await refreshAccessToken();
-      if (newAccess) {
-        originalRequest.headers = {
-          ...originalRequest.headers,
-          Authorization: `Bearer ${newAccess}`,
-        };
-        return api(originalRequest);
-      }
-    }
-
-    if (isAuthFailureStatus(status)) {
-      clearAuthStorage();
-      if (!originalRequest?.silent) {
-        notifyAuthExpired("session-expired");
-      }
-    }
-
-    if (!originalRequest?.silent && isForbiddenStatus(status)) {
-      notifyAppNotice("access-denied", "error");
-    }
-
-    if (!originalRequest?.silent && isRateLimitStatus(status)) {
-      notifyAppNotice("rate-limit", "warning");
-    }
-
-    return Promise.reject(error);
+const slideToEditor = (slide) => {
+  const content = slide?.content && typeof slide.content === "object" ? slide.content : {};
+  const common = { slide_id: slide.id, order: slide.position, show_leaderboard_after: content.show_leaderboard_after === true };
+  if (slide.kind === "question") {
+    const options = Array.isArray(content.options) ? content.options.map(normalizeOption) : [];
+    const question = {
+      question_id: slide.id,
+      title: content.title || "",
+      text: content.text || "",
+      question_text: content.text || "",
+      question_type: content.question_type || "single",
+      time_limit: Number(content.question_time || 10),
+      question_time: Number(content.question_time || 10),
+      min_point: Number(content.min_point || 0),
+      max_point: Number(content.max_point || 100),
+      image_url: content.image_url || "",
+      question_image: content.image_url || "",
+      faster_answers_more_points: content.faster_answers_more_points === true,
+      partial_scoring: content.partial_scoring === true,
+      options,
+    };
+    return { ...common, slide_type: 1, question };
   }
-);
+  if (slide.kind === "question_draft") return { ...common, slide_type: 1, question: null };
+  if (slide.kind === "leaderboard") return { ...common, slide_type: 3, title: content.title || "Leaderboard" };
+  return {
+    ...common,
+    slide_type: 2,
+    title: content.title || "",
+    content_text: content.text || content.content_text || "",
+    content_image_url: content.image_url || content.content_image_url || "",
+  };
+};
 
+const presentationToEditor = (presentation) => {
+  const settings = presentation.settings || {};
+  return {
+    quiz_id: presentation.id,
+    title: presentation.title,
+    quiz_name: presentation.title,
+    background_color: settings.background_color || "#f7f7fb",
+    background_image_url: settings.background_image_url || "",
+    text_color: settings.text_color || "#111827",
+    music_url: settings.music_url || "",
+    background: {
+      color: settings.background_color || "#f7f7fb",
+      image: settings.background_image_url || "",
+      text_color: settings.text_color || "#111827",
+    },
+    slides: (presentation.slides || []).map(slideToEditor),
+    created_at: presentation.created_at,
+    last_update: presentation.updated_at,
+  };
+};
+
+const editorSlideToDefinition = (slide, fallbackPosition = 0) => {
+  const position = Number(slide.order ?? fallbackPosition);
+  if (slide.slide_type === 1 && !slide.question) {
+    return { position, kind: "question_draft", content: { show_leaderboard_after: slide.show_leaderboard_after === true } };
+  }
+  if (slide.slide_type === 1 || slide.question) {
+    const question = slide.question || {};
+    return {
+      position,
+      kind: "question",
+      content: {
+        title: question.title || "",
+        text: question.text ?? question.question_text ?? "",
+        question_type: question.question_type || "single",
+        question_time: Number(question.time_limit ?? question.question_time ?? 10),
+        min_point: Number(question.min_point || 0),
+        max_point: Number(question.max_point || 100),
+        image_url: question.image_url || question.question_image || "",
+        faster_answers_more_points: question.faster_answers_more_points === true,
+        partial_scoring: question.partial_scoring === true,
+        show_leaderboard_after: slide.show_leaderboard_after === true,
+        options: (question.options || []).map((option, index) => ({
+          id: String(option.id ?? option.option_id ?? newID()),
+          text: option.text ?? option.option_text ?? "",
+          is_correct: option.is_correct === true,
+          image_url: option.image_url || "",
+          order: Number(option.order ?? index + 1),
+        })),
+      },
+    };
+  }
+  if (slide.slide_type === 3) return { position, kind: "leaderboard", content: { title: slide.title || "Leaderboard" } };
+  return {
+    position,
+    kind: "content",
+    content: {
+      title: slide.title || "",
+      text: slide.content_text || "",
+      image_url: slide.content_image_url || "",
+    },
+  };
+};
+
+const mutationQueues = new Map();
+const mutateSlide = (presentationId, slideId, mutate) => {
+  const key = `${presentationId}:${slideId}`;
+  const previous = mutationQueues.get(key) || Promise.resolve();
+  const next = previous.catch(() => {}).then(async () => {
+    const presentation = await request(`/presentations/${presentationId}`);
+    const source = presentation.slides.find((item) => item.id === String(slideId));
+    if (!source) throw new Error("not_found");
+    const editorSlide = slideToEditor(source);
+    const changed = mutate(editorSlide) || editorSlide;
+    const definition = editorSlideToDefinition(changed, source.position);
+    const saved = await request(`/presentations/${presentationId}/slides/${slideId}`, { method: "PUT", json: definition });
+    return slideToEditor(saved);
+  });
+  const queued = next.finally(() => { if (mutationQueues.get(key) === queued) mutationQueues.delete(key); });
+  mutationQueues.set(key, queued);
+  return next;
+};
+
+const patchSettings = async (quizId, fields) => {
+  const current = await request(`/presentations/${quizId}`);
+  return presentationToEditor(await request(`/presentations/${quizId}`, {
+    method: "PATCH",
+    json: { settings: { ...(current.settings || {}), ...fields } },
+  }));
+};
 
 export const quizService = {
+  listPresentations: () => request("/presentations"),
+  createPresentation: (title = "Untitled Presentation") => request("/presentations", { method: "POST", json: { title, settings: {} } }),
+  deletePresentation: (id) => request(`/presentations/${id}`, { method: "DELETE" }),
+  duplicatePresentation: (id, title) => request(`/presentations/${id}/duplicate`, { method: "POST", json: { title } }),
+  resetPresentationResults: (id) => request(`/presentations/${id}/results`, { method: "DELETE" }),
+  getLatestSession: (id) => request(`/presentations/${id}/latest-session`),
 
-  // Getting a quiz
-  getQuiz: async (quizId) => {
-    try {
-      const response = await api.get(`/quizzes/${quizId}/`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching quiz:', error);
-      throw error;
-    }
+  getQuiz: async (quizId) => presentationToEditor(await request(`/presentations/${quizId}`)),
+  getEditorQuiz: async (quizId) => presentationToEditor(await request(`/presentations/${quizId}`)),
+  updateQuiz: async (quizId, data) => {
+    const current = await request(`/presentations/${quizId}`);
+    const settings = { ...(current.settings || {}) };
+    if (data.background_color !== undefined || data.background?.color !== undefined) settings.background_color = data.background_color ?? data.background.color;
+    if (data.background_image_url !== undefined || data.background?.image !== undefined) settings.background_image_url = data.background_image_url ?? data.background.image;
+    if (data.text_color !== undefined || data.background?.text_color !== undefined) settings.text_color = data.text_color ?? data.background.text_color;
+    if (data.music_url !== undefined) settings.music_url = data.music_url;
+    return presentationToEditor(await request(`/presentations/${quizId}`, {
+      method: "PATCH",
+      json: { title: data.title || data.quiz_name || current.title, settings },
+    }));
   },
+  updateQuizMusic: (quizId, musicUrl) => patchSettings(quizId, { music_url: musicUrl || "" }),
+  updateQuizBackground: (quizId, data) => patchSettings(quizId, data),
 
-  // Getting quiz data for the editor
-  getEditorQuiz: async (quizId) => {
-    try {
-      const response = await api.get(`/quizzes/${quizId}/editor-data/`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching editor quiz:', error);
-      throw error;
-    }
-  },
-
-
-  // Updating a quiz
-  updateQuiz: async (quizId, quizData) => {
-    try {
-      const response = await api.put(`/quizzes/${quizId}/`, quizData);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating quiz:', error);
-      throw error;
-    }
-  },
-
-
-  // Just update the quiz music
-  updateQuizMusic: async (quizId, musicUrl) => {
-    try {
-      const response = await api.patch(
-        `/quizzes/${quizId}/`,
-        { music_url: musicUrl } 
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error updating quiz music:', error);
-      throw error;
-    }
-  },
-
-
-  // Just Update the quiz background 
-  updateQuizBackground: async (quizId, backgroundData) => {
-    try {
-      const payload = {};
-      
-      if (backgroundData.background_color !== undefined) {
-        payload.background_color = backgroundData.background_color;
-      }
-      
-      if (backgroundData.background_image_url !== undefined) {
-        payload.background_image_url = backgroundData.background_image_url;
-      }
-
-      if (backgroundData.text_color !== undefined) {
-        payload.text_color = backgroundData.text_color;
-      }
-      
-      const response = await api.patch(
-        `/quizzes/${quizId}/`,
-        payload
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error updating quiz background:', error);
-      throw error;
-    }
-  },
-
-
-  // Getting question of a slide of a quiz
-  getQuestion: async (quizId, slideId) => {
-    try {
-      const response = await api.get(
-        `/quizzes/${quizId}/slides/${slideId}/question/`
-      );
-      return response.data;
-    } catch (error) {
-      if (error.response?.status === 404) {
-        return null;
-      }
-      console.error('Error fetching question:', error);
-      throw error;
-    }
-  },
-
-
-  // Create a new question for a quiz slide
-  createQuestion: async (quizId, slideId, questionData) => {
-    try {
-      const response = await api.post(
-        `/quizzes/${quizId}/slides/${slideId}/question/`,
-        questionData
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error creating question:', error);
-      throw error;
-    }
-  },
-
-
-  // Update existing question
-  updateQuestion: async (quizId, slideId, questionData) => {
-    try {
-      const response = await api.put(
-        `/quizzes/${quizId}/slides/${slideId}/question/`,
-        questionData
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error updating question:', error);
-      throw error;
-    }
-  },
-
-
-  // Getting options of a question of a quiz slide
-  getOptions: async (quizId, slideId) => {
-    try {
-      const response = await api.get(
-        `/quizzes/${quizId}/slides/${slideId}/question/options/`
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching options:', error);
-      throw error;
-    }
-  },
-
-
-  // Create a new option for question
-  createOption: async (quizId, slideId, optionData) => {
-    try {
-      const response = await api.post(
-        `/quizzes/${quizId}/slides/${slideId}/question/options/`,
-        optionData
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error creating option:', error);
-      throw error;
-    }
-  },
-
-
-  // Update an existing option
-  updateOption: async (quizId, slideId, optionId, optionData) => {
-    try {
-      const response = await api.put(
-        `/quizzes/${quizId}/slides/${slideId}/question/options/${optionId}/`,
-        optionData
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error updating option:', error);
-      throw error;
-    }
-  },
-
-
-  // Delete an option
-  deleteOption: async (quizId, slideId, optionId) => {
-    try {
-      await api.delete(
-        `/quizzes/${quizId}/slides/${slideId}/question/options/${optionId}/`
-      );
-    } catch (error) {
-      console.error('Error deleting option:', error);
-      throw error;
-    }
-  },
-
-
-  // Create a new slide for quiz
   createSlide: async (quizId, slideData) => {
+    const current = await request(`/presentations/${quizId}`);
+    const definition = editorSlideToDefinition({ ...slideData, order: current.slides.length }, current.slides.length);
+    return slideToEditor(await request(`/presentations/${quizId}/slides`, { method: "POST", json: definition }));
+  },
+  updateSlide: (quizId, slideId, data) => mutateSlide(quizId, slideId, (current) => ({ ...current, ...data, question: data.question ?? current.question })),
+  deleteSlide: (quizId, slideId) => request(`/presentations/${quizId}/slides/${slideId}`, { method: "DELETE" }),
+  reorderSlides: (quizId, slideIds) => request(`/presentations/${quizId}/slides/reorder`, { method: "POST", json: { slide_ids: slideIds.map(String) } }),
+
+  getQuestion: async (quizId, slideId) => {
+    const quiz = await quizService.getQuiz(quizId);
+    return quiz.slides.find((slide) => slide.slide_id === String(slideId))?.question || null;
+  },
+  createQuestion: (quizId, slideId, data) => mutateSlide(quizId, slideId, (slide) => ({
+    ...slide,
+    slide_type: 1,
+    question: {
+      question_id: String(slideId),
+      text: data.text || "New Question",
+      question_text: data.text || "New Question",
+      question_type: data.question_type || "single",
+      time_limit: Number(data.time_limit || 10),
+      min_point: Number(data.min_point || 0),
+      max_point: Number(data.max_point || 100),
+      image_url: data.image_url || "",
+      faster_answers_more_points: data.faster_answers_more_points === true,
+      partial_scoring: data.partial_scoring === true,
+      options: data.options || [],
+    },
+  })).then((slide) => slide.question),
+  updateQuestion: (quizId, slideId, data) => mutateSlide(quizId, slideId, (slide) => ({
+    ...slide,
+    slide_type: 1,
+    question: { ...(slide.question || { question_id: String(slideId), options: [] }), ...data,
+      text: data.text ?? slide.question?.text ?? "", question_text: data.text ?? slide.question?.question_text ?? "",
+      time_limit: Number(data.time_limit ?? slide.question?.time_limit ?? 10) },
+  })).then((slide) => slide.question),
+
+  getOptions: async (quizId, slideId) => (await quizService.getQuestion(quizId, slideId))?.options || [],
+  createOption: (quizId, slideId, data) => {
+    const id = newID();
+    return mutateSlide(quizId, slideId, (slide) => ({ ...slide, question: { ...slide.question, options: [...(slide.question?.options || []), normalizeOption({ ...data, id }, slide.question?.options?.length || 0)] } })).then((slide) => slide.question.options.find((option) => option.option_id === id));
+  },
+  updateOption: (quizId, slideId, optionId, data) => mutateSlide(quizId, slideId, (slide) => ({
+    ...slide,
+    question: { ...slide.question, options: (slide.question?.options || []).map((option) => String(option.option_id) === String(optionId) ? normalizeOption({ ...option, ...data, id: option.option_id }, Number(data.order ?? option.order) - 1) : option) },
+  })).then((slide) => slide.question.options.find((option) => String(option.option_id) === String(optionId))),
+  deleteOption: (quizId, slideId, optionId) => mutateSlide(quizId, slideId, (slide) => ({ ...slide, question: { ...slide.question, options: (slide.question?.options || []).filter((option) => String(option.option_id) !== String(optionId)) } })),
+
+  getQuestionLeaderboard: async (quizId) => {
     try {
-      const response = await api.post(
-        `/quizzes/${quizId}/slides/`, 
-        slideData
-      );
-      return response.data;
+      const locator = await request(`/presentations/${quizId}/latest-session`);
+      const page = await request(`/live/sessions/${locator.session_id}/roster?order=score&limit=100`);
+      return (page.items || []).map((item, index) => ({
+        rust_session_id: item.participant_id,
+        player_name: item.display_name,
+        avatar: item.avatar || "",
+        score: Number(item.score || 0),
+        rank: index + 1,
+      }));
     } catch (error) {
-      console.error('Error creating slide:', error);
+      if (error?.response?.status === 404) return [];
       throw error;
     }
   },
-
-
-  // Update a slide
-  updateSlide: async (quizId, slideId, slideData) => {
-    try {
-      const response = await api.put(
-        `/quizzes/${quizId}/slides/${slideId}/`,
-        slideData
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error updating slide:', error);
-      throw error;
-    }
-  },
-
-
-  // Delete a slide
-  deleteSlide: async (quizId, slideId) => {
-    try {
-      await api.delete(
-        `/quizzes/${quizId}/slides/${slideId}/`
-      );
-    } catch (error) {
-      console.error('Error deleting slide:', error);
-      throw error;
-    }
-  },
-
-
-  // Just for update order of a slide
-  updateSlideOrder: async (quizId, slideId, order) => {
-    try {
-      const response = await api.patch(
-        `/quizzes/${quizId}/slides/${slideId}/`, 
-        { order }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error updating slide order:', error);
-      throw error;
-    }
-  },
-
-
-  // Get leaderboard entries for a question slide
-  getQuestionLeaderboard: async (quizId, slideId) => {
-    try {
-      const response = await api.get(
-        `/quizzes/${quizId}/slides/${slideId}/question/leaderboard/`
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching question leaderboard:', error);
-      throw error;
-    }
-  },
-
-
-  // Reorder slides for a quiz
-  reorderSlides: async (quizId, slideIds) => {
-    try {
-      const response = await api.post(
-        `/quizzes/${quizId}/slides/reorder/`,
-        { slide_ids: slideIds }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error reordering slides:', error);
-      throw error;
-    }
-  },
-
-
-  // Getting slides with their leaderboards
-  getSlidesFromAPI : async (quizId) => {
-    try {
-      const response = await api.get(
-        `/quizzes/${quizId}/export/`
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching slides from API:', error);
-      throw error;
-    }
-  },
-
-
-  // Delete leaderboard slide of a question slide
-  deleteLeaderboardSlide : async (quizId, slideId) => {
-    try {
-        const response = await api.patch(
-          `/quizzes/${quizId}/slides/${slideId}/`,
-          {show_leaderboard_after: false}
-        );
-        return response.data;
-    } catch (error) {
-        console.error('Error updating slide:', error);
-        throw error;
-    }
-  },
+  getSlidesFromAPI: (quizId) => quizService.getQuiz(quizId),
+  deleteLeaderboardSlide: (quizId, slideId) => mutateSlide(quizId, slideId, (slide) => ({ ...slide, show_leaderboard_after: false })),
 };

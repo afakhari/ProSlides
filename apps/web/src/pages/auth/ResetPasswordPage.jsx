@@ -9,7 +9,7 @@ function parseJson(response) {
 
 function getPasswordPolicyError(value) {
   if (!value) return "Enter a password.";
-  if (value.length < 8) return "Use at least 8 characters.";
+  if (value.length < 12) return "Use at least 12 characters.";
   if (/^\d+$/.test(value)) return "Password cannot be all numbers.";
   return "";
 }
@@ -152,7 +152,7 @@ export default function ResetPasswordPage() {
     setStatus(null);
 
     try {
-      const response = await apiFetch("/auth/password/reset/confirm/", {
+      const response = await apiFetch("/auth/password/reset/confirm", {
         method: "POST",
         auth: false,
         json: { uid, token, new_password: password.trim() },

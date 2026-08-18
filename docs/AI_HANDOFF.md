@@ -15,22 +15,25 @@ are not complete. Never describe a design target as benchmark evidence.
 ## Current objective and status at a glance
 
 - Branch purpose: isolated Go migration; `master` remains untouched legacy work.
-- Overall migration estimate: about 60%; this is a roadmap estimate, not a
+- Overall migration estimate: about 70%; this is a roadmap estimate, not a
   code-coverage calculation.
-- Implemented: Go/Compose foundation, identity, owner-scoped presentations,
-  content/question creation, live state machine, join, idempotent answers,
+- Implemented: Go/Compose foundation, cookie identity, owner-scoped dashboard
+  and presentation/editor CRUD, settings, duplication/results management,
+  hashed one-time password-reset tokens, content/question creation, live state
+  machine, join, idempotent answers,
   replaceable scoring, aggregate scores, role-scoped snapshots, manager-only
   keyset-paginated roster/leaderboard, durable events, typed React HTTP/SSE,
   snapshot-first recovery, and public live-session join-code resolution.
 - High-load improvements in this stage: one event-ledger poller per active
   session/API process, bounded subscriber buffers, slow-client disconnect and
   replay, presence compaction, snapshot cursor, and indexed participant scores.
-- Not implemented: rate limiting, telemetry, Redis wake-up fan-out/presence
-  TTL, media/reports,
+- Not implemented: approved outbound password-reset delivery, Go-side Google
+  token verification/email verification, rate limiting, telemetry, Redis
+  wake-up fan-out/presence TTL, media upload,
   k6 proof, production proxy/security hardening, cutover, or rollback exercise.
 - Capacity truth: architecture has a credible horizontal path, but 1k/5k/10k
   has not been measured. Use `docs/capacity-plan.md` as the only proof protocol.
-- Exact next task: bounded telemetry plus a 100-user k6 smoke scenario, defined later in this document.
+- Exact next task: approved external identity-provider wiring, defined later in this document.
 
 ## Branch and collaboration boundary
 
@@ -56,8 +59,9 @@ Do not install a second Go version. Use the version declared by `apps/api/go.mod
 Do not run a broad `npm audit fix`; investigate updates as a dedicated,
 compatibility-tested change.
 
-Latest completed local verification (2026-08-19): Go formatting, all API tests,
-and `go vet` passed; the API image rebuilt; and the real Compose matrix passed identity,
+Latest completed local verification (2026-08-19): Go formatting and all API
+tests passed; the API image rebuilt; and the real Compose matrix passed identity,
+owner presentation list/create/update/delete/duplicate, settings, slide replace/reorder,
 content/question creation, live commands, idempotent join/answer, role-scoped
 snapshots, participant non-disclosure, manager-only multi-page roster and score
 ordering, aggregate-only leaderboard events, 16 concurrent joins, and
@@ -65,7 +69,8 @@ ordering, aggregate-only leaderboard events, 16 concurrent joins, and
 of question correctness metadata from participant snapshots. Web lint,
 TypeScript checking, 23 web unit tests, and the production
 build also passed; the generated sitemap timestamp was restored because it was
-unrelated to this change. `npm ci` still reports the already-known 20
+unrelated to this change. Browser automation could not run because no in-app or
+extension browser was connected. `npm ci` still reports the already-known 20
 vulnerabilities. GitHub CI must confirm the pushed revision.
 
 ## Completed implementation: dependency adapters and readiness
@@ -172,23 +177,25 @@ deletion was performed.
 
 ### Current exact next task
 
-Add bounded OpenTelemetry-compatible live-path metrics and a reproducible
-100-participant k6 smoke scenario.
+Complete the external identity-provider boundary after provider configuration
+is explicitly supplied and approved.
 
 Contract and acceptance criteria:
 
-1. Instrument HTTP request count/duration/status/in-flight, SSE connections and
-   lifetime/reconnect/replay lag, broker subscribers/drops, answer outcomes,
-   and PostgreSQL pool/query/transaction signals needed by the capacity plan.
-2. Use bounded labels only; never label by participant, request ID, raw session
-   ID, email, raw error text, or other unbounded values.
-3. Add a committed k6 smoke scenario for 100 participants covering join,
-   snapshot-first SSE, answer burst, reconnect, closure, and correctness
-   reconciliation against PostgreSQL.
-4. Document exact commands, topology, thresholds, and result artifact format.
-5. Run the full Go/Compose/web verification matrix.
+1. Wire a production mail adapter to the existing password-reset service; keep
+   tokens hashed, one-time, expiring, and never logged.
+2. Verify Google ID tokens server-side against the configured audience before
+   issuing the same HttpOnly session/CSRF cookies used by password login.
+3. Preserve the existing auth-page layout, animation, OTP states, responsive
+   behavior, and recovery UX; only its transport/state integration may change.
+4. Keep unknown-email responses non-disclosing and revoke every account session
+   after a successful password reset.
+5. Add provider-adapter tests and run the full Go/Compose/web/browser matrix.
 
-Do not add Redis Pub/Sub or claim/run the 1k/5k/10k gates in the same change.
+Required owner inputs are the approved SMTP/provider settings, public reset
+base URL, and Google OAuth client ID. Secrets belong in environment/secret
+storage, never in Git or chat. After this task, return to bounded telemetry and
+the documented 100-user k6 smoke scenario; do not run 1k/5k/10k yet.
 
 ## Commands and verification matrix
 

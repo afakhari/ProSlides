@@ -1,5 +1,4 @@
-const DEFAULT_API_BASE = "https://api.proslides.ir/api";
-const LOCAL_API_BASE = "http://127.0.0.1:8000/api";
+const DEFAULT_API_BASE = "/api/v1";
 
 const normalizeBase = (base) => {
   if (!base) return "";
@@ -7,15 +6,9 @@ const normalizeBase = (base) => {
 };
 
 export const getApiBase = () => {
-  const envBase = import.meta.env.VITE_API_BASE_URL;
+  const envBase = import.meta.env?.VITE_API_BASE_URL;
   if (envBase && envBase.trim()) {
     return normalizeBase(envBase);
-  }
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host === "localhost" || host === "127.0.0.1") {
-      return normalizeBase(LOCAL_API_BASE);
-    }
   }
   return normalizeBase(DEFAULT_API_BASE);
 };

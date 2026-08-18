@@ -4,51 +4,309 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/proslides/proslides/internal/identity"
 	"net/http"
+	"strings"
+
+	"github.com/proslides/proslides/internal/identity"
 )
+
+const maxContentBytes = 2 << 20
 
 type SessionReader interface {
 	Current(context.Context, string) (identity.StoredSession, error)
 	Authorize(context.Context, string, string) (identity.User, error)
 }
+
 type HTTP struct {
 	sessions SessionReader
 	store    Store
 }
 
 func NewHTTP(s SessionReader, store Store) *HTTP { return &HTTP{sessions: s, store: store} }
+
 func (h *HTTP) Register(m *http.ServeMux) {
-	m.HandleFunc("GET /api/v1/presentations/{presentationId}", h.get)
+	m.HandleFunc("GET /api/v1/presentations", h.list)
 	m.HandleFunc("POST /api/v1/presentations", h.create)
+	m.HandleFunc("GET /api/v1/presentations/{presentationId}", h.get)
+	m.HandleFunc("PATCH /api/v1/presentations/{presentationId}", h.update)
+	m.HandleFunc("DELETE /api/v1/presentations/{presentationId}", h.delete)
+	m.HandleFunc("POST /api/v1/presentations/{presentationId}/duplicate", h.duplicate)
+	m.HandleFunc("GET /api/v1/presentations/{presentationId}/latest-session", h.latestSession)
+	m.HandleFunc("DELETE /api/v1/presentations/{presentationId}/results", h.deleteResults)
 	m.HandleFunc("POST /api/v1/presentations/{presentationId}/slides", h.createSlide)
+	m.HandleFunc("POST /api/v1/presentations/{presentationId}/slides/reorder", h.reorderSlides)
+	m.HandleFunc("PUT /api/v1/presentations/{presentationId}/slides/{slideId}", h.replaceSlide)
+	m.HandleFunc("DELETE /api/v1/presentations/{presentationId}/slides/{slideId}", h.deleteSlide)
 	m.HandleFunc("POST /api/v1/presentations/{presentationId}/questions", h.createQuestion)
 }
-func (h *HTTP) createQuestion(w http.ResponseWriter, r *http.Request) {
-	c, e := r.Cookie("proslides_session")
-	if e != nil {
+
+func (h *HTTP) current(r *http.Request) (identity.User, error) {
+	cookie, err := r.Cookie("proslides_session")
+	if err != nil {
+		return identity.User{}, err
+	}
+	session, err := h.sessions.Current(r.Context(), cookie.Value)
+	return session.User, err
+}
+
+func (h *HTTP) mutating(w http.ResponseWriter, r *http.Request) (identity.User, bool) {
+	cookie, err := r.Cookie("proslides_session")
+	if err != nil {
+		errJSON(w, 401, "unauthorized")
+		return identity.User{}, false
+	}
+	user, err := h.sessions.Authorize(r.Context(), cookie.Value, r.Header.Get("X-CSRF-Token"))
+	if err != nil {
+		errJSON(w, 403, "csrf_failed")
+		return identity.User{}, false
+	}
+	return user, true
+}
+
+func (h *HTTP) list(w http.ResponseWriter, r *http.Request) {
+	user, err := h.current(r)
+	if err != nil {
 		errJSON(w, 401, "unauthorized")
 		return
 	}
-	u, e := h.sessions.Authorize(r.Context(), c.Value, r.Header.Get("X-CSRF-Token"))
-	if e != nil {
-		errJSON(w, 403, "csrf_failed")
+	items, err := h.store.ListOwned(r.Context(), user.ID)
+	if err != nil {
+		errJSON(w, 500, "internal_error")
+		return
+	}
+	writeJSON(w, 200, items)
+}
+
+func (h *HTTP) get(w http.ResponseWriter, r *http.Request) {
+	user, err := h.current(r)
+	if err != nil {
+		errJSON(w, 401, "unauthorized")
+		return
+	}
+	p, err := h.store.FindOwned(r.Context(), r.PathValue("presentationId"), user.ID)
+	if handleStoreError(w, err) {
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, p)
+}
+
+type presentationInput struct {
+	Title    *string         `json:"title"`
+	Settings json.RawMessage `json:"settings"`
+}
+
+func decodePresentationInput(w http.ResponseWriter, r *http.Request, requireTitle bool) (presentationInput, bool) {
+	var body presentationInput
+	r.Body = http.MaxBytesReader(w, r.Body, maxContentBytes)
+	if json.NewDecoder(r.Body).Decode(&body) != nil {
+		errJSON(w, 400, "invalid_request")
+		return body, false
+	}
+	if body.Title != nil {
+		value := strings.TrimSpace(*body.Title)
+		body.Title = &value
+	}
+	if requireTitle && (body.Title == nil || *body.Title == "") {
+		errJSON(w, 400, "invalid_request")
+		return body, false
+	}
+	if body.Title != nil && (*body.Title == "" || len(*body.Title) > 500) {
+		errJSON(w, 400, "invalid_request")
+		return body, false
+	}
+	if len(body.Settings) > 0 && !validJSONObject(body.Settings) {
+		errJSON(w, 400, "invalid_request")
+		return body, false
+	}
+	if !requireTitle && body.Title == nil && len(body.Settings) == 0 {
+		errJSON(w, 400, "invalid_request")
+		return body, false
+	}
+	return body, true
+}
+
+func (h *HTTP) create(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.mutating(w, r)
+	if !ok {
+		return
+	}
+	body, ok := decodePresentationInput(w, r, true)
+	if !ok {
+		return
+	}
+	p, err := h.store.Create(r.Context(), user.ID, *body.Title, body.Settings)
+	if handleStoreError(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, p)
+}
+
+func (h *HTTP) update(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.mutating(w, r)
+	if !ok {
+		return
+	}
+	body, ok := decodePresentationInput(w, r, false)
+	if !ok {
+		return
+	}
+	p, err := h.store.Update(r.Context(), r.PathValue("presentationId"), user.ID, PresentationPatch{Title: body.Title, Settings: body.Settings})
+	if handleStoreError(w, err) {
+		return
+	}
+	writeJSON(w, 200, p)
+}
+
+func (h *HTTP) delete(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.mutating(w, r)
+	if !ok {
+		return
+	}
+	if handleStoreError(w, h.store.Delete(r.Context(), r.PathValue("presentationId"), user.ID)) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *HTTP) duplicate(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.mutating(w, r)
+	if !ok {
+		return
+	}
+	body, ok := decodePresentationInput(w, r, true)
+	if !ok {
+		return
+	}
+	p, err := h.store.Duplicate(r.Context(), r.PathValue("presentationId"), user.ID, *body.Title)
+	if handleStoreError(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, p)
+}
+
+func (h *HTTP) latestSession(w http.ResponseWriter, r *http.Request) {
+	user, err := h.current(r)
+	if err != nil {
+		errJSON(w, 401, "unauthorized")
+		return
+	}
+	locator, err := h.store.LatestSession(r.Context(), r.PathValue("presentationId"), user.ID)
+	if handleStoreError(w, err) {
+		return
+	}
+	writeJSON(w, 200, locator)
+}
+
+func (h *HTTP) deleteResults(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.mutating(w, r)
+	if !ok {
+		return
+	}
+	if handleStoreError(w, h.store.DeleteResults(r.Context(), r.PathValue("presentationId"), user.ID)) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type slideInput struct {
+	Position int             `json:"position"`
+	Kind     string          `json:"kind"`
+	Content  json.RawMessage `json:"content"`
+}
+
+func decodeSlideInput(w http.ResponseWriter, r *http.Request) (slideInput, bool) {
+	var body slideInput
+	r.Body = http.MaxBytesReader(w, r.Body, maxContentBytes)
+	if json.NewDecoder(r.Body).Decode(&body) != nil || body.Position < 0 || len(body.Kind) == 0 || len(body.Kind) > 100 || !validJSONObject(body.Content) {
+		errJSON(w, 400, "invalid_request")
+		return body, false
+	}
+	return body, true
+}
+
+func (h *HTTP) createSlide(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.mutating(w, r)
+	if !ok {
+		return
+	}
+	body, ok := decodeSlideInput(w, r)
+	if !ok {
+		return
+	}
+	slide, err := h.store.CreateSlide(r.Context(), r.PathValue("presentationId"), user.ID, body.Position, body.Kind, body.Content)
+	if handleStoreError(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, slide)
+}
+
+func (h *HTTP) replaceSlide(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.mutating(w, r)
+	if !ok {
+		return
+	}
+	body, ok := decodeSlideInput(w, r)
+	if !ok {
+		return
+	}
+	slide, err := h.store.ReplaceSlide(r.Context(), r.PathValue("presentationId"), r.PathValue("slideId"), user.ID, body.Position, body.Kind, body.Content)
+	if handleStoreError(w, err) {
+		return
+	}
+	writeJSON(w, 200, slide)
+}
+
+func (h *HTTP) deleteSlide(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.mutating(w, r)
+	if !ok {
+		return
+	}
+	if handleStoreError(w, h.store.DeleteSlide(r.Context(), r.PathValue("presentationId"), r.PathValue("slideId"), user.ID)) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *HTTP) reorderSlides(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.mutating(w, r)
+	if !ok {
 		return
 	}
 	var body struct {
-		Position                int    `json:"position"`
-		Text                    string `json:"text"`
-		QuestionType            string `json:"question_type"`
-		QuestionTime            int    `json:"question_time"`
-		MaxPoint                int    `json:"max_point"`
-		MinPoint                int    `json:"min_point"`
-		FasterAnswersMorePoints bool   `json:"faster_answers_more_points"`
-		PartialScoring          bool   `json:"partial_scoring"`
-		Options                 []struct {
+		SlideIDs []string `json:"slide_ids"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxContentBytes)
+	if json.NewDecoder(r.Body).Decode(&body) != nil || len(body.SlideIDs) > 1000 || hasEmptyOrDuplicate(body.SlideIDs) {
+		errJSON(w, 400, "invalid_request")
+		return
+	}
+	if handleStoreError(w, h.store.ReorderSlides(r.Context(), r.PathValue("presentationId"), user.ID, body.SlideIDs)) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *HTTP) createQuestion(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.mutating(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Position     int    `json:"position"`
+		Text         string `json:"text"`
+		QuestionType string `json:"question_type"`
+		QuestionTime int    `json:"question_time"`
+		MaxPoint     int    `json:"max_point"`
+		MinPoint     int    `json:"min_point"`
+		Faster       bool   `json:"faster_answers_more_points"`
+		Partial      bool   `json:"partial_scoring"`
+		Options      []struct {
 			Text      string `json:"text"`
 			IsCorrect bool   `json:"is_correct"`
 		} `json:"options"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxContentBytes)
 	if json.NewDecoder(r.Body).Decode(&body) != nil {
 		errJSON(w, 400, "invalid_request")
 		return
@@ -59,124 +317,61 @@ func (h *HTTP) createQuestion(w http.ResponseWriter, r *http.Request) {
 	if body.MaxPoint == 0 {
 		body.MaxPoint = 100
 	}
-	if body.Position < 0 || len(body.Text) == 0 || len(body.Options) < 2 || (body.QuestionType != "single" && body.QuestionType != "multiple") || body.QuestionTime < 1 || body.QuestionTime > 86400 || body.MinPoint < 0 || body.MaxPoint < body.MinPoint {
-		errJSON(w, 400, "invalid_request")
-		return
-	}
 	correct := 0
-	for _, o := range body.Options {
-		if len(o.Text) == 0 {
+	for _, option := range body.Options {
+		if strings.TrimSpace(option.Text) == "" {
 			errJSON(w, 400, "invalid_request")
 			return
 		}
-		if o.IsCorrect {
+		if option.IsCorrect {
 			correct++
 		}
 	}
-	if correct == 0 || (body.QuestionType == "single" && correct != 1) {
+	if body.Position < 0 || strings.TrimSpace(body.Text) == "" || len(body.Options) < 2 || (body.QuestionType != "single" && body.QuestionType != "multiple") || body.QuestionTime < 1 || body.QuestionTime > 86400 || body.MinPoint < 0 || body.MaxPoint < body.MinPoint || correct == 0 || (body.QuestionType == "single" && correct != 1) {
 		errJSON(w, 400, "invalid_request")
 		return
 	}
-	content, _ := json.Marshal(map[string]any{"text": body.Text, "question_type": body.QuestionType, "question_time": body.QuestionTime, "max_point": body.MaxPoint, "min_point": body.MinPoint, "faster_answers_more_points": body.FasterAnswersMorePoints, "partial_scoring": body.PartialScoring, "options": body.Options})
-	slide, e := h.store.CreateSlide(r.Context(), r.PathValue("presentationId"), u.ID, body.Position, "question", content)
-	if errors.Is(e, ErrNotFound) {
+	content, _ := json.Marshal(map[string]any{"text": strings.TrimSpace(body.Text), "question_type": body.QuestionType, "question_time": body.QuestionTime, "max_point": body.MaxPoint, "min_point": body.MinPoint, "faster_answers_more_points": body.Faster, "partial_scoring": body.Partial, "options": body.Options})
+	slide, err := h.store.CreateSlide(r.Context(), r.PathValue("presentationId"), user.ID, body.Position, "question", content)
+	if handleStoreError(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, slide)
+}
+
+func validJSONObject(raw json.RawMessage) bool {
+	var value map[string]any
+	return len(raw) > 0 && json.Unmarshal(raw, &value) == nil && value != nil
+}
+func hasEmptyOrDuplicate(ids []string) bool {
+	seen := map[string]struct{}{}
+	for _, id := range ids {
+		if id == "" {
+			return true
+		}
+		if _, ok := seen[id]; ok {
+			return true
+		}
+		seen[id] = struct{}{}
+	}
+	return false
+}
+func handleStoreError(w http.ResponseWriter, err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrNotFound) {
 		errJSON(w, 404, "not_found")
-		return
-	}
-	if e != nil {
+	} else {
 		errJSON(w, 500, "internal_error")
-		return
 	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(201)
-	_ = json.NewEncoder(w).Encode(slide)
+	return true
 }
-func (h *HTTP) createSlide(w http.ResponseWriter, r *http.Request) {
-	c, e := r.Cookie("proslides_session")
-	if e != nil {
-		errJSON(w, 401, "unauthorized")
-		return
-	}
-	u, e := h.sessions.Authorize(r.Context(), c.Value, r.Header.Get("X-CSRF-Token"))
-	if e != nil {
-		errJSON(w, 403, "csrf_failed")
-		return
-	}
-	var body struct {
-		Position int             `json:"position"`
-		Kind     string          `json:"kind"`
-		Content  json.RawMessage `json:"content"`
-	}
-	if json.NewDecoder(r.Body).Decode(&body) != nil || body.Position < 0 || len(body.Kind) == 0 || len(body.Kind) > 100 || !json.Valid(body.Content) {
-		errJSON(w, 400, "invalid_request")
-		return
-	}
-	slide, e := h.store.CreateSlide(r.Context(), r.PathValue("presentationId"), u.ID, body.Position, body.Kind, body.Content)
-	if errors.Is(e, ErrNotFound) {
-		errJSON(w, 404, "not_found")
-		return
-	}
-	if e != nil {
-		errJSON(w, 500, "internal_error")
-		return
-	}
+func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(201)
-	_ = json.NewEncoder(w).Encode(slide)
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
 }
-func (h *HTTP) create(w http.ResponseWriter, r *http.Request) {
-	c, e := r.Cookie("proslides_session")
-	if e != nil {
-		errJSON(w, 401, "unauthorized")
-		return
-	}
-	u, e := h.sessions.Authorize(r.Context(), c.Value, r.Header.Get("X-CSRF-Token"))
-	if e != nil {
-		errJSON(w, 403, "csrf_failed")
-		return
-	}
-	var body struct {
-		Title string `json:"title"`
-	}
-	if json.NewDecoder(r.Body).Decode(&body) != nil || len(body.Title) == 0 || len(body.Title) > 500 {
-		errJSON(w, 400, "invalid_request")
-		return
-	}
-	p, e := h.store.Create(r.Context(), u.ID, body.Title)
-	if e != nil {
-		errJSON(w, 500, "internal_error")
-		return
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(p)
-}
-func (h *HTTP) get(w http.ResponseWriter, r *http.Request) {
-	c, e := r.Cookie("proslides_session")
-	if e != nil {
-		errJSON(w, 401, "unauthorized")
-		return
-	}
-	x, e := h.sessions.Current(r.Context(), c.Value)
-	if e != nil {
-		errJSON(w, 401, "unauthorized")
-		return
-	}
-	p, e := h.store.FindOwned(r.Context(), r.PathValue("presentationId"), x.User.ID)
-	if errors.Is(e, ErrNotFound) {
-		errJSON(w, 404, "not_found")
-		return
-	}
-	if e != nil {
-		errJSON(w, 500, "internal_error")
-		return
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(p)
-}
-func errJSON(w http.ResponseWriter, s int, e string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(s)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": e})
+func errJSON(w http.ResponseWriter, status int, code string) {
+	writeJSON(w, status, map[string]string{"error": code})
 }

@@ -158,6 +158,17 @@ export default function ManagerJoinPage({
       setStartError("This presentation has no slides to start.");
       return;
     }
+    const invalidQuestion = quiz.slides.find((slide) => {
+      if (slide.slide_type !== 1) return false;
+      const options = Array.isArray(slide.options) ? slide.options : [];
+      const correct = options.filter((option) => option.answer === true).length;
+      return !String(slide.question_text || "").trim() || options.length < 2 || correct < 1 ||
+        (slide.question_type === "single" && correct !== 1);
+    });
+    if (invalidQuestion) {
+      setStartError("Complete every question with at least two options and a valid correct answer before presenting.");
+      return;
+    }
     if (sessionInProgress) {
       setStartError("Session is already in progress. Resuming current slide...");
       onNext?.();

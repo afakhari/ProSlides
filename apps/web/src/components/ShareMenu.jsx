@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import { X, Check, Loader2 } from "lucide-react";
-import { apiFetch } from "../utils/apiFetch";
 
 
 export default function ShareMenu({
-  quizId,
   isOpen,
   onClose,
   accessCode,
@@ -49,29 +47,17 @@ export default function ShareMenu({
   const saveAccessCode = async () => {
     if (!code || inputError || code.length < 5) return false;
 
+    if (code !== initialCode) {
+      setSaveError("Join codes are generated securely when a live session starts and cannot be edited.");
+      return false;
+    }
     setIsSaving(true);
     setSaveError("");
     setSaveSuccess(false);
 
     try {
-      const response = await apiFetch(`/quizzes/${quizId}/`, {
-        method: "PATCH",
-        json: {
-          access_code: code,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        const errorMessage = formatSaveError(errorData);
-
-        setSaveError(`${errorMessage}`);
-        return false;
-      }
-
-      const data = await response.json();
       setSaveSuccess(true);
-      const updatedCode = data?.access_code || code;
+      const updatedCode = code;
       setInitialCode(updatedCode);
       if (onAccessCodeSaved) {
         onAccessCodeSaved(updatedCode);
@@ -90,23 +76,6 @@ export default function ShareMenu({
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const formatSaveError = (errorData) => {
-    if (!errorData) return "Unable to save access code. Please try again.";
-    if (typeof errorData === "string") return errorData;
-    if (errorData.access_code) {
-      const message = Array.isArray(errorData.access_code)
-        ? errorData.access_code.join(" ")
-        : errorData.access_code;
-      if (String(message).toLowerCase().includes("already")) {
-        return "This access code is already in use. Try a different one.";
-      }
-      return message;
-    }
-    if (errorData.detail) return errorData.detail;
-    const firstValue = Object.values(errorData)[0];
-    return firstValue || "Unable to save access code. Please try again.";
   };
 
   const hasChanges = code !== initialCode;

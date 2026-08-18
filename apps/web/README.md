@@ -4,7 +4,8 @@ React/Vite client for the new Go API.
 
 ## Current state
 
-The existing UI is retained while the live runtime uses typed HTTP commands,
+The existing UI is retained while authentication, dashboard, editor, reports,
+and the live runtime use the Go API. Live delivery uses typed HTTP commands,
 role-scoped snapshots, manager-only paginated rosters, and SSE recovery from
 `last_event_id`. No live runtime route opens the historical WebSocket client.
 
@@ -19,12 +20,12 @@ npm run test:unit
 npm run build
 ```
 
-`VITE_LIVE_API_BASE_URL` configures the Go live API (including `/api/v1`). The
-older `VITE_API_BASE_URL` remains for non-live endpoints not migrated in this
-stage. New live calls must be typed and aligned with the OpenAPI contract.
-The default `/api/v1` is same-origin; the Vite development server proxies it to
-the local Go API. A cross-origin production override requires an explicitly
-restricted CORS policy at the trusted ingress.
+`VITE_API_BASE_URL` and `VITE_LIVE_API_BASE_URL` configure the Go API. Both
+default to same-origin `/api/v1`; the Vite development server proxies it to the
+local Go API. A cross-origin production override requires an explicitly
+restricted CORS policy at the trusted ingress. `VITE_GOOGLE_CLIENT_ID` keeps
+the existing Google UI available, but the matching Go verification endpoint
+must not be enabled until its audience/provider configuration is approved.
 
 The presenter connection moves a new draft session idempotently into the lobby
 before displaying its join code. Participant retry/reconnect preserves one

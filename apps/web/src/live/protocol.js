@@ -74,11 +74,24 @@ export const normalizeLiveSlide = (activeSlide, session = {}) => {
 export const rosterEntryToLegacy = (entry, index = 0) => ({ user_id: entry.participant_id, name: entry.display_name, character: entry.avatar || "", rank: index + 1, total_points: Number(entry.score || 0), new_points: 0 });
 export const participantToLegacy = (p) => ({ user_id: p.id, name: p.display_name, character: p.avatar || "", rank: null, total_points: Number(p.score || 0), new_points: 0 });
 export const presentationSlideToLegacy = (slide) => {
+  if (slide.kind === "question_draft") {
+    return {
+      slide_type: 1,
+      slide_id: slide.id,
+      question_id: slide.id,
+      question_text: "",
+      question_type: "single",
+      question_time: 10,
+      options: [],
+      show_leaderboard_after: slide.content?.show_leaderboard_after === true,
+    };
+  }
   const normalized = normalizeLiveSlide({ id: slide.id, position: slide.position, kind: slide.kind, content: slide.content }, { active_slide_id: slide.id, state_version: 0, ends_at: null });
   if (normalized?.slide_type !== 1) return normalized;
   const sourceOptions = Array.isArray(slide.content?.options) ? slide.content.options : [];
   return {
     ...normalized,
+    show_leaderboard_after: slide.content?.show_leaderboard_after === true,
     options: normalized.options.map((option, index) => ({
       ...option,
       answer: sourceOptions[index]?.is_correct === true,

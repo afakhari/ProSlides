@@ -5,6 +5,9 @@ import Seo from "../../components/Seo";
 
 function formatError(payload) {
   if (!payload) return "خطایی رخ داد. دوباره تلاش کنید";
+  if (payload.error === "invalid_credentials") return "ایمیل یا رمز عبور نادرست است.";
+  if (payload.error === "email_taken") return "این ایمیل قبلاً ثبت شده است.";
+  if (payload.error === "invalid_request") return "اطلاعات واردشده معتبر نیست.";
   if (payload.email) {
     const message = Array.isArray(payload.email)
       ? payload.email.join(", ")
@@ -86,14 +89,14 @@ function getPasswordStrength(value) {
 
 function getPasswordPolicyError(value) {
   if (!value) return "لطفاً رمز عبور را وارد کنید.";
-  if (value.length < 8) return "رمز عبور باید حداقل ۸ کاراکتر باشد.";
+  if (value.length < 12) return "رمز عبور باید حداقل ۱۲ کاراکتر باشد.";
   if (/^\d+$/.test(value)) return "رمز عبور نمی‌تواند فقط شامل اعداد باشد.";
   return "";
 }
 
 function isDuplicateEmailError(payload) {
   if (!payload || typeof payload !== "object") return false;
-  const message = normalizeErrorValue(payload.email || payload.detail || "");
+  const message = normalizeErrorValue(payload.email || payload.detail || payload.error || "");
   return /already|exist|used/i.test(message);
 }
 
@@ -872,11 +875,11 @@ export default function AuthPage() {
   };
 
   const handleLogin = async () => {
-    const response = await apiFetch("/auth/token/", {
+    const response = await apiFetch("/auth/login", {
       method: "POST",
       auth: false,
       json: {
-        username: email.trim(),
+        email: email.trim(),
         password: password.trim(),
       },
     });
@@ -900,16 +903,9 @@ export default function AuthPage() {
       throw new Error(message);
     }
 
-    const { access, refresh } = payload || {};
-    if (!access) {
-      throw new Error("ورود با موفقیت انجام شد، اما توکن دسترسی دریافت نشد.");
-    }
-
-    localStorage.setItem("auth.access", access);
-    if (refresh) localStorage.setItem("auth.refresh", refresh);
     setAuthEmail(trimmedEmail);
     const resolvedName =
-      payload?.full_name || payload?.name || fullName.trim();
+      payload?.display_name || payload?.full_name || payload?.name || fullName.trim();
     if (resolvedName) {
       localStorage.setItem("auth.name", resolvedName);
     }
@@ -929,12 +925,15 @@ export default function AuthPage() {
     setSubmitting(true);
     setStatus(null);
     try {
-      const response = await apiFetch("/auth/password/reset/", {
+      const response = await apiFetch("/auth/password/reset", {
         method: "POST",
         auth: false,
         json: { email: email.trim() },
       });
       const payload = await parseJson(response);
+      if (response.status === 503) {
+        throw new Error("سرویس ارسال ایمیل بازیابی هنوز پیکربندی نشده است.");
+      }
       if (!response.ok) {
         if (isOtpExpiredError(payload)) {
           setOtpExpiresIn(0);
@@ -965,13 +964,12 @@ export default function AuthPage() {
   const handleSignup = async () => {
     const trimmedName = fullName.trim();
     const requestPayload = {
-      username: email.trim(),
       email: email.trim(),
       password: password.trim(),
-      full_name: trimmedName,
+      display_name: trimmedName,
     };
 
-    const response = await apiFetch("/auth/register/", {
+    const response = await apiFetch("/auth/register", {
       method: "POST",
       auth: false,
       json: requestPayload,
@@ -998,7 +996,7 @@ export default function AuthPage() {
     setAuthEmail(trimmedEmail);
 
     if (responsePayload?.is_active) {
-      await handleLogin();
+      navigateToDashboard();
       return;
     }
 

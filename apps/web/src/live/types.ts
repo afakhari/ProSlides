@@ -71,4 +71,11 @@ export interface ParticipantResult { id: string; display_name: string; avatar?: 
 export interface AnswerResult { answer_id: string; score_delta: number; duplicate: boolean }
 export interface LiveSessionLocator { session_id: string; presentation_id: string }
 export interface PresentationSlide { id: string; position: number; kind: string; content: Record<string, unknown> }
-export interface Presentation { id: string; title: string; slides: PresentationSlide[] }
+export interface Presentation {
+  id: string;
+  title: string;
+  settings: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+  slides: PresentationSlide[];
+}

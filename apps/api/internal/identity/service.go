@@ -35,3 +35,11 @@ func PrepareRegistration(input Registration) (Account, error) {
 func VerifyPassword(password, hash string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
+
+func HashPassword(password string) (string, error) {
+	if len(password) < 12 || len(password) > 128 {
+		return "", ErrInvalidRegistration
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(hash), err
+}

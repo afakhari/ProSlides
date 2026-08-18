@@ -25,4 +25,6 @@ type Store interface {
 	CreateSession(context.Context, string, SessionSecrets) error
 	FindSession(context.Context, []byte) (StoredSession, error)
 	DeleteSession(context.Context, []byte) error
+	CreatePasswordReset(context.Context, string, []byte, time.Time) error
+	ConsumePasswordReset(context.Context, string, []byte, string) (bool, error)
 }

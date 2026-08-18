@@ -16,6 +16,7 @@ import { ServerDataProvider } from "./contexts/ServerDataContext";
 import { useServerData } from "./hooks/useServerData";
 import notFoundIllustration from "./assets/404.svg";
 import accessDeniedIllustration from "./assets/access_denied.png";
+import RequireSession from "./components/RequireSession";
 import { QuizSetup } from "./data/mockData";
 
 import ManagerJoinPage from "./pages/presentation/manager/JoinPage";
@@ -39,6 +40,12 @@ function RouteFallback() {
   return <div className="min-h-screen bg-white" aria-busy="true" />;
 }
 
+function ProtectedPresentationRoute() {
+  const { role } = useParams();
+  const presentation = <PresentationEntry mode="presentation" />;
+  return role === "manager" ? <RequireSession>{presentation}</RequireSession> : presentation;
+}
+
 export default function App() {
   return (
     <Router>
@@ -52,19 +59,19 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/:role/presentation/:roomId"
-            element={<PresentationEntry mode="presentation" />}
+            element={<ProtectedPresentationRoute />}
           />
           <Route path="/" element={<LandingPage />} />
           {/* Access code route resolves the active Go live session for a player. */}
           <Route path="/:accessCode" element={<PresentationEntry mode="accessCode" />} />
           {/* Manager/Role panel (supports both /manager and any role param) */}
-          <Route path="/:role/panel" element={<HomePage />} />
-          <Route path="/:role/panel/:roomId" element={<EditorPage />} />
+          <Route path="/:role/panel" element={<RequireSession><HomePage /></RequireSession>} />
+          <Route path="/:role/panel/:roomId" element={<RequireSession><EditorPage /></RequireSession>} />
           {/* Catch-all route for any undefined path */}
           <Route path="*" element={<NotFoundPage />} />
           <Route
             path="/:role/panel/:quizId/report"
-            element={<SessionDetail />}
+            element={<RequireSession><SessionDetail /></RequireSession>}
           />
           <Route path="*" element={<WaitingPage />} />
         </Routes>

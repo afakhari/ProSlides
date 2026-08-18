@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import ShareMenu from "./ShareMenu";
 import { apiFetch } from "../utils/apiFetch";
-import { clearAuthStorage, getRefreshToken } from "../utils/auth";
+import { clearAuthStorage } from "../utils/auth";
 
 const safeTimestamp = (value) => {
   const time = Date.parse(value);
@@ -61,22 +61,18 @@ export default function QuizManager({ onNewPresentation }) {
       setLoading(true);
       // Add a small delay for better UX
       await new Promise((resolve) => setTimeout(resolve, 100));
-      const response = await apiFetch("/quizzes/list/");
-      if (!response.ok) {
-        throw new Error("Failed to fetch quizzes");
-      }
-      const data = await response.json();
+      const data = await quizService.listPresentations();
 
       // Map API response to local quiz structure
-      const mappedQuizzes = data.results.map((quiz) => {
-        const updatedAt = safeTimestamp(quiz.last_update);
+      const mappedQuizzes = data.map((quiz) => {
+        const updatedAt = safeTimestamp(quiz.updated_at);
         const createdAt = safeTimestamp(quiz.created_at);
         return {
-          id: quiz.quiz_id,
-          name: quiz.quiz_name,
-          accessCode: quiz.access_code,
-          slides: quiz.slides_count,
-          participants: quiz.participants_count,
+          id: quiz.id,
+          name: quiz.title,
+          accessCode: "",
+          slides: quiz.slide_count,
+          participants: quiz.participant_count,
           members: "",
           createdBy: quiz.owner_full_name || quiz.owner_name || loggedInUser,
           lastUpdated: formatDate(updatedAt),
@@ -143,22 +139,8 @@ export default function QuizManager({ onNewPresentation }) {
   const handleNewPresentation = async () => {
     try {
       setCreatingQuiz(true);
-      const response = await apiFetch("/quizzes/", {
-        method: "POST",
-        json: {
-          title: "Untitled Presentation",
-          background_color: "#f7f7fb",
-          background_image_url: "",
-          text_color: "#111827",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to create quiz: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const newQuizId = data.quiz_id;
+      const data = await quizService.createPresentation("Untitled Presentation");
+      const newQuizId = data.id;
 
       if (newQuizId) {
         // Navigate to editor with new quiz ID
@@ -262,13 +244,7 @@ export default function QuizManager({ onNewPresentation }) {
         setDeletingQuizIds((prev) => [...prev, quizId]);
       }
 
-      const response = await apiFetch(`/quizzes/${quizId}/`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to delete quiz: ${response.statusText}`);
-      }
+      await quizService.deletePresentation(quizId);
 
       // Remove from local state immediately
       setQuizzes((prevQuizzes) => prevQuizzes.filter((q) => q.id !== quizId));
@@ -287,16 +263,7 @@ export default function QuizManager({ onNewPresentation }) {
   // Rename a quiz via API
   const renameQuiz = async (quizId, newName) => {
     try {
-      const response = await apiFetch(`/quizzes/${quizId}/`, {
-        method: "PATCH",
-        json: {
-          title: newName.trim(),
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to rename quiz: ${response.statusText}`);
-      }
+      await quizService.updateQuiz(quizId, { title: newName.trim() });
 
       // Update local state on success
       const now = Date.now();
@@ -328,13 +295,7 @@ export default function QuizManager({ onNewPresentation }) {
         throw new Error("Quiz not found");
       }
 
-      const response = await apiFetch(`/quizzes/${quizId}/reset-result/`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to reset quiz results: ${response.statusText}`);
-      }
+      await quizService.resetPresentationResults(quizId);
 
       setStatusMessage({
         type: "success",
@@ -428,24 +389,6 @@ export default function QuizManager({ onNewPresentation }) {
     setSelectedQuizzes(filteredQuizzes.map((q) => q.id));
   };
 
-  // Generate unique access code
-  const generateAccessCode = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "";
-    let isUnique = false;
-
-    while (!isUnique) {
-      code = "";
-      for (let i = 0; i < 5; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      // Check if code is unique
-      isUnique = !quizzes.some((q) => q.accessCode === code);
-    }
-
-    return code;
-  };
-
   // Handle duplicate quiz via API
   const handleDuplicate = async (quiz) => {
     try {
@@ -467,33 +410,17 @@ export default function QuizManager({ onNewPresentation }) {
 
       const newName = `${quiz.name} (copy ${maxCopyNumber + 1})`;
 
-      const response = await apiFetch(`/quizzes/${quiz.id}/duplicate/`, {
-        method: "POST",
-        json: {
-          title: newName,
-          access_code: generateAccessCode(), // Generate new access code for duplicate
-          music_url: "",
-          background_color: "",
-          background_image_url: "",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to duplicate quiz: ${response.statusText}`);
-      }
-
-      const duplicatedQuizData = await response.json();
+      const duplicatedQuizData = await quizService.duplicatePresentation(quiz.id, newName);
 
       // Add the duplicated quiz to local state
       // Assuming the API returns the new quiz data, map it to our local format
       const now = Date.now();
       const newQuiz = {
-        id: duplicatedQuizData.quiz_id || duplicatedQuizData.id,
-        name: duplicatedQuizData.quiz_name || duplicatedQuizData.title,
-        accessCode: duplicatedQuizData.access_code,
-        slides: duplicatedQuizData.slides_count || quiz.slides,
-        participants:
-          duplicatedQuizData.participants_count || quiz.participants,
+        id: duplicatedQuizData.id,
+        name: duplicatedQuizData.title,
+        accessCode: "",
+        slides: duplicatedQuizData.slides?.length ?? quiz.slides,
+        participants: 0,
         members: "",
         createdBy: quiz.createdBy,
         lastUpdated: formatDate(now),
@@ -534,7 +461,13 @@ export default function QuizManager({ onNewPresentation }) {
           slide.question &&
           typeof slide.question === "object" &&
           slide.question !== null &&
-          Object.keys(slide.question).length > 0
+          Object.keys(slide.question).length > 0 &&
+          Array.isArray(slide.question.options) &&
+          slide.question.options.length >= 2 &&
+          slide.question.options.every((option) => String(option.text || option.option_text || "").trim()) &&
+          slide.question.options.some((option) => option.is_correct) &&
+          (slide.question.question_type !== "single" ||
+            slide.question.options.filter((option) => option.is_correct).length === 1)
         );
       });
 
@@ -558,15 +491,9 @@ export default function QuizManager({ onNewPresentation }) {
   const handleLogout = async () => {
     setShowProfileMenu(false);
     try {
-      const refresh = getRefreshToken();
-      if (refresh) {
-        const response = await apiFetch("/auth/logout/", {
-          method: "POST",
-          json: { refresh },
-        });
-        if (!response.ok) {
-          console.warn("Logout request failed:", response.statusText);
-        }
+      const response = await apiFetch("/auth/logout", { method: "POST" });
+      if (!response.ok) {
+        console.warn("Logout request failed:", response.statusText);
       }
     } catch (err) {
       console.warn("Logout error:", err);
@@ -593,13 +520,17 @@ export default function QuizManager({ onNewPresentation }) {
     setPasswordPromptLoading(true);
     setPasswordPromptStatus(null);
     try {
-      const response = await apiFetch("/auth/password/reset/", {
+      const response = await apiFetch("/auth/password/reset", {
         method: "POST",
         auth: false,
         json: { email },
       });
       if (!response.ok) {
-        throw new Error("Unable to send password setup email.");
+        throw new Error(
+          response.status === 503
+            ? "Password recovery email delivery is not configured yet."
+            : "Unable to send password setup email."
+        );
       }
       setPasswordPromptStatus({
         type: "success",

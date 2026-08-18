@@ -266,10 +266,14 @@ function AppPresentation({ roomId, role, initialQuizData }) {
             quiz_id: data.id,
             title: data.title,
             access_code: "",
-            background: { color: "#1e1e2e", image: "", text_color: "#111827" },
-            music_url: "",
+            background: {
+              color: data.settings?.background_color || "#1e1e2e",
+              image: data.settings?.background_image_url || "",
+              text_color: data.settings?.text_color || "#111827",
+            },
+            music_url: data.settings?.music_url || "",
             slides: mappedSlides,
-            text_color: "#111827",
+            text_color: data.settings?.text_color || "#111827",
           };
 
           setRemoteQuiz(quizData);

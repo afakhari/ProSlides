@@ -114,6 +114,27 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/CurrentUser' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/auth/password/reset:
+    post:
+      operationId: requestPasswordReset
+      summary: Send a one-time password reset link without disclosing account existence.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PasswordResetRequest' } } }
+      responses:
+        '202': { description: Request accepted whether or not the email exists. }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '503': { description: Password reset delivery is temporarily unavailable. }
+  /api/v1/auth/password/reset/confirm:
+    post:
+      operationId: confirmPasswordReset
+      summary: Consume a one-time reset token and revoke all existing account sessions.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PasswordResetConfirmRequest' } } }
+      responses:
+        '204': { description: Password changed and existing sessions revoked. }
+        '400': { $ref: '#/components/responses/ValidationError' }
   /api/v1/presentations/{presentationId}:
     get:
       operationId: getPresentation
@@ -129,7 +150,41 @@ paths:
               schema: { $ref: '#/components/schemas/Presentation' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updatePresentation
+      summary: Update an owned presentation's title or visual settings.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UpdatePresentationRequest' } } }
+      responses:
+        '200': { description: Updated presentation., content: { application/json: { schema: { $ref: '#/components/schemas/Presentation' } } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deletePresentation
+      summary: Permanently delete an owned presentation and its dependent data.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204': { description: Presentation deleted. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/presentations:
+    get:
+      operationId: listPresentations
+      summary: List the current owner's presentations in stable recent-first order.
+      responses:
+        '200':
+          description: Bounded owner presentation list.
+          content: { application/json: { schema: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/PresentationSummary' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
     post:
       operationId: createPresentation
       summary: Create an empty presentation owned by the current account.
@@ -149,6 +204,44 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
+  /api/v1/presentations/{presentationId}/duplicate:
+    post:
+      operationId: duplicatePresentation
+      summary: Atomically duplicate an owned presentation and all ordered slides.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreatePresentationRequest' } } }
+      responses:
+        '201': { description: Duplicated presentation., content: { application/json: { schema: { $ref: '#/components/schemas/Presentation' } } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/presentations/{presentationId}/latest-session:
+    get:
+      operationId: getLatestPresentationSession
+      summary: Resolve the newest live session for an owned presentation.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+      responses:
+        '200': { description: Latest session locator., content: { application/json: { schema: { $ref: '#/components/schemas/LiveSessionLocator' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/presentations/{presentationId}/results:
+    delete:
+      operationId: deletePresentationResults
+      summary: Delete all live sessions and results for an owned presentation while preserving its content.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204': { description: Results deleted. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/presentations/{presentationId}/slides:
     post:
       operationId: createSlide
@@ -169,6 +262,51 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Slide' }
         '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/presentations/{presentationId}/slides/reorder:
+    post:
+      operationId: reorderSlides
+      summary: Atomically replace the complete slide order for an owned presentation.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ReorderSlidesRequest' } } }
+      responses:
+        '204': { description: Slide positions updated. }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/presentations/{presentationId}/slides/{slideId}:
+    put:
+      operationId: replaceSlide
+      summary: Replace the editable definition of one owned slide.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+        - { name: slideId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateSlideRequest' } } }
+      responses:
+        '200': { description: Replaced slide., content: { application/json: { schema: { $ref: '#/components/schemas/Slide' } } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteSlide
+      summary: Delete one owned slide and compact following positions.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+        - { name: slideId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204': { description: Slide deleted. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -396,27 +534,61 @@ components:
       properties:
         email: { type: string, format: email, maxLength: 320 }
         password: { type: string, format: password, maxLength: 128 }
+    PasswordResetRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+    PasswordResetConfirmRequest:
+      type: object
+      required: [uid, token, new_password]
+      properties:
+        uid: { type: string, format: uuid }
+        token: { type: string, minLength: 32, maxLength: 128 }
+        new_password: { type: string, format: password, minLength: 12, maxLength: 128 }
     CurrentUser:
       type: object
-      required: [id, email, display_name]
+      required: [id, email, display_name, is_active]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         display_name: { type: string }
+        is_active: { type: boolean, enum: [true], description: Go accounts are active immediately after successful registration. }
     Presentation:
       type: object
-      required: [id, title, slides]
+      required: [id, title, settings, created_at, updated_at, slides]
       properties:
         id: { type: string, format: uuid }
         title: { type: string, minLength: 1, maxLength: 500 }
+        settings: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
         slides:
           type: array
           items: { $ref: '#/components/schemas/Slide' }
+    PresentationSummary:
+      type: object
+      required: [id, title, settings, slide_count, participant_count, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        settings: { type: object, additionalProperties: true }
+        slide_count: { type: integer, minimum: 0 }
+        participant_count: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     CreatePresentationRequest:
       type: object
       required: [title]
       properties:
         title: { type: string, minLength: 1, maxLength: 500 }
+        settings: { type: object, additionalProperties: true }
+    UpdatePresentationRequest:
+      type: object
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+        settings: { type: object, additionalProperties: true }
     CreateSlideRequest:
       type: object
       required: [position, kind, content]
@@ -424,6 +596,15 @@ components:
         position: { type: integer, minimum: 0 }
         kind: { type: string, minLength: 1, maxLength: 100 }
         content: { type: object, additionalProperties: true }
+    ReorderSlidesRequest:
+      type: object
+      required: [slide_ids]
+      properties:
+        slide_ids:
+          type: array
+          maxItems: 1000
+          uniqueItems: true
+          items: { type: string, format: uuid }
     CreateQuestionRequest:
       type: object
       required: [position, text, question_type, options]

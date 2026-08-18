@@ -120,8 +120,21 @@ try {
   $contentID = ($contentResponse.Content | ConvertFrom-Json).id
   $questionResponse = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/questions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 1; text = "Choose"; question_type = "multiple"; question_time = 30; max_point = 100; min_point = 0; partial_scoring = $true; faster_answers_more_points = $false; options = @(@{ text = "A"; is_correct = $true }, @{ text = "B"; is_correct = $true }, @{ text = "C"; is_correct = $false }) } | ConvertTo-Json -Compress -Depth 4) -ExpectedStatus 201
   $questionID = ($questionResponse.Content | ConvertFrom-Json).id
+
+  $updated = Invoke-API -Method PATCH -Path "/api/v1/presentations/$createdID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ title = "Updated through API"; settings = @{ background_color = "#112233"; show_music = $true } } | ConvertTo-Json -Compress) -ExpectedStatus 200
+  $updatedPayload = $updated.Content | ConvertFrom-Json
+  if ($updatedPayload.title -ne "Updated through API" -or $updatedPayload.settings.background_color -ne "#112233") { throw "Presentation metadata update was not persisted" }
+  Invoke-API -Method PUT -Path "/api/v1/presentations/$createdID/slides/$contentID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 0; kind = "content"; content = @{ text = "Updated content"; image_url = "" } } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides/reorder" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ slide_ids = @($questionID, $contentID) } | ConvertTo-Json -Compress) -ExpectedStatus 204 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides/reorder" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ slide_ids = @($contentID, $questionID) } | ConvertTo-Json -Compress) -ExpectedStatus 204 | Out-Null
+  $duplicate = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/duplicate" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ title = "Integration duplicate" } | ConvertTo-Json -Compress) -ExpectedStatus 201
+  $duplicateID = ($duplicate.Content | ConvertFrom-Json).id
+  $ownedList = Invoke-API -Method GET -Path "/api/v1/presentations" -Client $loginClient -ExpectedStatus 200
+  $ownedIDs = @(($ownedList.Content | ConvertFrom-Json) | ForEach-Object { $_.id })
+  if ($ownedIDs -notcontains $createdID -or $ownedIDs -notcontains $duplicateID) { throw "Owned presentation list omitted created content" }
   $createdRead = Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200
-  if (($createdRead.Content | ConvertFrom-Json).slides.Count -ne 2) { throw "Created presentation did not contain both slides" }
+  $createdPayload = $createdRead.Content | ConvertFrom-Json
+  if ($createdPayload.slides.Count -ne 2 -or $createdPayload.slides[0].id -ne $contentID -or $createdPayload.slides[0].content.text -ne "Updated content") { throw "Presentation editor round trip was incomplete or out of order" }
 
   $createSessionRequest = [guid]::NewGuid().ToString()
   $liveCreated = Invoke-API -Method POST -Path "/api/v1/live/sessions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = $createSessionRequest; presentation_id = $createdID } | ConvertTo-Json -Compress) -ExpectedStatus 201
@@ -283,13 +296,22 @@ try {
     throw "Presentation response did not return ordered slides"
   }
 
+  $otherCookieJar = [System.Net.CookieContainer]::new()
   $otherHandler = [System.Net.Http.HttpClientHandler]::new()
   $otherHandler.UseProxy = $false
+  $otherHandler.CookieContainer = $otherCookieJar
   $otherClient = [System.Net.Http.HttpClient]::new($otherHandler)
   $otherClient.Timeout = [TimeSpan]::FromSeconds(10)
   $otherEmail = "presentation-reader-$([guid]::NewGuid().ToString('N').Substring(0, 16))@example.test"
   Invoke-API -Method POST -Path "/api/v1/auth/register" -Client $otherClient -Body (@{ email = $otherEmail; display_name = "Other User"; password = $password } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  $otherCSRF = $otherCookieJar.GetCookies($apiBaseUrl)["proslides_csrf"].Value
   Invoke-API -Method GET -Path "/api/v1/presentations/$presentationID" -Client $otherClient -ExpectedStatus 404 | Out-Null
+  Invoke-API -Method PATCH -Path "/api/v1/presentations/$createdID" -Client $otherClient -Headers @{ "X-CSRF-Token" = $otherCSRF } -Body (@{ title = "Unauthorized update" } | ConvertTo-Json -Compress) -ExpectedStatus 404 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides/reorder" -Client $otherClient -Headers @{ "X-CSRF-Token" = $otherCSRF } -Body (@{ slide_ids = @() } | ConvertTo-Json -Compress) -ExpectedStatus 404 | Out-Null
+  Invoke-API -Method DELETE -Path "/api/v1/presentations/$createdID/results" -Client $otherClient -Headers @{ "X-CSRF-Token" = $otherCSRF } -ExpectedStatus 404 | Out-Null
+
+  Invoke-API -Method DELETE -Path "/api/v1/presentations/$duplicateID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -ExpectedStatus 204 | Out-Null
+  Invoke-API -Method GET -Path "/api/v1/presentations/$duplicateID" -Client $loginClient -ExpectedStatus 404 | Out-Null
 
   Write-Host "Authentication Compose integration matrix passed."
 } finally {
