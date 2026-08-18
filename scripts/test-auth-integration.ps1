@@ -172,8 +172,33 @@ try {
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/answers" -Client $participantClient -Body (@{ request_id = [guid]::NewGuid().ToString(); question_slide_id = $questionID; selected_option_indexes = @(0) } | ConvertTo-Json -Compress) -ExpectedStatus 409 | Out-Null
   $snapshot = Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/snapshot" -Client $participantClient -ExpectedStatus 200
   $snapshotPayload = $snapshot.Content | ConvertFrom-Json
-  if (($snapshotPayload.scores.PSObject.Properties.Value | Measure-Object -Sum).Sum -ne 100) { throw "Snapshot score was not 100" }
+  if ($snapshotPayload.role -ne "participant" -or $snapshotPayload.participant.score -ne 100) { throw "Participant snapshot did not contain only the caller score" }
+  if ($snapshotPayload.PSObject.Properties.Name -contains "participants" -or $snapshotPayload.PSObject.Properties.Name -contains "scores") { throw "Participant snapshot disclosed the complete roster or score map" }
+  if ($snapshotPayload.session.PSObject.Properties.Name -contains "host_id" -or $snapshotPayload.session.PSObject.Properties.Name -contains "join_code") { throw "Participant snapshot disclosed manager-only session fields" }
   if ($snapshotPayload.participant_count -ne 17 -or $snapshotPayload.last_event_id -lt 1) { throw "Snapshot did not include its participant count and SSE recovery cursor" }
+
+  $managerSnapshot = Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/snapshot" -Client $loginClient -ExpectedStatus 200
+  $managerSnapshotPayload = $managerSnapshot.Content | ConvertFrom-Json
+  if ($managerSnapshotPayload.role -ne "manager" -or $managerSnapshotPayload.participant_count -ne 17 -or $managerSnapshotPayload.last_event_id -lt $snapshotPayload.last_event_id) { throw "Manager snapshot did not contain aggregate state and a valid recovery cursor" }
+  if ($managerSnapshotPayload.PSObject.Properties.Name -contains "participants" -or $managerSnapshotPayload.PSObject.Properties.Name -contains "scores") { throw "Manager snapshot returned an unbounded roster" }
+  Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/roster" -Client $participantClient -ExpectedStatus 401 | Out-Null
+
+  $rosterIDs = @()
+  $rosterCursor = $null
+  do {
+    $rosterPath = "/api/v1/live/sessions/$($liveSession.id)/roster?order=joined&limit=5"
+    if ($rosterCursor) { $rosterPath += "&cursor=$([Uri]::EscapeDataString($rosterCursor))" }
+    $rosterResponse = Invoke-API -Method GET -Path $rosterPath -Client $loginClient -ExpectedStatus 200
+    $rosterPage = $rosterResponse.Content | ConvertFrom-Json
+    if ($rosterPage.items.Count -gt 5 -or $rosterPage.limit -ne 5 -or $rosterPage.order -ne "joined") { throw "Roster page was not bounded or ordered as requested" }
+    $rosterIDs += @($rosterPage.items | ForEach-Object { $_.participant_id })
+    $rosterCursor = $rosterPage.next_cursor
+  } while ($rosterPage.has_more)
+  if ($rosterIDs.Count -ne 17 -or ($rosterIDs | Sort-Object -Unique).Count -ne 17) { throw "Roster pagination skipped or duplicated participants" }
+
+  $leaderboardPage = Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/roster?order=score&limit=5" -Client $loginClient -ExpectedStatus 200
+  $leaderboardPayload = $leaderboardPage.Content | ConvertFrom-Json
+  if ($leaderboardPayload.items[0].participant_id -ne $snapshotPayload.participant.id -or $leaderboardPayload.items[0].score -ne 100) { throw "Leaderboard ordering was not score-descending and stable" }
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 3; action = "close_question" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 4; action = "show_leaderboard" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
 
@@ -205,14 +230,23 @@ try {
     throw "SSE Last-Event-ID replay did not resume after the acknowledged event"
   }
   $resumedEventNames = @()
+  $currentEventName = $null
+  $leaderboardEventValidated = $false
   for ($lineNumber = 0; $lineNumber -lt 100; $lineNumber++) {
     $eventLine = $resumeReader.ReadLineAsync().GetAwaiter().GetResult()
     if ($eventLine -match '^event: (.+)$') {
-      $resumedEventNames += $Matches[1]
-      if ($Matches[1] -eq 'leaderboard.updated') { break }
+      $currentEventName = $Matches[1]
+      $resumedEventNames += $currentEventName
+    } elseif ($currentEventName -eq 'leaderboard.updated' -and $eventLine -match '^data: (.+)$') {
+      $leaderboardEvent = $Matches[1] | ConvertFrom-Json
+      if ($leaderboardEvent.schema_version -ne 2 -or $leaderboardEvent.payload.participant_count -ne 17 -or $leaderboardEvent.payload -is [System.Array] -or $leaderboardEvent.payload.PSObject.Properties.Name -contains 'participant_id') {
+        throw "leaderboard.updated disclosed roster rows instead of an aggregate notification"
+      }
+      $leaderboardEventValidated = $true
+      break
     }
   }
-  if ($resumedEventNames -notcontains 'answer.stats' -or $resumedEventNames -notcontains 'leaderboard.updated') {
+  if ($resumedEventNames -notcontains 'answer.stats' -or $resumedEventNames -notcontains 'leaderboard.updated' -or -not $leaderboardEventValidated) {
     throw "SSE replay did not contain the aggregated answer.stats and leaderboard.updated events"
   }
   $resumeReader.Dispose()

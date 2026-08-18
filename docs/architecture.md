@@ -106,7 +106,18 @@ Presence bursts are compacted so only the newest consecutive
 `participant_delta` equal to the number of committed joins in that compacted
 burst. The exact count always comes from the snapshot. Answers never produce
 one SSE event per participant; `answer.stats` is emitted after closure and
-`leaderboard.updated` when the leaderboard is shown.
+`leaderboard.updated` carries only an aggregate participant count when the
+leaderboard is shown. Complete rows are never broadcast. Newly written
+leaderboard notifications use event schema version 2; retained version-1 array
+payloads are reduced to their count by the PostgreSQL adapter before replay,
+without rewriting the durable ledger.
+
+Snapshots are role-scoped and read from a single PostgreSQL `REPEATABLE READ`
+view. Participants receive public session state, active slide, their own
+participant/score, aggregate count, and the event cursor. Managers receive a
+bounded snapshot and fetch roster/leaderboard rows separately with `limit <=
+100` and stable keyset cursors. Joined order uses `(joined_at, id)`; score order
+uses `(score DESC, joined_at, id)`.
 
 Redis Pub/Sub can later replace PostgreSQL polling as the low-latency wake-up
 path across instances, but only through an outbox relay from `live_events`.
@@ -161,13 +172,11 @@ the old version available until schema/event compatibility is confirmed.
 
 ## Known capacity gaps (truth, not aspirations)
 
-1. Participant snapshots still include the complete participant/score maps.
-   They must become role-scoped and paginated before a 10k audience test.
-2. Distributed rate limiting, ephemeral presence TTLs, and Redis wake-up fan-out
+1. Distributed rate limiting, ephemeral presence TTLs, and Redis wake-up fan-out
    are not implemented.
-3. Metrics/tracing and a production reverse-proxy configuration are absent.
-4. Event retention/compaction and PostgreSQL operational tuning are undefined.
-5. No k6 1k/5k/10k evidence exists yet; therefore 10k is a target, not a claim.
+2. Metrics/tracing and a production reverse-proxy configuration are absent.
+3. Event retention/compaction and PostgreSQL operational tuning are undefined.
+4. No k6 1k/5k/10k evidence exists yet; therefore 10k is a target, not a claim.
 
 The ordered capacity work and pass/fail thresholds are in
 `docs/capacity-plan.md`.

@@ -60,7 +60,9 @@ functional gate; it is not capacity evidence.
 
 ## Ordered execution
 
-1. Add role-scoped/paginated snapshots so players never download the 10k roster.
+1. **Completed 2026-08-19:** add role-scoped/paginated snapshots so players
+   never download the 10k roster; full leaderboard rows are also removed from
+   audience SSE.
 2. Add OpenTelemetry-compatible metrics and a k6 smoke scenario (100 users).
 3. Run 1k on a production-like single API instance; profile CPU/heap/locks.
 4. Fix measured bottlenecks; rerun twice.

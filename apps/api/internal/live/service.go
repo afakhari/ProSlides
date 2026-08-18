@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"strings"
 )
 
@@ -51,8 +53,41 @@ func (s *Service) Submit(c context.Context, session, participantToken, request, 
 	}
 	return s.store.SubmitAnswer(c, session, tokenHash(participantToken), request, slide, selected, s.scoring)
 }
-func (s *Service) Snapshot(c context.Context, session string) (Snapshot, error) {
-	return s.store.Snapshot(c, session)
+func (s *Service) ParticipantSnapshot(c context.Context, session, participantToken string) (ParticipantSnapshot, error) {
+	if session == "" || participantToken == "" {
+		return ParticipantSnapshot{}, ErrUnauthorized
+	}
+	return s.store.ParticipantSnapshot(c, session, tokenHash(participantToken))
+}
+func (s *Service) ManagerSnapshot(c context.Context, session, manager string) (ManagerSnapshot, error) {
+	if session == "" || manager == "" {
+		return ManagerSnapshot{}, ErrUnauthorized
+	}
+	return s.store.ManagerSnapshot(c, session, manager)
+}
+func (s *Service) Roster(c context.Context, session, manager, order string, limit int, encodedCursor string) (RosterPage, error) {
+	if session == "" || manager == "" || limit < 1 || limit > 100 || (order != "joined" && order != "score") {
+		return RosterPage{}, ErrInvalid
+	}
+	query := RosterQuery{Order: order, Limit: limit}
+	if encodedCursor != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(encodedCursor)
+		if err != nil || json.Unmarshal(decoded, &query.Cursor) != nil || query.Cursor == nil || query.Cursor.Order != order || query.Cursor.ID == "" || query.Cursor.JoinedAt.IsZero() {
+			return RosterPage{}, ErrInvalid
+		}
+	}
+	page, err := s.store.Roster(c, session, manager, query)
+	if err != nil || !page.HasMore || len(page.Items) == 0 {
+		return page, err
+	}
+	last := page.Items[len(page.Items)-1]
+	cursor, err := json.Marshal(RosterCursor{Order: order, JoinedAt: last.JoinedAt, ID: last.ParticipantID, Score: last.Score})
+	if err != nil {
+		return RosterPage{}, err
+	}
+	next := base64.RawURLEncoding.EncodeToString(cursor)
+	page.NextCursor = &next
+	return page, nil
 }
 func (s *Service) Events(c context.Context, session string, after int64) ([]Event, error) {
 	return s.store.Events(c, session, after, 200)

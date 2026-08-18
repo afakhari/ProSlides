@@ -32,6 +32,7 @@ func (h *HTTP) Register(m *http.ServeMux) {
 	m.HandleFunc("POST /api/v1/live/sessions/{sessionId}/actions", h.action)
 	m.HandleFunc("POST /api/v1/live/sessions/{sessionId}/answers", h.answer)
 	m.HandleFunc("GET /api/v1/live/sessions/{sessionId}/snapshot", h.snapshot)
+	m.HandleFunc("GET /api/v1/live/sessions/{sessionId}/roster", h.roster)
 	m.HandleFunc("GET /api/v1/live/sessions/{sessionId}/events", h.events)
 }
 func (h *HTTP) createSession(w http.ResponseWriter, r *http.Request) {
@@ -124,16 +125,60 @@ func (h *HTTP) answer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, status, x)
 }
 func (h *HTTP) snapshot(w http.ResponseWriter, r *http.Request) {
-	if e := h.viewer(r); e != nil {
-		returnError(w, e)
+	sessionID := r.PathValue("sessionId")
+	managerAuthenticated := false
+	if u, e := h.manager(r, false); e == nil {
+		managerAuthenticated = true
+		x, snapshotErr := h.service.ManagerSnapshot(r.Context(), sessionID, u.ID)
+		if snapshotErr == nil {
+			writeJSON(w, http.StatusOK, x)
+			return
+		}
+		if !errors.Is(snapshotErr, ErrNotFound) {
+			returnError(w, snapshotErr)
+			return
+		}
+	}
+	participant, e := r.Cookie("proslides_participant")
+	if e != nil {
+		if managerAuthenticated {
+			returnError(w, ErrNotFound)
+		} else {
+			returnError(w, ErrUnauthorized)
+		}
 		return
 	}
-	x, e := h.service.Snapshot(r.Context(), r.PathValue("sessionId"))
+	x, e := h.service.ParticipantSnapshot(r.Context(), sessionID, participant.Value)
 	if e != nil {
 		returnError(w, e)
 		return
 	}
-	writeJSON(w, 200, x)
+	writeJSON(w, http.StatusOK, x)
+}
+func (h *HTTP) roster(w http.ResponseWriter, r *http.Request) {
+	u, e := h.manager(r, false)
+	if e != nil {
+		returnError(w, ErrUnauthorized)
+		return
+	}
+	limit := 50
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		limit, e = strconv.Atoi(raw)
+		if e != nil {
+			returnError(w, ErrInvalid)
+			return
+		}
+	}
+	order := r.URL.Query().Get("order")
+	if order == "" {
+		order = "joined"
+	}
+	x, e := h.service.Roster(r.Context(), r.PathValue("sessionId"), u.ID, order, limit, r.URL.Query().Get("cursor"))
+	if e != nil {
+		returnError(w, e)
+		return
+	}
+	writeJSON(w, http.StatusOK, x)
 }
 func (h *HTTP) events(w http.ResponseWriter, r *http.Request) {
 	if e := h.viewer(r); e != nil {

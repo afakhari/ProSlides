@@ -1,6 +1,7 @@
 package live
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -185,7 +186,7 @@ func (s *PostgresStore) ApplyAction(c context.Context, session, host, request st
 		}
 	}
 	if action == "show_leaderboard" {
-		leaderboard, leaderboardErr := leaderboardSnapshot(c, tx, session)
+		leaderboard, leaderboardErr := leaderboardSummary(c, tx, session)
 		if leaderboardErr != nil {
 			return out, false, leaderboardErr
 		}
@@ -278,38 +279,116 @@ func (s *PostgresStore) SubmitAnswer(c context.Context, session string, hash []b
 	}
 	return result, nil
 }
-func (s *PostgresStore) Snapshot(c context.Context, session string) (Snapshot, error) {
-	var x Snapshot
-	e := scanSession(s.pool.QueryRow(c, `SELECT id::text,presentation_id::text,host_id::text,join_code,state,state_version,active_slide_id::text,ends_at FROM live_sessions WHERE id=$1`, session), &x.Session)
+func (s *PostgresStore) ParticipantSnapshot(c context.Context, session string, hash []byte) (ParticipantSnapshot, error) {
+	var x ParticipantSnapshot
+	tx, e := s.pool.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if e != nil {
+		return x, e
+	}
+	defer tx.Rollback(c)
+	var full Session
+	e = tx.QueryRow(c, `SELECT l.id::text,l.presentation_id::text,l.host_id::text,l.join_code,l.state,l.state_version,l.active_slide_id::text,l.ends_at,p.id::text,p.display_name,COALESCE(p.avatar,''),p.score
+		FROM live_sessions l JOIN participants p ON p.session_id=l.id
+		WHERE l.id=$1 AND p.token_hash=$2`, session, hash).Scan(
+		&full.ID, &full.PresentationID, &full.HostID, &full.JoinCode, &full.State, &full.StateVersion, &full.ActiveSlideID, &full.EndsAt,
+		&x.Participant.ID, &x.Participant.DisplayName, &x.Participant.Avatar, &x.Participant.Score,
+	)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return x, ErrUnauthorized
+	}
+	if e != nil {
+		return x, e
+	}
+	x.Role = "participant"
+	x.Session = publicSession(full)
+	if e = snapshotMeta(c, tx, session, &x.ParticipantCount, &x.LastEventID, full.ActiveSlideID, &x.ActiveSlide); e != nil {
+		return x, e
+	}
+	if e = tx.Commit(c); e != nil {
+		return x, e
+	}
+	return x, nil
+}
+func (s *PostgresStore) ManagerSnapshot(c context.Context, session, manager string) (ManagerSnapshot, error) {
+	var x ManagerSnapshot
+	tx, e := s.pool.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if e != nil {
+		return x, e
+	}
+	defer tx.Rollback(c)
+	e = scanSession(tx.QueryRow(c, `SELECT id::text,presentation_id::text,host_id::text,join_code,state,state_version,active_slide_id::text,ends_at FROM live_sessions WHERE id=$1 AND host_id=$2`, session, manager), &x.Session)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return x, ErrNotFound
 	}
 	if e != nil {
 		return x, e
 	}
-	x.Participants = []Participant{}
-	x.Scores = map[string]int{}
-	if e = s.pool.QueryRow(c, `SELECT (SELECT count(*)::int FROM participants WHERE session_id=$1),COALESCE((SELECT max(event_id) FROM live_events WHERE session_id=$1),0) FROM live_sessions WHERE id=$1`, session).Scan(&x.ParticipantCount, &x.LastEventID); e != nil {
+	x.Role = "manager"
+	if e = snapshotMeta(c, tx, session, &x.ParticipantCount, &x.LastEventID, x.Session.ActiveSlideID, &x.ActiveSlide); e != nil {
 		return x, e
 	}
-	rows, e := s.pool.Query(c, `SELECT p.id::text,p.display_name,COALESCE(p.avatar,''),p.score FROM participants p WHERE p.session_id=$1 ORDER BY p.joined_at`, session)
-	if e != nil {
+	if e = tx.Commit(c); e != nil {
 		return x, e
+	}
+	return x, nil
+}
+func (s *PostgresStore) Roster(c context.Context, session, manager string, query RosterQuery) (RosterPage, error) {
+	page := RosterPage{Items: []RosterEntry{}, Order: query.Order, Limit: query.Limit}
+	var owned bool
+	if e := s.pool.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM live_sessions WHERE id=$1 AND host_id=$2)`, session, manager).Scan(&owned); e != nil {
+		return page, e
+	}
+	if !owned {
+		return page, ErrNotFound
+	}
+	var rows pgx.Rows
+	var e error
+	if query.Order == "score" {
+		if query.Cursor == nil {
+			rows, e = s.pool.Query(c, `SELECT id::text,display_name,COALESCE(avatar,''),score,joined_at FROM participants WHERE session_id=$1 ORDER BY score DESC,joined_at,id LIMIT $2`, session, query.Limit+1)
+		} else {
+			rows, e = s.pool.Query(c, `SELECT id::text,display_name,COALESCE(avatar,''),score,joined_at FROM participants WHERE session_id=$1 AND (score<$2 OR (score=$2 AND (joined_at,id)>($3,$4::uuid))) ORDER BY score DESC,joined_at,id LIMIT $5`, session, query.Cursor.Score, query.Cursor.JoinedAt, query.Cursor.ID, query.Limit+1)
+		}
+	} else if query.Cursor == nil {
+		rows, e = s.pool.Query(c, `SELECT id::text,display_name,COALESCE(avatar,''),score,joined_at FROM participants WHERE session_id=$1 ORDER BY joined_at,id LIMIT $2`, session, query.Limit+1)
+	} else {
+		rows, e = s.pool.Query(c, `SELECT id::text,display_name,COALESCE(avatar,''),score,joined_at FROM participants WHERE session_id=$1 AND (joined_at,id)>($2,$3::uuid) ORDER BY joined_at,id LIMIT $4`, session, query.Cursor.JoinedAt, query.Cursor.ID, query.Limit+1)
+	}
+	if e != nil {
+		return page, mapPG(e)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var p Participant
-		var score int
-		if e = rows.Scan(&p.ID, &p.DisplayName, &p.Avatar, &score); e != nil {
-			return x, e
+		var item RosterEntry
+		if e = rows.Scan(&item.ParticipantID, &item.DisplayName, &item.Avatar, &item.Score, &item.JoinedAt); e != nil {
+			return page, e
 		}
-		x.Participants = append(x.Participants, p)
-		x.Scores[p.ID] = score
+		page.Items = append(page.Items, item)
 	}
-	if x.Session.ActiveSlideID != nil {
-		_ = s.pool.QueryRow(c, `SELECT jsonb_build_object('id',id,'position',position,'kind',kind,'content',content) FROM slides WHERE id=$1`, *x.Session.ActiveSlideID).Scan(&x.ActiveSlide)
+	if e = rows.Err(); e != nil {
+		return page, e
 	}
-	return x, rows.Err()
+	if len(page.Items) > query.Limit {
+		page.HasMore = true
+		page.Items = page.Items[:query.Limit]
+	}
+	return page, nil
+}
+
+func snapshotMeta(c context.Context, tx pgx.Tx, session string, participantCount *int, lastEventID *int64, activeSlideID *string, activeSlide *json.RawMessage) error {
+	if e := tx.QueryRow(c, `SELECT count(*)::int,COALESCE((SELECT max(event_id) FROM live_events WHERE session_id=$1),0) FROM participants WHERE session_id=$1`, session).Scan(participantCount, lastEventID); e != nil {
+		return e
+	}
+	if activeSlideID != nil {
+		if e := tx.QueryRow(c, `SELECT jsonb_build_object('id',id,'position',position,'kind',kind,'content',content) FROM slides WHERE id=$1`, *activeSlideID).Scan(activeSlide); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+func publicSession(session Session) PublicSession {
+	return PublicSession{ID: session.ID, PresentationID: session.PresentationID, State: session.State, StateVersion: session.StateVersion, ActiveSlideID: session.ActiveSlideID, EndsAt: session.EndsAt}
 }
 func (s *PostgresStore) Events(c context.Context, session string, after int64, limit int) ([]Event, error) {
 	rows, e := s.pool.Query(c, `SELECT event_id,schema_version,session_id::text,state_version,name,payload,occurred_at FROM live_events WHERE session_id=$1 AND event_id>$2 ORDER BY event_id LIMIT $3`, session, after, limit)
@@ -321,6 +400,9 @@ func (s *PostgresStore) Events(c context.Context, session string, after int64, l
 	for rows.Next() {
 		var x Event
 		if e = rows.Scan(&x.EventID, &x.SchemaVersion, &x.SessionID, &x.StateVersion, &x.Name, &x.Payload, &x.OccurredAt); e != nil {
+			return nil, e
+		}
+		if e = sanitizeReplayedEvent(&x); e != nil {
 			return nil, e
 		}
 		out = append(out, x)
@@ -348,8 +430,28 @@ func scanSession(row pgx.Row, x *Session) error {
 }
 func insertEvent(c context.Context, tx pgx.Tx, session string, version int64, name string, payload any) error {
 	b, _ := json.Marshal(payload)
-	_, e := tx.Exec(c, `INSERT INTO live_events(session_id,state_version,name,payload)VALUES($1,$2,$3,$4)`, session, version, name, b)
+	schemaVersion := 1
+	if name == "leaderboard.updated" {
+		schemaVersion = 2
+	}
+	_, e := tx.Exec(c, `INSERT INTO live_events(schema_version,session_id,state_version,name,payload)VALUES($1,$2,$3,$4,$5)`, schemaVersion, session, version, name, b)
 	return e
+}
+
+func sanitizeReplayedEvent(event *Event) error {
+	if event.Name != "leaderboard.updated" {
+		return nil
+	}
+	var rows []json.RawMessage
+	payload := bytes.TrimSpace(event.Payload)
+	if len(payload) > 0 && payload[0] == '[' {
+		if e := json.Unmarshal(event.Payload, &rows); e != nil {
+			return e
+		}
+		event.Payload, _ = json.Marshal(map[string]int{"participant_count": len(rows)})
+	}
+	event.SchemaVersion = 2
+	return nil
 }
 
 func answerStats(c context.Context, tx pgx.Tx, session, slide string) (map[string]any, error) {
@@ -381,25 +483,12 @@ func answerStats(c context.Context, tx pgx.Tx, session, slide string) (map[strin
 	return map[string]any{"question_slide_id": slide, "response_count": responseCount, "option_counts": counts}, nil
 }
 
-func leaderboardSnapshot(c context.Context, tx pgx.Tx, session string) ([]map[string]any, error) {
-	rows, e := tx.Query(c, `SELECT p.id::text,p.display_name,p.score
-		FROM participants p
-		WHERE p.session_id=$1
-		ORDER BY p.score DESC,p.joined_at,p.id`, session)
-	if e != nil {
+func leaderboardSummary(c context.Context, tx pgx.Tx, session string) (map[string]any, error) {
+	var participantCount int
+	if e := tx.QueryRow(c, `SELECT count(*)::int FROM participants WHERE session_id=$1`, session).Scan(&participantCount); e != nil {
 		return nil, e
 	}
-	defer rows.Close()
-	out := []map[string]any{}
-	for rows.Next() {
-		var id, displayName string
-		var score int
-		if e = rows.Scan(&id, &displayName, &score); e != nil {
-			return nil, e
-		}
-		out = append(out, map[string]any{"participant_id": id, "display_name": displayName, "score": score})
-	}
-	return out, rows.Err()
+	return map[string]any{"participant_count": participantCount}, nil
 }
 func actionTarget(from State, action string) (State, error) {
 	switch action {

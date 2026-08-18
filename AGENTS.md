@@ -40,13 +40,13 @@ The historical Django/Rust implementation was intentionally removed from this
 branch. Its history remains in Git and `master`; do not restore legacy code as
 a shortcut.
 
-## Current repository state — 2026-08-18
+## Current repository state — 2026-08-19
 
 | Area | Actual state | Rule for next work |
 |---|---|---|
-| `apps/api` | Go API with Compose-verified identity/content/live flows; durable idempotency/event replay; atomic participant scores; one bounded event poller per active session/process | Implement role-scoped snapshots before load or frontend migration. |
-| `apps/web` | React 19/Vite UI migration baseline; still JavaScript and still contains legacy WebSocket client code | Preserve visual work, but do not extend WebSocket. Replace its boundary with typed HTTP + SSE in Phase 2. |
-| PostgreSQL | PostgreSQL 16; migrations `0001`-`0008`; authoritative users/content/sessions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
+| `apps/api` | Go API with Compose-verified identity/content/live flows; role-scoped snapshots; manager-only keyset-paginated roster/leaderboard; durable replay and bounded fan-out | Preserve the role boundary while migrating the web client to typed HTTP + SSE. |
+| `apps/web` | React 19/Vite UI migration baseline; still JavaScript and still contains legacy WebSocket client code | Replace the legacy boundary with typed HTTP + SSE; do not extend WebSocket. |
+| PostgreSQL | PostgreSQL 16; migrations `0001`-`0009`; authoritative users/content/sessions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
 | Redis | Redis 7.4 is wired for readiness but not live fan-out/rate limiting yet | It may accelerate ephemeral work, never replace the event/answer ledger. |
 | CI | GitHub Actions validates Go tests and web lint/unit tests | Keep CI passing and add checks with new tooling. |
 | Tests | Web lint/unit/build, Go tests/vet, and real Compose identity/content/live/score/SSE replay passed on 2026-08-18; 1k/5k/10k load tests do not exist yet | Never claim the 10k target is proven until `docs/capacity-plan.md` passes. |
@@ -136,8 +136,8 @@ Slow clients are disconnected and recover; server memory must remain bounded.
 - Score reads use `participants.score`, not repeated full-history aggregation.
 - PostgreSQL polling grows with active sessions/API replicas, not SSE clients.
 - Redis failure must not lose answers, scores, command results, or replay events.
-- Known blockers before a serious 10k run: role-scoped/paginated snapshots,
-  metrics/tracing, rate limits, proxy/TLS tuning, event retention, database/pool
+- Known blockers before a serious 10k run: metrics/tracing, rate limits,
+  proxy/TLS tuning, event retention, database/pool
   tuning, and k6 evidence.
 
 ## Required workflow for every change
@@ -174,17 +174,17 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 
 ## Single exact next task
 
-Implement contract-first, role-scoped live snapshots. A participant response
-must contain only public session state, the caller's participant/score, aggregate
-counts, active slide, and `last_event_id`; it must not return the complete 10k
-roster/score map. A manager may request a paginated roster/leaderboard view with
-explicit limits and stable ordering. Update OpenAPI first, add a forward-only
-migration only if the projection needs schema support, add authorization and
-behavior tests, extend the Compose matrix, and update all status documents.
+Replace the React legacy WebSocket boundary with a typed HTTP + SSE client.
+Fetch the role-scoped snapshot first, connect with its `last_event_id`, apply
+events by `event_id` without regressing `state_version`, use the manager roster
+endpoint for paginated roster/leaderboard views, and reconnect through a fresh
+snapshot plus cursor. Preserve the existing UI and do not add load testing,
+Redis fan-out, or unrelated visual changes in the same change.
 
-Acceptance: no unbounded participant collection is returned to an audience
-client, reconnect remains snapshot + cursor correct, manager pagination is
-deterministic, and Go/Compose/web checks pass.
+Acceptance: no React runtime path opens a legacy WebSocket, participant code
+never expects complete roster/score maps, manager pagination is consumed
+incrementally, reconnect behavior is covered by unit/E2E tests, and the full
+Go/Compose/web verification matrix passes.
 
 ## Phases and the single next task
 
@@ -202,7 +202,8 @@ deterministic, and Go/Compose/web checks pass.
   presence, timers, score, and WebSocket-to-SSE UI migration.
   The durable backend vertical slice, aggregate score projection, bounded local
   event fan-out, presence compaction, and replay cursor are complete;
-  role-scoped views, Redis acceleration, UI migration, and capacity proof remain.
+  Redis acceleration, UI migration, and capacity proof remain. Role-scoped
+  snapshots and manager pagination are complete.
 - [ ] Phase 3: integration/E2E tests plus k6 scenarios for 1k/5k/10k users,
   reconnects, host disconnects, and answer bursts; document SLOs.
 - [ ] Phase 4: feature-flagged cutover and exercised rollback only after
@@ -234,6 +235,7 @@ deterministic, and Go/Compose/web checks pass.
 | 2026-08-18 | Verified question creation against Compose | Content and multiple-choice question slides were created and read back through the API. |
 | 2026-08-18 | Implemented the durable live-session backend vertical slice | Forward-only live schema, versioned state transitions, idempotent commands/join/answers, deduction-based partial scoring behind `ScoringPolicy`, snapshots, aggregate answer/leaderboard events, and `Last-Event-ID` SSE replay passed Go and Compose tests. |
 | 2026-08-18 | Removed two immediate high-load bottlenecks | Durable aggregate participant scores replace repeated answer-history sums; bounded per-session event brokers replace per-SSE-connection database polling; snapshots expose a recovery cursor and presence bursts are compacted. Capacity still requires the documented load gates. |
+| 2026-08-19 | Implemented role-scoped snapshots and manager pagination | Participant snapshots expose only public state, self/score, counts, active slide, and cursor; manager roster/leaderboard uses bounded stable keyset pages; leaderboard SSE is aggregate-only. Go, Compose, and web checks passed. |
 
 ## References
 

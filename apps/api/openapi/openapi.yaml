@@ -210,7 +210,8 @@ paths:
             session.state_changed, answer.stats, and leaderboard.updated.
             answer.stats is emitted once when a question closes and
             leaderboard.updated is emitted when the leaderboard is shown;
-            individual answers are never broadcast.
+            individual answers and complete leaderboard rows are never
+            broadcast. Managers fetch rows from the paginated roster endpoint.
           content:
             text/event-stream:
               schema:
@@ -286,11 +287,47 @@ paths:
   /api/v1/live/sessions/{sessionId}/snapshot:
     get:
       operationId: getLiveSnapshot
-      summary: Get authoritative session state, participants, scores, active slide, and SSE recovery cursor.
-      description: Clients apply this snapshot first, then connect to events using last_event_id as Last-Event-ID so historical presence bursts are not replayed unnecessarily.
+      summary: Get an authoritative role-scoped session snapshot and SSE recovery cursor.
+      description: >-
+        Clients apply this snapshot first, then connect to events using
+        last_event_id as Last-Event-ID. Participants receive only public
+        session state, their own participant record and score, aggregate
+        participant count, and the active slide. Managers receive session
+        state and aggregate count; roster and leaderboard rows are available
+        only from the paginated manager endpoint.
       parameters: [{ $ref: '#/components/parameters/SessionId' }]
       responses:
-        '200': { description: Current snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/LiveSnapshot' } } } }
+        '200':
+          description: Current snapshot scoped to the authenticated viewer role.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/ParticipantLiveSnapshot' }
+                  - { $ref: '#/components/schemas/ManagerLiveSnapshot' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/live/sessions/{sessionId}/roster:
+    get:
+      operationId: listLiveRoster
+      summary: List a live session roster or leaderboard page as the manager.
+      description: >-
+        Manager-only keyset pagination. joined orders by joined_at ascending
+        then participant id; score orders by score descending, joined_at
+        ascending, then participant id. Cursors are opaque and bound to the
+        selected order.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/RosterLimit'
+        - $ref: '#/components/parameters/RosterCursor'
+        - $ref: '#/components/parameters/RosterOrder'
+      responses:
+        '200':
+          description: A stable, bounded roster page.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RosterPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 components:
@@ -307,6 +344,22 @@ components:
       schema:
         type: string
         format: uuid
+    RosterLimit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    RosterCursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor returned by the preceding page.
+      schema: { type: string, maxLength: 512 }
+    RosterOrder:
+      name: order
+      in: query
+      required: false
+      schema: { type: string, enum: [joined, score], default: joined }
     PresentationId:
       name: presentationId
       in: path
@@ -437,22 +490,77 @@ components:
         answer_id: { type: string, format: uuid }
         score_delta: { type: integer, minimum: 0 }
         duplicate: { type: boolean }
-    LiveSnapshot:
+    PublicLiveSession:
       type: object
-      required: [session, participants, scores, participant_count, last_event_id]
+      required: [id, presentation_id, state, state_version]
       properties:
-        session: { $ref: '#/components/schemas/LiveSession' }
+        id: { type: string, format: uuid }
+        presentation_id: { type: string, format: uuid }
+        state: { type: string, enum: [draft, lobby, content, question_open, question_closed, leaderboard, ended] }
+        state_version: { type: integer, format: int64 }
+        active_slide_id: { type: string, format: uuid, nullable: true }
+        ends_at: { type: string, format: date-time, nullable: true }
+    ParticipantWithScore:
+      type: object
+      required: [id, display_name, score]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        display_name: { type: string }
+        avatar: { type: string }
+        score: { type: integer, minimum: 0 }
+    ParticipantLiveSnapshot:
+      type: object
+      required: [role, session, participant, participant_count, last_event_id]
+      additionalProperties: false
+      properties:
+        role: { type: string, enum: [participant] }
+        session: { $ref: '#/components/schemas/PublicLiveSession' }
         active_slide: { type: object, additionalProperties: true }
-        participants: { type: array, items: { $ref: '#/components/schemas/Participant' } }
-        scores: { type: object, additionalProperties: { type: integer } }
+        participant: { $ref: '#/components/schemas/ParticipantWithScore' }
         participant_count: { type: integer, minimum: 0 }
         last_event_id: { type: integer, format: int64, minimum: 0 }
+    ManagerLiveSnapshot:
+      type: object
+      required: [role, session, participant_count, last_event_id]
+      additionalProperties: false
+      properties:
+        role: { type: string, enum: [manager] }
+        session: { $ref: '#/components/schemas/LiveSession' }
+        active_slide: { type: object, additionalProperties: true }
+        participant_count: { type: integer, minimum: 0 }
+        last_event_id: { type: integer, format: int64, minimum: 0 }
+    RosterEntry:
+      type: object
+      required: [participant_id, display_name, score, joined_at]
+      additionalProperties: false
+      properties:
+        participant_id: { type: string, format: uuid }
+        display_name: { type: string }
+        avatar: { type: string }
+        score: { type: integer, minimum: 0 }
+        joined_at: { type: string, format: date-time }
+    RosterPage:
+      type: object
+      required: [items, order, limit, has_more]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RosterEntry' }
+        order: { type: string, enum: [joined, score] }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        has_more: { type: boolean }
+        next_cursor: { type: string, nullable: true }
     LiveEventEnvelope:
       type: object
       required: [event_id, schema_version, session_id, state_version, name, payload, occurred_at]
       properties:
         event_id: { type: integer, format: int64 }
-        schema_version: { type: integer, enum: [1] }
+        schema_version:
+          type: integer
+          enum: [1, 2]
+          description: Version 2 is used by aggregate-only leaderboard.updated payloads; other current events remain version 1.
         session_id: { type: string, format: uuid }
         state_version: { type: integer, format: int64 }
         name:
@@ -463,8 +571,7 @@ components:
             - { $ref: '#/components/schemas/SessionEventPayload' }
             - { $ref: '#/components/schemas/PresenceUpdatedPayload' }
             - { $ref: '#/components/schemas/AnswerStatsPayload' }
-            - type: array
-              items: { $ref: '#/components/schemas/LeaderboardEntry' }
+            - { $ref: '#/components/schemas/LeaderboardUpdatedPayload' }
         occurred_at: { type: string, format: date-time }
     SessionEventPayload:
       type: object
@@ -490,14 +597,12 @@ components:
         option_counts:
           type: object
           additionalProperties: { type: integer, minimum: 0 }
-    LeaderboardEntry:
+    LeaderboardUpdatedPayload:
       type: object
-      required: [participant_id, display_name, score]
+      required: [participant_count]
       additionalProperties: false
       properties:
-        participant_id: { type: string, format: uuid }
-        display_name: { type: string }
-        score: { type: integer, minimum: 0 }
+        participant_count: { type: integer, minimum: 0 }
     Slide:
       type: object
       required: [id, position, kind, content]

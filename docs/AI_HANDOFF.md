@@ -15,20 +15,21 @@ are not complete. Never describe a design target as benchmark evidence.
 ## Current objective and status at a glance
 
 - Branch purpose: isolated Go migration; `master` remains untouched legacy work.
-- Overall migration estimate: about 48%; this is a roadmap estimate, not a
+- Overall migration estimate: about 52%; this is a roadmap estimate, not a
   code-coverage calculation.
 - Implemented: Go/Compose foundation, identity, owner-scoped presentations,
   content/question creation, live state machine, join, idempotent answers,
-  replaceable scoring, aggregate scores, snapshots, durable events, and SSE.
+  replaceable scoring, aggregate scores, role-scoped snapshots, manager-only
+  keyset-paginated roster/leaderboard, durable events, and SSE.
 - High-load improvements in this stage: one event-ledger poller per active
   session/API process, bounded subscriber buffers, slow-client disconnect and
   replay, presence compaction, snapshot cursor, and indexed participant scores.
-- Not implemented: role-scoped/paginated snapshots, typed React HTTP/SSE client,
-  rate limiting, telemetry, Redis wake-up fan-out/presence TTL, media/reports,
+- Not implemented: typed React HTTP/SSE client, rate limiting, telemetry, Redis
+  wake-up fan-out/presence TTL, media/reports,
   k6 proof, production proxy/security hardening, cutover, or rollback exercise.
 - Capacity truth: architecture has a credible horizontal path, but 1k/5k/10k
   has not been measured. Use `docs/capacity-plan.md` as the only proof protocol.
-- Exact next task: role-scoped live snapshots, defined later in this document.
+- Exact next task: typed React HTTP + SSE migration, defined later in this document.
 
 ## Branch and collaboration boundary
 
@@ -54,19 +55,16 @@ Do not install a second Go version. Use the version declared by `apps/api/go.mod
 Do not run a broad `npm audit fix`; investigate updates as a dedicated,
 compatibility-tested change.
 
-Latest completed local verification (2026-08-18): Go formatting, all API tests,
-50 repeated `internal/live` concurrency-oriented test runs, and `go vet` passed;
-the API image rebuilt; migrations `0007` and `0008` applied to the preserved PostgreSQL
-volume; and the real Compose matrix passed identity, content/question creation,
-live commands, idempotent join/answer, aggregate scoring, snapshot count/cursor,
-16 concurrent joins without deadlock, aggregate event delivery, and
-`Last-Event-ID` SSE replay. Local `go test -race`
-was attempted but could not build because `gcc` is absent; the pushed CI runs
-that race check on Linux. Web lint, 12 web unit
-tests, and the production build also passed; the generated sitemap timestamp was
-restored because it was unrelated to this change. GitHub CI must confirm the
-pushed revision. Direct PostgreSQL reconciliation found zero mismatches between
-participant aggregate scores and answer deltas.
+Latest completed local verification (2026-08-19): Go formatting, all API tests,
+and `go vet` passed; the API image rebuilt; migration `0009` applied to the
+preserved PostgreSQL volume; and the real Compose matrix passed identity,
+content/question creation, live commands, idempotent join/answer, role-scoped
+snapshots, participant non-disclosure, manager-only multi-page roster and score
+ordering, aggregate-only leaderboard events, 16 concurrent joins, and
+`Last-Event-ID` SSE replay. Web lint, 12 web unit tests, and the production
+build also passed; the generated sitemap timestamp was restored because it was
+unrelated to this change. `npm ci` still reports the already-known 20
+vulnerabilities. GitHub CI must confirm the pushed revision.
 
 ## Completed implementation: dependency adapters and readiness
 
@@ -113,7 +111,7 @@ then applies the configured maximum and optional server-timed range. Exact-match
 mode remains available when partial scoring is disabled, and another policy can
 replace this implementation without changing HTTP or storage code.
 
-Migrations `0004` through `0008` add durable sessions, participants, answers,
+Migrations `0004` through `0009` add durable sessions, participants, answers,
 idempotent command results, participant credential hashes, versioned event
 replay, atomic participant score projections, and hot-path indexes. Migration
 `0008` removes an attempted session-row presence counter so concurrent joins do
@@ -121,6 +119,17 @@ not serialize on a hot counter; snapshots compute the exact indexed count and
 presence events carry compactable deltas. Answer transactions use shared session locks: concurrent answers do not
 serialize against one another, while closing a question cannot race past an
 in-flight accepted answer. PostgreSQL remains authoritative.
+
+Migration `0009` adds the `(session_id, joined_at, id)` index used by stable
+joined-order keyset pagination. Participant snapshots are built in a read-only
+`REPEATABLE READ` transaction and contain only public session fields, the
+caller participant and score, aggregate count, active slide, and
+`last_event_id`. Manager snapshots remain bounded; roster and leaderboard rows
+come from `GET /api/v1/live/sessions/{sessionId}/roster` with `limit <= 100`, an
+opaque order-bound cursor, and deterministic `joined` or `score` ordering.
+New aggregate-only `leaderboard.updated` events use schema version 2. Historical
+version-1 leaderboard arrays remain untouched in PostgreSQL but are reduced to
+`participant_count` by the adapter before any replay or fan-out.
 
 `EventBroker` replaces per-connection database polling with one poller per
 active session per API process. Each SSE subscriber has a bounded buffer; a slow
@@ -141,17 +150,16 @@ authoritative state first and avoids replaying old presence bursts.
 4. Snapshot is authoritative and exposes `last_event_id`. SSE replays the
    PostgreSQL ledger, switches to bounded shared fan-out, emits heartbeats, and
    disables proxy buffering.
-5. `answer.stats` is aggregated at question close and `leaderboard.updated` at
-   leaderboard display; no per-answer SSE event is published.
+5. `answer.stats` is aggregated at question close and `leaderboard.updated` is
+   an aggregate count notification; no per-answer or full-roster SSE event is
+   published.
 
 ### Out of scope
 
-The React client still uses the legacy boundary. Audience snapshots still
-contain the full roster/score maps and are therefore unsuitable at 10k; this is
-the highest-priority capacity gap. Redis wake-up fan-out/presence TTL, rate
-limiting, telemetry, reports, media, load tests, event retention, and production
-proxy tuning are also not implemented. No database reset or volume deletion was
-performed.
+The React client still uses the legacy boundary. Redis wake-up fan-out/presence
+TTL, rate limiting, telemetry, reports, media, load tests, event retention, and
+production proxy tuning are not implemented. No database reset or volume
+deletion was performed.
 
 ### Definition of done
 
@@ -162,25 +170,23 @@ performed.
 
 ### Current exact next task
 
-Implement role-scoped live snapshots before migrating the React client or
-running serious load tests.
+Replace the React legacy WebSocket boundary with a typed HTTP + SSE client.
 
 Contract and acceptance criteria:
 
-1. Edit OpenAPI first. Define a participant snapshot containing public session
-   state, active slide, aggregate counts, caller participant/score, and
-   `last_event_id`; it must not contain the complete roster or score map.
-2. Define a manager-only paginated roster/leaderboard query with bounded `limit`,
-   stable ordering, and cursor or deterministic offset semantics.
-3. Authorization must distinguish manager from participant without exposing a
-   participant credential in URLs or logs.
-4. Snapshot plus `Last-Event-ID` must remain race-safe and authoritative.
-5. Add unit/behavior tests and extend the real Compose matrix for both roles,
-   non-disclosure, pagination, and reconnect cursor behavior.
-6. Run the full verification matrix and update `AGENTS.md`, this file,
-   architecture/OpenAPI, then commit and push.
+1. Generate or hand-maintain narrow TypeScript types matching the existing
+   OpenAPI contract; do not change backend semantics as a shortcut.
+2. Fetch the role-scoped snapshot before opening SSE and send its
+   `last_event_id` as `Last-Event-ID`.
+3. Apply equal-state-version events in `event_id` order while rejecting true
+   state regressions; reconnect through a fresh snapshot plus cursor.
+4. Participant state must never expect a complete roster/score map. Manager
+   roster and leaderboard UI must page through the manager-only endpoint.
+5. Remove live runtime dependence on the legacy WebSocket client, preserve the
+   existing visual behavior, and add unit/E2E coverage for reconnect and roles.
+6. Run the full Go/Compose/web verification matrix and update status documents.
 
-Do not begin Redis Pub/Sub, k6 10k, or broad UI replacement in the same change.
+Do not add Redis Pub/Sub or run 1k/5k/10k load tests in the same change.
 
 ## Commands and verification matrix
 

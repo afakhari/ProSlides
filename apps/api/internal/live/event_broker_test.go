@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -122,5 +123,26 @@ func TestCompactEventsKeepsOnlyLatestPresenceInBurst(t *testing.T) {
 	}
 	if e := json.Unmarshal(got[0].Payload, &payload); e != nil || payload.ParticipantDelta != 2 {
 		t.Fatalf("unexpected presence payload: %s (%v)", got[0].Payload, e)
+	}
+}
+
+func TestSanitizeReplayedEventRemovesHistoricalLeaderboardRows(t *testing.T) {
+	event := Event{
+		SchemaVersion: 1,
+		Name:          "leaderboard.updated",
+		Payload:       json.RawMessage(`[{"participant_id":"secret-1","score":100},{"participant_id":"secret-2","score":50}]`),
+	}
+	if err := sanitizeReplayedEvent(&event); err != nil {
+		t.Fatal(err)
+	}
+	if event.SchemaVersion != 2 {
+		t.Fatalf("schema version = %d", event.SchemaVersion)
+	}
+	var payload map[string]int
+	if err := json.Unmarshal(event.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["participant_count"] != 2 || strings.Contains(string(event.Payload), "participant_id") {
+		t.Fatalf("unexpected sanitized payload: %s", event.Payload)
 	}
 }

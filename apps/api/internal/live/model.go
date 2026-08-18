@@ -30,6 +30,18 @@ type Participant struct {
 	DisplayName string `json:"display_name"`
 	Avatar      string `json:"avatar,omitempty"`
 }
+type PublicSession struct {
+	ID             string     `json:"id"`
+	PresentationID string     `json:"presentation_id"`
+	State          State      `json:"state"`
+	StateVersion   int64      `json:"state_version"`
+	ActiveSlideID  *string    `json:"active_slide_id"`
+	EndsAt         *time.Time `json:"ends_at"`
+}
+type ParticipantWithScore struct {
+	Participant
+	Score int `json:"score"`
+}
 type AnswerResult struct {
 	AnswerID   string `json:"answer_id"`
 	ScoreDelta int    `json:"score_delta"`
@@ -44,13 +56,45 @@ type Event struct {
 	Payload       json.RawMessage `json:"payload"`
 	OccurredAt    time.Time       `json:"occurred_at"`
 }
-type Snapshot struct {
+type ParticipantSnapshot struct {
+	Role             string               `json:"role"`
+	Session          PublicSession        `json:"session"`
+	ActiveSlide      json.RawMessage      `json:"active_slide,omitempty"`
+	Participant      ParticipantWithScore `json:"participant"`
+	ParticipantCount int                  `json:"participant_count"`
+	LastEventID      int64                `json:"last_event_id"`
+}
+type ManagerSnapshot struct {
+	Role             string          `json:"role"`
 	Session          Session         `json:"session"`
 	ActiveSlide      json.RawMessage `json:"active_slide,omitempty"`
-	Participants     []Participant   `json:"participants"`
-	Scores           map[string]int  `json:"scores"`
 	ParticipantCount int             `json:"participant_count"`
 	LastEventID      int64           `json:"last_event_id"`
+}
+type RosterEntry struct {
+	ParticipantID string    `json:"participant_id"`
+	DisplayName   string    `json:"display_name"`
+	Avatar        string    `json:"avatar,omitempty"`
+	Score         int       `json:"score"`
+	JoinedAt      time.Time `json:"joined_at"`
+}
+type RosterCursor struct {
+	Order    string    `json:"o"`
+	JoinedAt time.Time `json:"j"`
+	ID       string    `json:"i"`
+	Score    int       `json:"s,omitempty"`
+}
+type RosterQuery struct {
+	Order  string
+	Limit  int
+	Cursor *RosterCursor
+}
+type RosterPage struct {
+	Items      []RosterEntry `json:"items"`
+	Order      string        `json:"order"`
+	Limit      int           `json:"limit"`
+	HasMore    bool          `json:"has_more"`
+	NextCursor *string       `json:"next_cursor,omitempty"`
 }
 
 type Store interface {
@@ -58,7 +102,9 @@ type Store interface {
 	Join(context.Context, string, string, string, string, []byte) (Participant, bool, error)
 	ApplyAction(context.Context, string, string, string, int64, string, string, int) (Session, bool, error)
 	SubmitAnswer(context.Context, string, []byte, string, string, []int, ScoringPolicy) (AnswerResult, error)
-	Snapshot(context.Context, string) (Snapshot, error)
+	ParticipantSnapshot(context.Context, string, []byte) (ParticipantSnapshot, error)
+	ManagerSnapshot(context.Context, string, string) (ManagerSnapshot, error)
+	Roster(context.Context, string, string, RosterQuery) (RosterPage, error)
 	Events(context.Context, string, int64, int) ([]Event, error)
 	LatestEventID(context.Context, string) (int64, error)
 	AuthorizeViewer(context.Context, string, string, []byte) error
