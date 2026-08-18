@@ -38,52 +38,65 @@ Latest completed local verification (2026-08-18): Go format/tests, web lint,
 all passed. Docker runtime checks remain unverified only because the local
 Docker daemon is not running.
 
-## Exact next implementation: dependency adapters and readiness
+## Completed implementation: dependency adapters and readiness
 
 ### Objective
 
-Replace bootstrap-only readiness with truthful health of configured PostgreSQL
-and Redis dependencies. This is the prerequisite for any domain feature.
+Bootstrap readiness has been replaced by truthful health of configured
+PostgreSQL and Redis dependencies. This was the prerequisite for domain work.
 
 ### Scope
 
-1. Add `apps/api/internal/platform/postgres` and
-   `apps/api/internal/platform/redis` adapters. Prefer stable, idiomatic Go
-   clients and keep their interfaces narrow.
-2. Extend config validation only for values already present in
-   `apps/api/.env.example` / Compose. Do not add a new environment variable
-   unless it has a real operational need; document every addition.
-3. Construct adapters in `cmd/api/main.go`, inject a readiness dependency into
-   the HTTP router, and close resources during graceful shutdown.
-4. Keep `GET /healthz` process-only: 200 if the server can serve requests.
-5. Make `GET /readyz` test all configured required dependencies with bounded
-   request contexts. Return 200 only when both are reachable; otherwise return
-   503 with a safe, structured dependency-status body. Never expose connection
-   strings, credentials, hostnames, or raw driver errors.
-6. Add unit tests for success, failure, timeout/cancellation mapping, and route
-   status/body. Add an integration test only if it can be isolated and skipped
-   clearly when Docker is unavailable.
-7. Update `apps/api/openapi/openapi.yaml`, `apps/api/README.md`, `AGENTS.md`,
-   and this document to record the final route behavior and tests.
+1. `pgxpool` and `go-redis` clients live behind narrow `Dependency` interfaces.
+2. `DATABASE_URL` and `REDIS_URL` are required; `DEPENDENCY_CHECK_TIMEOUT`
+   (default `2s`) bounds each ping and is documented in Compose and `.env.example`.
+3. `cmd/api` owns lifecycle and graceful closure of both clients.
+4. `GET /healthz` remains process-only and returns 200.
+5. `GET /readyz` returns 200 only when PostgreSQL and Redis pings succeed; it
+   returns 503 otherwise, with only `ok` or `unavailable` dependency states.
+6. Route tests cover success, each dependency failure, missing configuration,
+   timeout behavior, and secret-error non-disclosure. Configuration tests cover
+   missing URLs and invalid timeout values.
+7. OpenAPI and API README now document this behavior.
+
+### Remaining verification limitation
+
+Docker Desktop's daemon was not running, so the live Compose execution and
+driver-to-container checks are not yet verified. Unit tests use fake
+dependencies and pass locally. Do not claim container integration coverage
+until Docker runtime checks have passed.
+
+## Exact next implementation: identity boundary
+
+### Objective
+
+Create the first domain boundary: identity and authentication. It must be
+contract-first, durable in PostgreSQL, and independent from quiz/live modules.
+
+### Scope
+
+1. Add an OpenAPI design for account registration/sign-in/sign-out/current-user
+   behavior, status/error responses, and cookie/session security requirements.
+2. Add an `internal/identity` module with domain/application/repository layers.
+3. Add forward-only PostgreSQL migrations for users and opaque server-side
+   sessions. Email must be unique case-insensitively; store only password hashes,
+   never plaintext passwords or bearer tokens in the database.
+4. Use secure cookie sessions; require CSRF protection for mutating endpoints.
+   Do not place long-lived tokens in SSE URLs.
+5. Add unit tests for validation, duplicate-email behavior, password hashing,
+   session lifecycle, and authorization boundary behavior.
 
 ### Out of scope
 
-- No login/auth, quiz/content CRUD, SSE endpoint, WebSocket migration, live
-  state machine, schema redesign, message queue, or UI rewrite.
-- No change to existing PostgreSQL data volume and no destructive Compose
-  command.
+No quiz/content CRUD, SSE endpoint, WebSocket migration, live state machine,
+message queue, UI rewrite, database reset, or destructive Compose operation.
 
 ### Definition of done
 
-- `healthz` remains independent from dependencies.
-- `readyz` is 200 only when PostgreSQL and Redis checks pass and is 503 for
-  each dependency-failure scenario.
-- Dependency checks use timeouts and do not leak secrets or raw internals.
-- Tests demonstrate all above behavior and pass locally or their exact blocker
-  is reported.
-- OpenAPI, API README, `AGENTS.md`, and this document agree with code.
-- The change is committed on the feature branch, pushed, and CI status is
-  reported.
+- Contract, migration, API behavior, tests, `AGENTS.md`, and this handoff agree.
+- Secrets and credentials are absent from logs and responses.
+- The implementation is committed and pushed on the feature branch with CI
+  result reported.
 
 ## Commands and verification matrix
 

@@ -33,7 +33,7 @@ a shortcut.
 
 | Area | Actual state | Rule for next work |
 |---|---|---|
-| `apps/api` | Go 1.26.0 bootstrap: config, graceful HTTP server, health/version routes, initial SQL schema and OpenAPI skeleton | Build Postgres/Redis adapters and truthful readiness first. |
+| `apps/api` | Go 1.26.0 foundation: config, graceful HTTP server, PostgreSQL/Redis adapters, health/readiness/version routes, initial SQL schema and OpenAPI contract | Begin the identity/auth contract and module; retain the platform boundary. |
 | `apps/web` | React 19/Vite UI migration baseline; still JavaScript and still contains legacy WebSocket client code | Preserve visual work, but do not extend WebSocket. Replace its boundary with typed HTTP + SSE in Phase 2. |
 | PostgreSQL | PostgreSQL 16 in Compose, with an initial immutable SQL migration | Durable data belongs here. Add forward-only migrations only. |
 | Redis | Redis 7.4 in Compose | Use it only after the durable command/write path is correct. |
@@ -143,9 +143,11 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 - [x] Phase 0a: choose Go modular monolith + PostgreSQL + Redis + HTTP/SSE.
 - [x] Phase 0b: establish monorepo, Go bootstrap, Compose, initial schema,
   contract skeleton, CI, architecture documents, and remove legacy stack.
-- [ ] **Phase 0c (next):** add PostgreSQL and Redis adapters; make `/readyz`
-  fail when either configured dependency is unavailable; add adapter and route
-  tests; update local/CI verification.
+- [x] Phase 0c: PostgreSQL and Redis adapters, safe dependency readiness,
+  configuration validation, route tests, and API contract documentation.
+- [ ] **Phase 1a (next):** define the identity/auth contract and create the
+  identity module with forward-only users/sessions migrations and tests. Do not
+  begin quiz/content endpoints before this boundary exists.
 - [ ] Phase 1: identity, content, quizzes, presentations, slides, media, and
   typed React API client.
 - [ ] Phase 2: live state machine, commands, snapshots, SSE, idempotency,
@@ -165,6 +167,7 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 | 2026-08-18 | Made this guide and `AI_HANDOFF.md` the explicit AI handoff protocol | Future agents must update both for material changes. |
 | 2026-08-18 | Registered existing Go 1.26.6 installation in the user PATH and ran API formatting/tests | `go fmt ./...` and `go test ./...` passed; Docker daemon remains unavailable. |
 | 2026-08-18 | Added the AI execution handoff and completed the local verification matrix | Web lint, 12 web unit tests, web build, Go tests, Compose syntax, and diff hygiene passed; `npm ci` reports 20 dependency vulnerabilities for later reviewed remediation. |
+| 2026-08-18 | Added PostgreSQL/Redis clients and truthful `/readyz` | `healthz` remains process-only; `readyz` reports only safe per-dependency states and returns 503 on missing, failed, or timed-out dependencies. |
 
 ## References
 

@@ -1,17 +1,19 @@
 package platformhttp
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/proslides/proslides/internal/platform/config"
+	"github.com/proslides/proslides/internal/platform/dependency"
 )
 
-func NewRouter(cfg config.Config) http.Handler {
+func NewRouter(cfg config.Config, dependencies ...dependency.Dependency) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", health)
-	mux.HandleFunc("GET /readyz", readiness(cfg))
+	mux.HandleFunc("GET /readyz", readiness(cfg, dependencies))
 	mux.HandleFunc("GET /api/v1/version", version(cfg))
 	return requestID(recoverer(mux))
 }
@@ -20,13 +22,45 @@ func health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func readiness(cfg config.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		// Database and Redis probes will be added together with their adapters.
-		// Do not claim dependency readiness before those probes exist.
-		writeJSON(w, http.StatusOK, map[string]string{
-			"status":      "bootstrap-ready",
-			"environment": cfg.Environment,
+type readinessResponse struct {
+	Status       string            `json:"status"`
+	Dependencies map[string]string `json:"dependencies"`
+}
+
+func readiness(cfg config.Config, dependencies []dependency.Dependency) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		statuses := make(map[string]string, len(dependencies))
+		if len(dependencies) == 0 {
+			statuses["configuration"] = "unavailable"
+			writeJSON(w, http.StatusServiceUnavailable, readinessResponse{
+				Status:       "not_ready",
+				Dependencies: statuses,
+			})
+			return
+		}
+
+		ready := true
+		for _, service := range dependencies {
+			checkCtx, cancel := context.WithTimeout(r.Context(), cfg.DependencyCheckTimeout)
+			err := service.Ping(checkCtx)
+			cancel()
+			if err != nil {
+				statuses[service.Name()] = "unavailable"
+				ready = false
+				continue
+			}
+			statuses[service.Name()] = "ok"
+		}
+
+		status := http.StatusOK
+		payloadStatus := "ready"
+		if !ready {
+			status = http.StatusServiceUnavailable
+			payloadStatus = "not_ready"
+		}
+		writeJSON(w, status, readinessResponse{
+			Status:       payloadStatus,
+			Dependencies: statuses,
 		})
 	}
 }

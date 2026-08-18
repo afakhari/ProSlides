@@ -1,8 +1,8 @@
 # Go backend foundation
 
-This is the new ProSlides Go modular monolith. It is intentionally a small,
-standard-library bootstrap: it exposes health/readiness/version endpoints but
-does not yet connect to PostgreSQL or Redis.
+This is the new ProSlides Go modular monolith. It provides process liveness,
+dependency readiness, and version endpoints. PostgreSQL uses `pgxpool`; Redis
+uses `go-redis`. Domain features are not implemented yet.
 
 ## Start with Docker Compose
 
@@ -12,7 +12,12 @@ From the repository root:
 docker compose --env-file apps/api/.env.example up --build
 ```
 
-Then request `http://localhost:8080/healthz`.
+Then request:
+
+- `GET http://localhost:8080/healthz` returns process liveness only.
+- `GET http://localhost:8080/readyz` returns `200` only when PostgreSQL and
+  Redis are reachable; it returns `503` with safe dependency statuses when
+  either is unavailable.
 
 ## Local development
 
@@ -23,5 +28,9 @@ go test ./...
 go run ./cmd/api
 ```
 
-The next implementation task is wiring PostgreSQL and Redis adapters, including
-real readiness probes, before any domain endpoint is added.
+`DATABASE_URL` and `REDIS_URL` are required in every environment.
+`DEPENDENCY_CHECK_TIMEOUT` is a positive Go duration (default `2s`) that bounds
+each readiness check. Never place real credentials in `.env.example` or Git.
+
+API contract changes begin in `openapi/openapi.yaml`. See the repository root
+`AGENTS.md` and `docs/AI_HANDOFF.md` before changing code.

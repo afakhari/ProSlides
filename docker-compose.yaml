@@ -8,6 +8,7 @@ services:
       LOG_LEVEL: INFO
       DATABASE_URL: postgres://proslides:proslides@postgres:5432/proslides?sslmode=disable
       REDIS_URL: redis://redis:6379/0
+      DEPENDENCY_CHECK_TIMEOUT: 2s
     depends_on:
       postgres:
         condition: service_healthy

@@ -5,16 +5,18 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 )
 
 // Config contains only process-wide configuration. Domain configuration belongs
 // to its owning module, not to this package.
 type Config struct {
-	Environment string
-	HTTPAddr    string
-	LogLevel    slog.Level
-	DatabaseURL string
-	RedisURL    string
+	Environment            string
+	HTTPAddr               string
+	LogLevel               slog.Level
+	DatabaseURL            string
+	RedisURL               string
+	DependencyCheckTimeout time.Duration
 }
 
 func Load() (Config, error) {
@@ -25,14 +27,20 @@ func Load() (Config, error) {
 		RedisURL:    os.Getenv("REDIS_URL"),
 	}
 
+	dependencyCheckTimeout, err := time.ParseDuration(valueOrDefault("DEPENDENCY_CHECK_TIMEOUT", "2s"))
+	if err != nil || dependencyCheckTimeout <= 0 {
+		return Config{}, fmt.Errorf("DEPENDENCY_CHECK_TIMEOUT must be a positive duration")
+	}
+	cfg.DependencyCheckTimeout = dependencyCheckTimeout
+
 	level, err := parseLogLevel(valueOrDefault("LOG_LEVEL", "INFO"))
 	if err != nil {
 		return Config{}, err
 	}
 	cfg.LogLevel = level
 
-	if cfg.Environment == "production" && (cfg.DatabaseURL == "" || cfg.RedisURL == "") {
-		return Config{}, fmt.Errorf("DATABASE_URL and REDIS_URL are required in production")
+	if cfg.DatabaseURL == "" || cfg.RedisURL == "" {
+		return Config{}, fmt.Errorf("DATABASE_URL and REDIS_URL are required")
 	}
 	return cfg, nil
 }
