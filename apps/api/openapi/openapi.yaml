@@ -172,6 +172,24 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/presentations/{presentationId}/questions:
+    post:
+      operationId: createQuestionSlide
+      summary: Add a single- or multiple-choice question slide.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateQuestionRequest' }
+      responses:
+        '201': { description: Question slide created. }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/live/sessions/{sessionId}/events:
     get:
       operationId: subscribeLiveSession
@@ -253,6 +271,22 @@ components:
         position: { type: integer, minimum: 0 }
         kind: { type: string, minLength: 1, maxLength: 100 }
         content: { type: object, additionalProperties: true }
+    CreateQuestionRequest:
+      type: object
+      required: [position, text, question_type, options]
+      properties:
+        position: { type: integer, minimum: 0 }
+        text: { type: string, minLength: 1 }
+        question_type: { type: string, enum: [single, multiple] }
+        options:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            required: [text, is_correct]
+            properties:
+              text: { type: string, minLength: 1 }
+              is_correct: { type: boolean }
     Slide:
       type: object
       required: [id, position, kind, content]

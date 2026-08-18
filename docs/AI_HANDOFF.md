@@ -143,6 +143,10 @@ it requires the owner session plus CSRF, and returns 404 for absent or non-owned
 presentations. The Compose flow creates a presentation, creates a slide, and
 reads it back. Next, define the first question-slide contract before implementation.
 
+`POST /api/v1/presentations/{presentationId}/questions` creates validated
+single- or multiple-choice question slides. Next, define answer submission and
+scoring contracts before live/SSE work.
+
 ## Commands and verification matrix
 
 Run from repository root unless indicated otherwise.

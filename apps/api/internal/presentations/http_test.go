@@ -91,3 +91,15 @@ func TestCreateSlideRequiresCSRFAndCreatesForOwner(t *testing.T) {
 		t.Fatalf("status=%d owner=%s", res.Code, store.owner)
 	}
 }
+func TestCreateMultipleQuestion(t *testing.T) {
+	m := http.NewServeMux()
+	NewHTTP(fakeSessions{}, &fakeStore{}).Register(m)
+	q := httptest.NewRequest(http.MethodPost, "/api/v1/presentations/p/questions", strings.NewReader(`{"position":1,"text":"Choose","question_type":"multiple","options":[{"text":"A","is_correct":true},{"text":"B","is_correct":true}]}`))
+	q.AddCookie(&http.Cookie{Name: "proslides_session", Value: "t"})
+	q.Header.Set("X-CSRF-Token", "c")
+	r := httptest.NewRecorder()
+	m.ServeHTTP(r, q)
+	if r.Code != 201 {
+		t.Fatalf("status=%d", r.Code)
+	}
+}

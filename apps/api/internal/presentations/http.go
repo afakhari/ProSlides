@@ -22,6 +22,59 @@ func (h *HTTP) Register(m *http.ServeMux) {
 	m.HandleFunc("GET /api/v1/presentations/{presentationId}", h.get)
 	m.HandleFunc("POST /api/v1/presentations", h.create)
 	m.HandleFunc("POST /api/v1/presentations/{presentationId}/slides", h.createSlide)
+	m.HandleFunc("POST /api/v1/presentations/{presentationId}/questions", h.createQuestion)
+}
+func (h *HTTP) createQuestion(w http.ResponseWriter, r *http.Request) {
+	c, e := r.Cookie("proslides_session")
+	if e != nil {
+		errJSON(w, 401, "unauthorized")
+		return
+	}
+	u, e := h.sessions.Authorize(r.Context(), c.Value, r.Header.Get("X-CSRF-Token"))
+	if e != nil {
+		errJSON(w, 403, "csrf_failed")
+		return
+	}
+	var body struct {
+		Position     int    `json:"position"`
+		Text         string `json:"text"`
+		QuestionType string `json:"question_type"`
+		Options      []struct {
+			Text      string `json:"text"`
+			IsCorrect bool   `json:"is_correct"`
+		} `json:"options"`
+	}
+	if json.NewDecoder(r.Body).Decode(&body) != nil || body.Position < 0 || len(body.Text) == 0 || len(body.Options) < 2 || (body.QuestionType != "single" && body.QuestionType != "multiple") {
+		errJSON(w, 400, "invalid_request")
+		return
+	}
+	correct := 0
+	for _, o := range body.Options {
+		if len(o.Text) == 0 {
+			errJSON(w, 400, "invalid_request")
+			return
+		}
+		if o.IsCorrect {
+			correct++
+		}
+	}
+	if correct == 0 || (body.QuestionType == "single" && correct != 1) {
+		errJSON(w, 400, "invalid_request")
+		return
+	}
+	content, _ := json.Marshal(map[string]any{"text": body.Text, "question_type": body.QuestionType, "options": body.Options})
+	slide, e := h.store.CreateSlide(r.Context(), r.PathValue("presentationId"), u.ID, body.Position, "question", content)
+	if errors.Is(e, ErrNotFound) {
+		errJSON(w, 404, "not_found")
+		return
+	}
+	if e != nil {
+		errJSON(w, 500, "internal_error")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
+	_ = json.NewEncoder(w).Encode(slide)
 }
 func (h *HTTP) createSlide(w http.ResponseWriter, r *http.Request) {
 	c, e := r.Cookie("proslides_session")
