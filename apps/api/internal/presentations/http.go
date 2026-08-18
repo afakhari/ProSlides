@@ -36,15 +36,30 @@ func (h *HTTP) createQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Position     int    `json:"position"`
-		Text         string `json:"text"`
-		QuestionType string `json:"question_type"`
-		Options      []struct {
+		Position                int    `json:"position"`
+		Text                    string `json:"text"`
+		QuestionType            string `json:"question_type"`
+		QuestionTime            int    `json:"question_time"`
+		MaxPoint                int    `json:"max_point"`
+		MinPoint                int    `json:"min_point"`
+		FasterAnswersMorePoints bool   `json:"faster_answers_more_points"`
+		PartialScoring          bool   `json:"partial_scoring"`
+		Options                 []struct {
 			Text      string `json:"text"`
 			IsCorrect bool   `json:"is_correct"`
 		} `json:"options"`
 	}
-	if json.NewDecoder(r.Body).Decode(&body) != nil || body.Position < 0 || len(body.Text) == 0 || len(body.Options) < 2 || (body.QuestionType != "single" && body.QuestionType != "multiple") {
+	if json.NewDecoder(r.Body).Decode(&body) != nil {
+		errJSON(w, 400, "invalid_request")
+		return
+	}
+	if body.QuestionTime == 0 {
+		body.QuestionTime = 30
+	}
+	if body.MaxPoint == 0 {
+		body.MaxPoint = 100
+	}
+	if body.Position < 0 || len(body.Text) == 0 || len(body.Options) < 2 || (body.QuestionType != "single" && body.QuestionType != "multiple") || body.QuestionTime < 1 || body.QuestionTime > 86400 || body.MinPoint < 0 || body.MaxPoint < body.MinPoint {
 		errJSON(w, 400, "invalid_request")
 		return
 	}
@@ -62,7 +77,7 @@ func (h *HTTP) createQuestion(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, 400, "invalid_request")
 		return
 	}
-	content, _ := json.Marshal(map[string]any{"text": body.Text, "question_type": body.QuestionType, "options": body.Options})
+	content, _ := json.Marshal(map[string]any{"text": body.Text, "question_type": body.QuestionType, "question_time": body.QuestionTime, "max_point": body.MaxPoint, "min_point": body.MinPoint, "faster_answers_more_points": body.FasterAnswersMorePoints, "partial_scoring": body.PartialScoring, "options": body.Options})
 	slide, e := h.store.CreateSlide(r.Context(), r.PathValue("presentationId"), u.ID, body.Position, "question", content)
 	if errors.Is(e, ErrNotFound) {
 		errJSON(w, 404, "not_found")

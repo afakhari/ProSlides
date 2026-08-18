@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/proslides/proslides/internal/identity"
+	"github.com/proslides/proslides/internal/live"
 	"github.com/proslides/proslides/internal/platform/config"
 	"github.com/proslides/proslides/internal/platform/dependency"
 	platformhttp "github.com/proslides/proslides/internal/platform/http"
@@ -61,6 +62,7 @@ func main() {
 			identityService := identity.NewService(identity.NewPostgresStore(postgresClient.Pool()), cfg.SessionTTL)
 			identity.NewHTTP(identityService, cfg.Environment == "production").Register(m)
 			presentations.NewHTTP(identityService, presentations.NewPostgresStore(postgresClient.Pool())).Register(m)
+			live.NewHTTP(live.NewService(live.NewPostgresStore(postgresClient.Pool()), live.DeductionPolicy{}), identityService, cfg.Environment == "production").Register(m)
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       75 * time.Second,

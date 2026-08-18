@@ -17,6 +17,7 @@ apps/web/playwright-report/
 apps/web/.env.local
 
 # Tooling and operating-system files
+.tmp/
 .DS_Store
 Thumbs.db
 .idea/

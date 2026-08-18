@@ -1,8 +1,10 @@
 # Go backend foundation
 
-This is the new ProSlides Go modular monolith. It provides process liveness,
-dependency readiness, and version endpoints. PostgreSQL uses `pgxpool`; Redis
-uses `go-redis`. Domain features are not implemented yet.
+This is the ProSlides Go modular monolith. It provides identity, owner-scoped
+presentation/slide/question APIs, durable live sessions, idempotent answers,
+pluggable scoring, authoritative snapshots, and SSE replay. PostgreSQL uses
+`pgxpool` and is authoritative; Redis uses `go-redis` and is currently limited
+to readiness rather than durable live state.
 
 ## Start with Docker Compose
 
@@ -35,12 +37,16 @@ each readiness check. Never place real credentials in `.env.example` or Git.
 API contract changes begin in `openapi/openapi.yaml`. See the repository root
 `AGENTS.md` and `docs/AI_HANDOFF.md` before changing code.
 
-## Authentication status
+## Implemented API status
 
-The API contains contract-defined register, login, logout, and current-user
-routes using opaque server-side sessions and CSRF cookies. The Compose-backed
-end-to-end auth matrix has passed.
+Authentication uses opaque server-side sessions and CSRF cookies. Live manager
+commands use HTTP and state versions; participants receive a scoped HttpOnly
+cookie. The SSE endpoint supports durable `Last-Event-ID` replay and sends
+aggregate answer/leaderboard events rather than one event per answer. Multiple
+choice scoring is behind `ScoringPolicy`; the current deduction policy supports
+partial credit and can be replaced later.
 
 Run `powershell -ExecutionPolicy Bypass -File scripts/test-auth-integration.ps1`
-from the repository root to execute the matrix. Use `-SkipComposeStartup` only
-for an already-running local stack and `-StopAfter` only when it is safe to stop it.
+from the repository root to execute the identity, content, live, scoring,
+snapshot, and SSE replay matrix. Use `-SkipComposeStartup` only for an
+already-running local stack and `-StopAfter` only when it is safe to stop it.

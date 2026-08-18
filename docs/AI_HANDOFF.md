@@ -33,10 +33,12 @@ Do not install a second Go version. Use the version declared by `apps/api/go.mod
 Do not run a broad `npm audit fix`; investigate updates as a dedicated,
 compatibility-tested change.
 
-Latest completed local verification (2026-08-18): Go format/tests/vet, web
-lint, 12 web unit tests, web production build, Compose syntax, `git diff
---check`, API image build, and a real Compose call to `/healthz` and `/readyz`
-all passed.
+Latest completed local verification (2026-08-18): Go formatting and all API
+tests passed; the API image rebuilt; and the real Compose matrix passed identity,
+content/question creation, live commands, idempotent join/answer, scoring,
+snapshot, aggregate event delivery, and `Last-Event-ID` SSE replay. Web lint,
+12 web unit tests, and the production build last passed before this backend-only
+slice and were not affected.
 
 ## Completed implementation: dependency adapters and readiness
 
@@ -65,90 +67,66 @@ The real local Compose stack was verified with PostgreSQL and Redis. It creates
 named local volumes; use ordinary `docker compose down` after a test to preserve
 them. `down -v` remains destructive and requires owner authorization.
 
-## Exact next implementation: identity boundary
+## Completed implementation: durable live backend vertical slice
 
 ### Objective
 
-Create the first domain boundary: identity and authentication. It must be
-contract-first, durable in PostgreSQL, and independent from quiz/live modules.
+Provide a complete PostgreSQL-backed live path from session creation through
+answers, scoring, snapshots, leaderboard publication, and SSE recovery without
+introducing WebSockets or treating Redis as durable storage.
 
 ### Current progress
 
-`migrations/0002_identity_sessions.sql` creates opaque server-side sessions and
-a case-insensitive email uniqueness index. `SESSION_TTL` is configured with a
-default of `168h`. The OpenAPI contract and HTTP handlers define register,
-login, logout, and current-user behavior.
+`internal/live` owns the state machine, HTTP use cases, PostgreSQL adapter,
+event ledger, and a `ScoringPolicy` boundary. The current `DeductionPolicy`
+scores multiple-choice partial answers as
+`max(0, correct selections - incorrect selections) / correct option count`,
+then applies the configured maximum and optional server-timed range. Exact-match
+mode remains available when partial scoring is disabled, and another policy can
+replace this implementation without changing HTTP or storage code.
 
-The identity core validates/normalizes registration data, hashes passwords with
-bcrypt, and generates opaque session/CSRF values while retaining only their
-SHA-256 hashes for persistence. The PostgreSQL store and register/login/logout/
-me handlers are wired into the API composition root.
-
-Authentication is implemented and verified. `scripts/test-auth-integration.ps1`
-successfully started Compose through normal startup and covered successful
-register/login/`me`, duplicate email, invalid credentials, missing and invalid
-CSRF, successful logout, and revoked-session rejection. Registration returns
-the contract-required `201 Created`.
+Migrations `0004` through `0006` add durable sessions, participants, answers,
+idempotent command results, participant credential hashes, and versioned event
+replay. Answer transactions use shared session locks: concurrent answers do not
+serialize against one another, while closing a question cannot race past an
+in-flight accepted answer. PostgreSQL remains authoritative; Redis fan-out has
+not yet been added.
 
 ### Scope
 
-1. Add an OpenAPI design for account registration/sign-in/sign-out/current-user
-   behavior, status/error responses, and cookie/session security requirements.
-2. Add an `internal/identity` module with domain/application/repository layers.
-3. Add forward-only PostgreSQL migrations for users and opaque server-side
-   sessions. Email must be unique case-insensitively; store only password hashes,
-   never plaintext passwords or bearer tokens in the database.
-4. Use secure cookie sessions; require CSRF protection for mutating endpoints.
-   Do not place long-lived tokens in SSE URLs.
-5. Add unit tests for validation, duplicate-email behavior, password hashing,
-   session lifecycle, and authorization boundary behavior.
+1. Manager commands use authenticated HTTP plus CSRF and optimistic
+   `expected_state_version`; duplicate `request_id` values return the stored
+   original result.
+2. Participants join with an HttpOnly scoped cookie and submit at most one
+   answer per question; retries return the original score without double count.
+3. Answers are accepted only for the active question while server `ends_at` is
+   still in the future.
+4. Snapshot is authoritative. SSE replays the PostgreSQL event ledger after
+   `Last-Event-ID`, emits heartbeats, and disables proxy buffering.
+5. `answer.stats` is aggregated at question close and `leaderboard.updated` at
+   leaderboard display; no per-answer SSE event is published.
 
 ### Out of scope
 
-No quiz/content CRUD, SSE endpoint, WebSocket migration, live state machine,
-message queue, UI rewrite, database reset, or destructive Compose operation.
+The React client still uses the legacy boundary and is not migrated in this
+slice. Redis fan-out/presence, rate limiting, reports, media, load tests, and
+production proxy tuning are also not implemented. No database reset or volume
+deletion was performed.
 
 ### Definition of done
 
-- Contract, migration, API behavior, tests, `AGENTS.md`, and this handoff agree.
-- Secrets and credentials are absent from logs and responses.
-- The implementation is committed and pushed on the feature branch with CI
-  result reported.
+- OpenAPI names every live route and event envelope/payload.
+- Forward-only migrations apply during normal startup.
+- Go tests and the real Compose matrix pass.
+- `AGENTS.md`, API README, and this handoff describe the same implementation.
 
 ### Current exact next task
 
-`GET /api/v1/presentations/{presentationId}` is implemented as the first
-`presentations` slice. It authenticates via the opaque session cookie, enforces
-ownership in the PostgreSQL query, returns slides by ascending position, and
-uses 404 for absent or unauthorized resources. Unit behavior tests cover missing
-sessions, owner-scoped success, and the non-disclosing 404 path.
-
-The Compose auth matrix now also inserts a presentation with ordered slides,
-verifies the owner read, and verifies a second authenticated user receives 404.
-`0003_presentations.sql` is an embedded, forward-only migration that creates
-the required durable schema on normal API startup.
-
-Define the OpenAPI contract for creating a presentation. Require the current
-authenticated user as owner and CSRF protection; do not implement it, add a web
-client, or begin live/SSE behavior until that contract is reviewed.
-
-`POST /api/v1/presentations` is now implemented and verified end to end. It
-requires the session and CSRF header, creates an empty owner-scoped presentation,
-and returns 201. Next, complete the slide-create vertical slice with the same
-contract-to-Compose workflow; do not begin live/SSE behavior.
-
-`POST /api/v1/presentations/{presentationId}/slides` is implemented and verified
-end to end. It accepts a non-negative position, a generic kind, and JSON content;
-it requires the owner session plus CSRF, and returns 404 for absent or non-owned
-presentations. The Compose flow creates a presentation, creates a slide, and
-reads it back. Next, define the first question-slide contract before implementation.
-
-`POST /api/v1/presentations/{presentationId}/questions` creates validated
-single- or multiple-choice question slides. Next, define answer submission and
-scoring contracts before live/SSE work.
-
-The Compose matrix has verified creation and read-back of both content and
-multiple-choice question slides. This question slice is complete.
+Build a typed React API/SSE client for the implemented live contract and replace
+the first legacy WebSocket-backed audience/manager flow. Recovery must fetch the
+snapshot and reconnect with `Last-Event-ID`; commands must decide success from
+their HTTP response rather than waiting for an SSE echo. Preserve the existing
+visual UI and do not add Redis fan-out until this single-node client flow passes.
 
 ## Commands and verification matrix
 

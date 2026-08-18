@@ -117,9 +117,84 @@ try {
   $created = Invoke-API -Method POST -Path "/api/v1/presentations" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ title = "Created through API" } | ConvertTo-Json -Compress) -ExpectedStatus 201
   $createdID = ($created.Content | ConvertFrom-Json).id
   Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 0; kind = "content"; content = @{ text = "Created through API" } } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
-  Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/questions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 1; text = "Choose"; question_type = "multiple"; options = @(@{ text = "A"; is_correct = $true }, @{ text = "B"; is_correct = $true }) } | ConvertTo-Json -Compress -Depth 4) -ExpectedStatus 201 | Out-Null
+  $questionResponse = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/questions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 1; text = "Choose"; question_type = "multiple"; question_time = 30; max_point = 100; min_point = 0; partial_scoring = $true; faster_answers_more_points = $false; options = @(@{ text = "A"; is_correct = $true }, @{ text = "B"; is_correct = $true }, @{ text = "C"; is_correct = $false }) } | ConvertTo-Json -Compress -Depth 4) -ExpectedStatus 201
+  $questionID = ($questionResponse.Content | ConvertFrom-Json).id
   $createdRead = Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200
   if (($createdRead.Content | ConvertFrom-Json).slides.Count -ne 2) { throw "Created presentation did not contain both slides" }
+
+  $createSessionRequest = [guid]::NewGuid().ToString()
+  $liveCreated = Invoke-API -Method POST -Path "/api/v1/live/sessions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = $createSessionRequest; presentation_id = $createdID } | ConvertTo-Json -Compress) -ExpectedStatus 201
+  $liveSession = $liveCreated.Content | ConvertFrom-Json
+  Invoke-API -Method POST -Path "/api/v1/live/sessions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = $createSessionRequest; presentation_id = $createdID } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
+
+  $startRequest = [guid]::NewGuid().ToString()
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = $startRequest; expected_state_version = 1; action = "start" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = $startRequest; expected_state_version = 1; action = "start" } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
+
+  $participantHandler = [System.Net.Http.HttpClientHandler]::new()
+  $participantHandler.UseProxy = $false
+  $participantCookies = [System.Net.CookieContainer]::new()
+  $participantHandler.CookieContainer = $participantCookies
+  $participantClient = [System.Net.Http.HttpClient]::new($participantHandler)
+  $participantClient.Timeout = [TimeSpan]::FromSeconds(10)
+  $joinRequest = [guid]::NewGuid().ToString()
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/join" -Client $participantClient -Body (@{ request_id = $joinRequest; display_name = "Live Player"; avatar = "P" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/join" -Client $participantClient -Body (@{ request_id = $joinRequest; display_name = "Live Player"; avatar = "P" } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
+
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 2; action = "open_question"; slide_id = $questionID } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  $answerRequest = [guid]::NewGuid().ToString()
+  $answer = Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/answers" -Client $participantClient -Body (@{ request_id = $answerRequest; question_slide_id = $questionID; selected_option_indexes = @(0, 1) } | ConvertTo-Json -Compress) -ExpectedStatus 201
+  if (($answer.Content | ConvertFrom-Json).score_delta -ne 100) { throw "Correct multiple answer was not scored at 100" }
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/answers" -Client $participantClient -Body (@{ request_id = $answerRequest; question_slide_id = $questionID; selected_option_indexes = @(0, 1) } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/answers" -Client $participantClient -Body (@{ request_id = [guid]::NewGuid().ToString(); question_slide_id = $questionID; selected_option_indexes = @(0) } | ConvertTo-Json -Compress) -ExpectedStatus 409 | Out-Null
+  $snapshot = Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/snapshot" -Client $participantClient -ExpectedStatus 200
+  if ((($snapshot.Content | ConvertFrom-Json).scores.PSObject.Properties.Value | Measure-Object -Sum).Sum -ne 100) { throw "Snapshot score was not 100" }
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 3; action = "close_question" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 4; action = "show_leaderboard" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+
+  $eventRequest = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, "$apiBaseUrl/api/v1/live/sessions/$($liveSession.id)/events")
+  $eventResponse = $participantClient.SendAsync($eventRequest, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+  if ([int]$eventResponse.StatusCode -ne 200 -or $eventResponse.Content.Headers.ContentType.MediaType -ne "text/event-stream") {
+    throw "SSE endpoint did not return a successful event stream"
+  }
+  $eventReader = [System.IO.StreamReader]::new($eventResponse.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
+  $firstEventIDLine = $eventReader.ReadLineAsync().GetAwaiter().GetResult()
+  $firstEventNameLine = $eventReader.ReadLineAsync().GetAwaiter().GetResult()
+  if ($firstEventIDLine -notmatch '^id: ([0-9]+)$') {
+    throw "SSE initial replay did not contain a durable event ID"
+  }
+  $firstEventID = [long]$Matches[1]
+  if ($firstEventNameLine -notmatch '^event: session\.created$') {
+    throw "SSE initial replay did not start with the durable session.created event"
+  }
+  $eventReader.Dispose()
+  $eventResponse.Dispose()
+  $eventRequest.Dispose()
+
+  $resumeRequest = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, "$apiBaseUrl/api/v1/live/sessions/$($liveSession.id)/events")
+  $resumeRequest.Headers.Add("Last-Event-ID", $firstEventID.ToString())
+  $resumeResponse = $participantClient.SendAsync($resumeRequest, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+  $resumeReader = [System.IO.StreamReader]::new($resumeResponse.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
+  $resumedEventIDLine = $resumeReader.ReadLineAsync().GetAwaiter().GetResult()
+  if ($resumedEventIDLine -notmatch '^id: ([0-9]+)$' -or [long]$Matches[1] -le $firstEventID) {
+    throw "SSE Last-Event-ID replay did not resume after the acknowledged event"
+  }
+  $resumedEventNames = @()
+  for ($lineNumber = 0; $lineNumber -lt 100; $lineNumber++) {
+    $eventLine = $resumeReader.ReadLineAsync().GetAwaiter().GetResult()
+    if ($eventLine -match '^event: (.+)$') {
+      $resumedEventNames += $Matches[1]
+      if ($Matches[1] -eq 'leaderboard.updated') { break }
+    }
+  }
+  if ($resumedEventNames -notcontains 'answer.stats' -or $resumedEventNames -notcontains 'leaderboard.updated') {
+    throw "SSE replay did not contain the aggregated answer.stats and leaderboard.updated events"
+  }
+  $resumeReader.Dispose()
+  $resumeResponse.Dispose()
+  $resumeRequest.Dispose()
+
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 5; action = "end" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
 
   $presentationSQL = "INSERT INTO presentations (owner_id, title) VALUES ('$($registeredUser.id)', 'Integration presentation') RETURNING id::text;"
   $presentationID = (& docker @composeArgs exec -T postgres psql -U proslides -d proslides -q -t -A -v ON_ERROR_STOP=1 -c $presentationSQL).Trim()
@@ -155,5 +230,7 @@ try {
   if ($loginHandler) { $loginHandler.Dispose() }
   if ($otherClient) { $otherClient.Dispose() }
   if ($otherHandler) { $otherHandler.Dispose() }
+  if ($participantClient) { $participantClient.Dispose() }
+  if ($participantHandler) { $participantHandler.Dispose() }
   Pop-Location
 }

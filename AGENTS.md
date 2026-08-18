@@ -33,12 +33,12 @@ a shortcut.
 
 | Area | Actual state | Rule for next work |
 |---|---|---|
-| `apps/api` | Go API with Compose-verified presentation, slide, and question creation | Define answer submission and scoring contracts before live state work. |
+| `apps/api` | Go API with Compose-verified identity/content plus durable live sessions, answers, swappable scoring policy, snapshots, and SSE replay | Add the typed React HTTP/SSE client against the published contract; keep WebSocket out of new work. |
 | `apps/web` | React 19/Vite UI migration baseline; still JavaScript and still contains legacy WebSocket client code | Preserve visual work, but do not extend WebSocket. Replace its boundary with typed HTTP + SSE in Phase 2. |
 | PostgreSQL | PostgreSQL 16 in Compose, with an initial immutable SQL migration | Durable data belongs here. Add forward-only migrations only. |
 | Redis | Redis 7.4 in Compose | Use it only after the durable command/write path is correct. |
 | CI | GitHub Actions validates Go tests and web lint/unit tests | Keep CI passing and add checks with new tooling. |
-| Tests | Web lint, unit tests, and build last passed; Go 1.26.6 formatting/unit tests and the real Docker Compose health/readiness check passed on 2026-08-18 | Run the relevant matrix before every handoff. |
+| Tests | Web lint/unit/build last passed; Go formatting/unit tests and the full real Compose identity/content/live/score/SSE matrix passed on 2026-08-18 | Run the relevant matrix before every handoff. |
 
 The working branch is `feat/go-platform-foundation`. It uses a separate Git
 worktree, so `master` remains available to teammates. Do not merge, force-push,
@@ -152,6 +152,8 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
   typed React API client.
 - [ ] Phase 2: live state machine, commands, snapshots, SSE, idempotency,
   presence, timers, score, and WebSocket-to-SSE UI migration.
+  The durable backend vertical slice through score and SSE replay is complete;
+  Redis fan-out/presence, UI migration, and capacity validation remain.
 - [ ] Phase 3: integration/E2E tests plus k6 scenarios for 1k/5k/10k users,
   reconnects, host disconnects, and answer bursts; document SLOs.
 - [ ] Phase 4: feature-flagged cutover and exercised rollback only after
@@ -181,6 +183,7 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 | 2026-08-18 | Implemented and verified slide creation | Contract, CSRF-protected handler, owner-scoped PostgreSQL write, Go behavior tests, and Compose flow passed. |
 | 2026-08-18 | Implemented question creation with single/multiple choice | Question validation requires two options and correct answers; single has exactly one correct option. |
 | 2026-08-18 | Verified question creation against Compose | Content and multiple-choice question slides were created and read back through the API. |
+| 2026-08-18 | Implemented the durable live-session backend vertical slice | Forward-only live schema, versioned state transitions, idempotent commands/join/answers, deduction-based partial scoring behind `ScoringPolicy`, snapshots, aggregate answer/leaderboard events, and `Last-Event-ID` SSE replay passed Go and Compose tests. |
 
 ## References
 

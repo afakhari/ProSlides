@@ -194,6 +194,7 @@ paths:
     get:
       operationId: subscribeLiveSession
       summary: Subscribe to server-sent live events.
+      description: Requires either the manager session cookie or participant cookie. Replays events after Last-Event-ID and sends heartbeats.
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - name: Last-Event-ID
@@ -203,11 +204,94 @@ paths:
             type: string
       responses:
         '200':
-          description: text/event-stream response
+          description: >-
+            Versioned text/event-stream. Each data field is a LiveEventEnvelope.
+            Event names are session.created, participant.joined,
+            session.state_changed, answer.stats, and leaderboard.updated.
+            answer.stats is emitted once when a question closes and
+            leaderboard.updated is emitted when the leaderboard is shown;
+            individual answers are never broadcast.
           content:
             text/event-stream:
               schema:
                 type: string
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/live/sessions/{sessionId}/answers:
+    post:
+      operationId: submitLiveAnswer
+      summary: Submit one idempotent answer while the question is open.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnswerRequest' }
+      responses:
+        '201':
+          description: Answer accepted and scored.
+          content: { application/json: { schema: { $ref: '#/components/schemas/AnswerResult' } } }
+        '200':
+          description: Duplicate request; returns the original result.
+          content: { application/json: { schema: { $ref: '#/components/schemas/AnswerResult' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { description: Question is not open, has expired, or was already answered. }
+  /api/v1/live/sessions:
+    post:
+      operationId: createLiveSession
+      summary: Create an idempotent draft live session for an owned presentation.
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateLiveSessionRequest' } } }
+      responses:
+        '201': { description: Session created, content: { application/json: { schema: { $ref: '#/components/schemas/LiveSession' } } } }
+        '200': { description: Duplicate request; returns the original session. }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/live/sessions/{sessionId}/join:
+    post:
+      operationId: joinLiveSession
+      summary: Join a started live session and establish an HttpOnly participant cookie.
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/JoinLiveSessionRequest' } } }
+      responses:
+        '201': { description: Participant joined, content: { application/json: { schema: { $ref: '#/components/schemas/Participant' } } } }
+        '200': { description: Duplicate request; returns the original participant. }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { description: Session is not joinable. }
+  /api/v1/live/sessions/{sessionId}/actions:
+    post:
+      operationId: applyLiveAction
+      summary: Apply an idempotent manager state transition.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/LiveActionRequest' } } }
+      responses:
+        '201': { description: Transition applied, content: { application/json: { schema: { $ref: '#/components/schemas/LiveSession' } } } }
+        '200': { description: Duplicate request; returns the original result. }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: State version or transition conflict. }
+  /api/v1/live/sessions/{sessionId}/snapshot:
+    get:
+      operationId: getLiveSnapshot
+      summary: Get authoritative session state, participants, scores, and active slide.
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      responses:
+        '200': { description: Current snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/LiveSnapshot' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   parameters:
     CSRFToken:
@@ -278,6 +362,14 @@ components:
         position: { type: integer, minimum: 0 }
         text: { type: string, minLength: 1 }
         question_type: { type: string, enum: [single, multiple] }
+        question_time: { type: integer, minimum: 1, maximum: 86400, default: 30 }
+        max_point: { type: integer, minimum: 1, default: 100 }
+        min_point: { type: integer, minimum: 0, default: 0 }
+        faster_answers_more_points: { type: boolean, default: false }
+        partial_scoring:
+          type: boolean
+          default: false
+          description: When true, score is max(0, correct selections minus incorrect selections) divided by the number of correct options; the scoring policy is an implementation boundary and may be replaced later.
         options:
           type: array
           minItems: 2
@@ -287,6 +379,119 @@ components:
             properties:
               text: { type: string, minLength: 1 }
               is_correct: { type: boolean }
+    AnswerRequest:
+      type: object
+      required: [request_id, question_slide_id, selected_option_indexes]
+      properties:
+        request_id: { type: string, format: uuid }
+        question_slide_id: { type: string, format: uuid }
+        selected_option_indexes:
+          type: array
+          items: { type: integer, minimum: 0 }
+    CreateLiveSessionRequest:
+      type: object
+      required: [request_id, presentation_id]
+      properties:
+        request_id: { type: string, format: uuid }
+        presentation_id: { type: string, format: uuid }
+    JoinLiveSessionRequest:
+      type: object
+      required: [request_id, display_name]
+      properties:
+        request_id: { type: string, format: uuid, description: Also acts as the opaque participant credential and must be generated securely. }
+        display_name: { type: string, minLength: 1, maxLength: 100 }
+        avatar: { type: string, maxLength: 100 }
+    LiveActionRequest:
+      type: object
+      required: [request_id, expected_state_version, action]
+      properties:
+        request_id: { type: string, format: uuid }
+        expected_state_version: { type: integer, minimum: 1 }
+        action: { type: string, enum: [start, open_content, open_question, close_question, show_leaderboard, end] }
+        slide_id: { type: string, format: uuid }
+        duration_seconds: { type: integer, minimum: 1, maximum: 86400 }
+    LiveSession:
+      type: object
+      required: [id, presentation_id, host_id, join_code, state, state_version]
+      properties:
+        id: { type: string, format: uuid }
+        presentation_id: { type: string, format: uuid }
+        host_id: { type: string, format: uuid }
+        join_code: { type: string }
+        state: { type: string, enum: [draft, lobby, content, question_open, question_closed, leaderboard, ended] }
+        state_version: { type: integer }
+        active_slide_id: { type: string, format: uuid, nullable: true }
+        ends_at: { type: string, format: date-time, nullable: true }
+    Participant:
+      type: object
+      required: [id, display_name]
+      properties:
+        id: { type: string, format: uuid }
+        display_name: { type: string }
+        avatar: { type: string }
+    AnswerResult:
+      type: object
+      required: [answer_id, score_delta, duplicate]
+      properties:
+        answer_id: { type: string, format: uuid }
+        score_delta: { type: integer, minimum: 0 }
+        duplicate: { type: boolean }
+    LiveSnapshot:
+      type: object
+      required: [session, participants, scores]
+      properties:
+        session: { $ref: '#/components/schemas/LiveSession' }
+        active_slide: { type: object, additionalProperties: true }
+        participants: { type: array, items: { $ref: '#/components/schemas/Participant' } }
+        scores: { type: object, additionalProperties: { type: integer } }
+    LiveEventEnvelope:
+      type: object
+      required: [event_id, schema_version, session_id, state_version, name, payload, occurred_at]
+      properties:
+        event_id: { type: integer, format: int64 }
+        schema_version: { type: integer, enum: [1] }
+        session_id: { type: string, format: uuid }
+        state_version: { type: integer, format: int64 }
+        name:
+          type: string
+          enum: [session.created, participant.joined, session.state_changed, answer.stats, leaderboard.updated]
+        payload:
+          oneOf:
+            - { $ref: '#/components/schemas/SessionEventPayload' }
+            - { $ref: '#/components/schemas/ParticipantJoinedPayload' }
+            - { $ref: '#/components/schemas/AnswerStatsPayload' }
+            - type: array
+              items: { $ref: '#/components/schemas/LeaderboardEntry' }
+        occurred_at: { type: string, format: date-time }
+    SessionEventPayload:
+      type: object
+      properties:
+        state: { type: string, enum: [draft, lobby, content, question_open, question_closed, leaderboard, ended] }
+        active_slide_id: { type: string, format: uuid, nullable: true }
+        ends_at: { type: string, format: date-time, nullable: true }
+    ParticipantJoinedPayload:
+      type: object
+      required: [participant_id, display_name, avatar]
+      properties:
+        participant_id: { type: string, format: uuid }
+        display_name: { type: string }
+        avatar: { type: string }
+    AnswerStatsPayload:
+      type: object
+      required: [question_slide_id, response_count, option_counts]
+      properties:
+        question_slide_id: { type: string, format: uuid }
+        response_count: { type: integer, minimum: 0 }
+        option_counts:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+    LeaderboardEntry:
+      type: object
+      required: [participant_id, display_name, score]
+      properties:
+        participant_id: { type: string, format: uuid }
+        display_name: { type: string }
+        score: { type: integer, minimum: 0 }
     Slide:
       type: object
       required: [id, position, kind, content]
