@@ -1,235 +1,175 @@
-# ProSlides — سند راهبر توسعه
+# ProSlides: mandatory development guide
 
-> این فایل منبع دائمی context پروژه برای انسان و عامل هوش مصنوعی است. پیش از هر
-> تغییر کد، معماری یا زیرساخت، آن را کامل بخوانید. پس از هر تغییر مؤثر، بخش‌های
-> وضعیت، مرحلهٔ بعدی و جدول تغییرات این فایل را با واقعیت repository هم‌راستا کنید.
+This is the entry document for every human or AI agent working in this
+repository. Read it completely before inspecting, changing, generating, or
+deleting code. It is the operational source of truth; if it conflicts with the
+repository, investigate the discrepancy, correct this document in the same
+change, and state the discrepancy in the final handoff.
 
-## هدف محصول و ظرفیت
+## Product and non-negotiable decisions
 
-ProSlides یک پلتفرم ارائه و آزمون زنده شبیه Kahoot/AhaSlides است: Presentation
-Builder، Quiz، Poll، Word Cloud، Q&A، گزارش و Live Session با participant، timer،
-score و leaderboard.
+ProSlides is a capacity-oriented, interactive presentation platform in the
+Kahoot/AhaSlides category: presentations, quizzes, polls, word clouds, Q&A,
+live sessions, scoring, leaderboards, and reports.
 
-تصمیم مالک محصول در **2026-08-18**: محصول از ابتدا برای ظرفیت بالا و رشد بلندمدت
-طراحی می‌شود. هدف طراحی اولیه پشتیبانی از ۱۰٬۰۰۰ participant در یک live session و
-قابلیت scale افقی برای رشد بعدی است. این هدف به معنای شروع با microserviceهای زیاد
-نیست؛ اولویت عملیاتی همچنان سادگی، سرعت توسعه و قابلیت نگهداری است.
+- The target is a future-ready system that can be proven at 10,000 participants
+  in one live session before scaling beyond that.
+- The backend is a Go **modular monolith**, not Django, Rust, or microservices.
+- Client commands use HTTP; server-to-client live updates use SSE. Do not add a
+  WebSocket feature unless the owner explicitly approves a documented,
+  measured two-way need.
+- PostgreSQL is the durable source of truth. Redis is only for fan-out,
+  presence, cache, and distributed rate limits; it must never be the only copy
+  of a command, answer, score, or report.
+- Start with the smallest maintainable component set. Do not introduce Kafka,
+  RabbitMQ, NATS, ClickHouse, MongoDB, Kubernetes, or a microservice solely for
+  anticipated scale.
 
-## تصمیم معماری رسمی
+The historical Django/Rust implementation was intentionally removed from this
+branch. Its history remains in Git and `master`; do not restore legacy code as
+a shortcut.
 
-```text
-React + TypeScript + Vite
-  ├─ REST: identity, content, join, answer, manager action, snapshot
-  └─ SSE: server-to-client live events
-             │
-Go modular monolith
-  ├─ HTTP API + SSE gateway
-  ├─ auth, quizzes, slides, reports, media
-  ├─ live state machine, scoring, event fan-out, background jobs
-  ├─ PostgreSQL: durable source of truth
-  └─ Redis/Valkey: ephemeral delivery, presence, cache, rate limits
-```
+## Current repository state — 2026-08-18
 
-### اصول غیرقابل مذاکره
+| Area | Actual state | Rule for next work |
+|---|---|---|
+| `apps/api` | Go 1.26.0 bootstrap: config, graceful HTTP server, health/version routes, initial SQL schema and OpenAPI skeleton | Build Postgres/Redis adapters and truthful readiness first. |
+| `apps/web` | React 19/Vite UI migration baseline; still JavaScript and still contains legacy WebSocket client code | Preserve visual work, but do not extend WebSocket. Replace its boundary with typed HTTP + SSE in Phase 2. |
+| PostgreSQL | PostgreSQL 16 in Compose, with an initial immutable SQL migration | Durable data belongs here. Add forward-only migrations only. |
+| Redis | Redis 7.4 in Compose | Use it only after the durable command/write path is correct. |
+| CI | GitHub Actions validates Go tests and web lint/unit tests | Keep CI passing and add checks with new tooling. |
+| Tests | Web lint, unit tests, and build last passed; Go 1.26.6 formatting and unit tests passed on 2026-08-18 | Run the relevant matrix before every handoff. |
 
-1. Backend جدید **Go modular monolith** است. از microservice، Kafka، RabbitMQ،
-   NATS، ClickHouse، MongoDB و Kubernetes تا زمان وجود نیاز اندازه‌گیری‌شده اجتناب
-   شود.
-2. SSE فقط مسیر server-to-client است؛ join، answer و manager action با HTTP POST
-   انجام می‌شوند. WebSocket فقط با نیاز واقعی دوطرفه و پرتکرار وارد شود.
-3. PostgreSQL منبع حقیقت کاربران، محتوا، sessionها، پاسخ‌ها، score و report است.
-   Redis هرگز منبع حقیقت دائمی پاسخ یا امتیاز نیست.
-4. هر live session یک state machine، `state_version` افزایشی و زمان سروری دارد.
-5. هر mutation باید `request_id` داشته باشد و idempotent باشد.
-6. هر event قرارداد نام‌دار، نسخه‌دار و مستند دارد؛ پیام‌های عددی بدون قرارداد ممنوع.
-7. هر تصمیم scale باید با metric و load test پشتیبانی شود.
+The working branch is `feat/go-platform-foundation`. It uses a separate Git
+worktree, so `master` remains available to teammates. Do not merge, force-push,
+or modify `master` without explicit owner approval.
 
-## وضعیت فعلی repository
-
-| بخش | واقعیت فعلی |
-|---|---|
-| Frontend | `apps/web`؛ React 19/Vite موجود و در حال مهاجرت تدریجی به TypeScript/SSE |
-| Backend | `apps/api`؛ Go foundation با REST/SSE contract |
-| Database | PostgreSQL 16 در Compose؛ migration اولیه موجود است |
-| Realtime | SSE مقصد؛ implementation هنوز در Phase 2 است |
-| Redis | Redis 7.4 در Compose برای foundation realtime |
-
-کدهای Django، Rust، SQLite، static output و مستندات WebSocket از این branch حذف
-شده‌اند؛ تاریخچهٔ آن‌ها در Git و branch `master` باقی می‌ماند. `apps/web` به‌عنوان
-پایهٔ UI حفظ شده و وابستگی WebSocket آن باید در Phase 2 به SSE/HTTP منتقل شود.
-
-## ساختار مقصد
+## Repository map
 
 ```text
-apps/api/
-  cmd/api/                    # composition root
-  internal/
-    platform/                 # config, http, postgres, redis, observability
-    identity/ quizzes/ slides/ reports/ media/
-    live/                     # commands, state, scoring, sse, presence
-  migrations/                 # immutable PostgreSQL SQL migrations
-  openapi/                    # API and event contracts
-  Dockerfile
-apps/web/                     # migration تدریجی از JS به TypeScript
+apps/
+  api/                       Go API
+    cmd/api/                 composition root; process lifecycle only
+    internal/platform/       config, HTTP, Postgres, Redis, observability
+    internal/<module>/       module-specific application, domain, adapters
+    migrations/              ordered, forward-only PostgreSQL SQL migrations
+    openapi/                 REST and SSE contract source
+  web/                       React client, progressive JS -> TypeScript migration
+docs/
+  AI_HANDOFF.md              precise execution plan and handoff template
+  architecture.md            architecture boundaries
+  decisions/                 Architecture Decision Records
+AGENTS.md                    this mandatory guide
+docker-compose.yaml          local API + PostgreSQL + Redis stack
 ```
 
-قانون dependency: handler → application/use-case → domain → repository adapter.
-ماژول‌های دامنه نباید مستقیم به handler یا framework وابسته شوند. فقط `live` حق
-تغییر state/score/transition session را دارد.
+Dependency flow inside the API is strictly:
 
-## قرارداد live
+```text
+HTTP handler -> application/use case -> domain -> repository or infrastructure adapter
+```
 
-### REST
+Domain code must not import HTTP/framework concerns. Only the `live` module can
+advance session state, change scores, or close/open a question.
+
+## Live protocol contract
+
+Commands are HTTP and must return their definitive result; clients must not
+wait for an SSE echo to decide whether a command succeeded.
 
 ```text
 POST /api/v1/live/sessions/{sessionId}/join
 POST /api/v1/live/sessions/{sessionId}/answers
 POST /api/v1/live/sessions/{sessionId}/actions
 GET  /api/v1/live/sessions/{sessionId}/snapshot
-GET  /api/v1/live/sessions/{sessionId}/events   # text/event-stream
+GET  /api/v1/live/sessions/{sessionId}/events       # text/event-stream
 ```
 
-هر command شامل `request_id` و در commandهای مدیریتی `expected_state_version` است.
-پاسخ HTTP نتیجهٔ قطعی command را برمی‌گرداند؛ client برای تأیید صرفاً منتظر SSE
-نمی‌ماند.
+Every mutation carries `request_id`; manager mutations also carry
+`expected_state_version`. A duplicate request returns the original result and
+must not create a second answer or score.
 
-### SSE
+Every event must be documented and versioned in `apps/api/openapi/` with at
+least `event_id`, `schema_version`, `session_id`, `state_version`,
+`occurred_at`, and `payload`. Use named events such as `slide.opened`,
+`answer.stats`, and `leaderboard.updated`; never opaque numeric messages.
+
+The state machine is:
 
 ```text
-session.snapshot
-player.presence
-slide.opened
-answer.stats
-question.closed
-leaderboard.updated
-session.ended
+draft -> lobby -> content | question_open -> question_closed -> leaderboard -> ended
 ```
 
-هر event: `event_id`، `schema_version`، `session_id`، `state_version`،
-`occurred_at` و `payload` دارد. client باید eventهای قدیمی‌تر از state version
-فعلی را نادیده بگیرد. reconnect با `Last-Event-ID` و endpoint snapshot انجام شود.
+Answers are accepted only during `question_open` and before the server-side
+`ends_at`. Invalid transitions return `409 Conflict`. Batch answer statistics
+and leaderboard publications (normally 250–500 ms); never broadcast one event
+per answer at capacity. SSE reconnect uses `Last-Event-ID`, then an authoritative
+snapshot if replay is incomplete.
 
-### state machine
+## Required workflow for every change
 
-```text
-draft → lobby → content | question_open → question_closed → leaderboard → ended
-```
+1. Read this file, then `docs/AI_HANDOFF.md`, then the files relevant to the
+   requested scope.
+2. Inspect `git status --short --branch`. Preserve unrelated changes; never
+   reset, checkout, delete, or overwrite them.
+3. For a REST or event contract change: edit OpenAPI first, implement API and
+   web consumer second, then add/update contract and behavior tests.
+4. Keep migrations forward-only. Never edit an applied migration, reset a
+   database, purge Redis, or delete data without explicit owner authorization.
+5. Use structured logs with request/session/participant identifiers. Never log
+   secrets, access tokens, answers before closure, or personally identifying
+   data beyond what the product requires.
+6. Run the applicable verification commands in `docs/AI_HANDOFF.md`.
+7. Update this file and `docs/AI_HANDOFF.md` whenever a material implementation,
+   contract, decision, known risk, tool prerequisite, or next task changes.
+8. In the final handoff state: files changed, behavior delivered, verification
+   run and result, work not verified, and exactly one recommended next task.
 
-- answer فقط در `question_open` و قبل از `ends_at` سرور معتبر است.
-- duplicate answer نتیجهٔ idempotent قبلی را برمی‌گرداند و score تازه ایجاد نمی‌کند.
-- transition نامعتبر `409 Conflict` است.
-- answer stats و leaderboard نباید برای هر پاسخ broadcast شوند؛ batch 250–500ms.
+## Completion criteria and safety rails
 
-## داده و مقیاس
+A task is not complete merely because code compiles. It is complete when its
+contract, error behavior, tests, documentation, and operational consequence are
+consistent. New external behavior needs an OpenAPI entry; new configuration
+needs `.env.example` documentation; new persistent data needs a migration;
+new operational dependency needs Compose, health/readiness, and CI coverage.
 
-### PostgreSQL
+Before production, require TLS, secure/HttpOnly cookies or short-lived SSE
+tickets, CSRF protection for mutations, restricted CORS, disabled proxy
+buffering for SSE, appropriate timeouts/heartbeats, OpenTelemetry/metrics, and
+load tests. Long-lived JWTs in an SSE query string are prohibited.
 
-- PostgreSQL 16+ تنها DB عملیاتی است.
-- محتوای انعطاف‌پذیر slide در JSONB، اما relationهای اصلی relational هستند.
-- روی answer حداقل unique constraint `(session_id, participant_id, question_id)`
-  وجود دارد.
-- برای رشد، answer/session-eventها با data واقعی partition می‌شوند؛ زودتر نه.
-- connection pool، index و query plan پیش از افزایش ماشین‌ها بررسی شوند.
+## Phases and the single next task
 
-### Redis/Valkey
+- [x] Phase 0a: choose Go modular monolith + PostgreSQL + Redis + HTTP/SSE.
+- [x] Phase 0b: establish monorepo, Go bootstrap, Compose, initial schema,
+  contract skeleton, CI, architecture documents, and remove legacy stack.
+- [ ] **Phase 0c (next):** add PostgreSQL and Redis adapters; make `/readyz`
+  fail when either configured dependency is unavailable; add adapter and route
+  tests; update local/CI verification.
+- [ ] Phase 1: identity, content, quizzes, presentations, slides, media, and
+  typed React API client.
+- [ ] Phase 2: live state machine, commands, snapshots, SSE, idempotency,
+  presence, timers, score, and WebSocket-to-SSE UI migration.
+- [ ] Phase 3: integration/E2E tests plus k6 scenarios for 1k/5k/10k users,
+  reconnects, host disconnects, and answer bursts; document SLOs.
+- [ ] Phase 4: feature-flagged cutover and exercised rollback only after
+  parity is measured. Do not merge legacy code into this branch.
 
-- از شروع live برای SSE fan-out بین instanceها، presence با TTL، cache و distributed
-  rate limit استفاده می‌شود.
-- Redis Pub/Sub برای delivery سریع است؛ snapshot و دادهٔ durable از PostgreSQL.
-- قطعی Redis نباید دادهٔ PostgreSQL را corrupt کند؛ service می‌تواند push/presence
-  را degraded کند ولی command durability باید صریح و قابل مشاهده باشد.
+## Change log
 
-### سطح رشد
-
-| ظرفیت | نیاز عملیاتی |
-|---|---|
-| توسعه/MVP | یک API instance، PostgreSQL، Redis، Docker Compose |
-| تا ۱۰٬۰۰۰ در یک session | چند API/SSE instance پشت Nginx/HTTP2، Redis، PostgreSQL tuned، aggregation و load test |
-| بالاتر از آن | benchmark؛ سپس جداکردن فقط SSE gateway یا live aggregation، نه CRUD/auth |
-
-## امنیت و عملیات
-
-- API و SSE در same-origin ارائه شوند. برای SSE از cookie/session کوتاه‌عمر یا
-  ticket محدود استفاده شود؛ JWT بلندمدت در query string ممنوع است.
-- TLS، `HttpOnly`/`Secure` cookies، CSRF برای mutationها و CORS محدود اجباری است.
-- secretها فقط در env/secret store؛ هرگز در Git یا log نیستند.
-- Nginx برای SSE: buffering خاموش، HTTP/2، timeout مناسب و heartbeat.
-- log ساخت‌یافته باید request/session/participant ID داشته باشد.
-- OpenTelemetry، Prometheus metrics و alert برای DB، Redis، SSE connection، command
-  failure و reconnect پیش از production لازم است.
-
-## مراحل توسعه
-
-### Phase 0 — foundation and cleanup (وضعیت فعلی)
-
-- [x] تصمیم Go-first ثبت شد.
-- [x] ایجاد scaffold `apps/api`، Compose، OpenAPI و migration اولیه.
-- [x] حذف Django/Rust/SQLite و tooling و مستندات legacy از branch جدید.
-- [x] تبدیل repository به monorepo `apps/api` و `apps/web`.
-- [ ] نصب Go toolchain در محیط توسعه و اجرای تست محلی.
-- [ ] تکمیل adapterهای PostgreSQL و Redis و readiness واقعی.
-
-### محدودیت‌ها و ریسک‌های فعلی
-
-- `apps/web` هنوز در نقش مبنای مهاجرت UI، کدهای WebSocket دارد؛ توسعهٔ قابلیت جدید روی آن ممنوع است و در Phase 2 با SSE/HTTP جایگزین می‌شود.
-- Go در محیط توسعهٔ فعلی نصب نیست و Docker daemon در دسترس نبود؛ بنابراین آزمون Go و build کانتینر باید در CI یا محیط دارای Docker اجرا شوند.
-- `npm ci` در زمان پاک‌سازی 20 آسیب‌پذیری وابستگی گزارش کرد. پیش از انتشار، با بازبینی سازگاری و بدون اجرای کورکورانهٔ `npm audit fix` رسیدگی شود.
-
-### Phase 1 — content platform
-
-- [ ] identity/auth، quiz، presentation، slide و media در Go.
-- [ ] migration نهایی PostgreSQL و OpenAPI-generated types.
-- [ ] انتقال تدریجی React به TypeScript و API client typed.
-
-### Phase 2 — live engine
-
-- [ ] join، answer، action، snapshot و SSE.
-- [ ] idempotency، timer سروری، score، presence و reconnect.
-- [ ] integration test با PostgreSQL/Redis و E2E Playwright.
-
-### Phase 3 — capacity proof
-
-- [ ] k6 scenarios: 1k/5k/10k participant، reconnect، host disconnect و answer burst.
-- [ ] SLOهای p95 command/event latency با مالک محصول ثبت شوند.
-- [ ] scale افقی فقط پس از گزارش benchmark.
-
-### Phase 4 — cutover
-
-- [ ] feature flag و parity test با Django/Rust legacy.
-- [ ] انتقال traffic تدریجی و rollback آزمایش‌شده.
-- [ ] حذف legacy فقط با اجازهٔ صریح مالک.
-
-## پروتکل کار عامل توسعه
-
-1. ابتدا این فایل و فایل‌های بخش مورد تغییر را کامل بخوان.
-2. کد repository حقیقت نهایی است؛ اگر با سند ناسازگار بود، تفاوت را گزارش و سند را
-   پس از فهم علت اصلاح کن.
-3. تغییرات را کوچک، قابل‌آزمون و در scope درخواست نگه دار.
-4. هر تغییر API/event ابتدا در `apps/api/openapi/` ثبت و سپس در `apps/api` و `apps/web`
-   هم‌راستا شود.
-5. قبل از اعلام اتمام، formatter، unit test و integration test متناسب را اجرا کن.
-6. پس از هر تغییر مؤثر، checkbox مرحله، وضعیت، تصمیم/ریسک جدید و جدول تغییرات زیر
-   را به‌روزرسانی کن.
-7. reset database، حذف migration، purge Redis یا حذف legacy فقط با اجازهٔ صریح مالک.
-
-## تغییرات ثبت‌شده
-
-| تاریخ | تغییر | اعتبارسنجی |
+| Date | Change | Verification / consequence |
 |---|---|---|
-| 2026-08-18 | ایجاد سند راهبر اولیه | بررسی ساختار Django/Rust/React |
-| 2026-08-18 | تصمیم موقت Django-first | ظرفیت هدف ۱k تا ۵k |
-| 2026-08-18 | تصمیم رسمی Go-first و ظرفیت‌محور | درخواست صریح مالک: معماری آینده‌نگر و ظرفیت بالاتر |
-| 2026-08-18 | ایجاد Go scaffold، Compose، OpenAPI و schema اولیه | بازبینی فایل‌ها؛ Go toolchain در محیط فعلی نصب نیست، پس تست Go اجرا نشده است |
-| 2026-08-18 | افزودن راه‌اندازی Go stack به README ریشه | Compose با env اختصاصی API اعتبارسنجی شد |
-| 2026-08-18 | تلاش برای build کانتینری API | انجام نشد: Go محلی نصب نیست و Docker daemon این محیط در دسترس نبود |
-| 2026-08-18 | پاک‌سازی branch جدید و تبدیل به monorepo | Django/Rust/Python/SQLite و مستندات legacy حذف شدند؛ ساختار `apps/api` و `apps/web` ایجاد شد |
-| 2026-08-18 | افزودن CI، ADR و قواعد repository | `npm run lint`، `npm run test:unit` و `npm run build` در `apps/web` پاس شدند؛ Compose معتبر است |
+| 2026-08-18 | Go-first capacity architecture selected | Replaces Django/Rust/WebSocket direction. |
+| 2026-08-18 | Foundation created and repository reset to `apps/api` + `apps/web` | Legacy sources/docs removed only on feature branch; `master` preserved. |
+| 2026-08-18 | Added Compose, initial PostgreSQL schema, OpenAPI skeleton, CI, ADR, and web migration notes | Web lint/unit/build and Compose configuration passed; Docker daemon was unavailable. |
+| 2026-08-18 | Made this guide and `AI_HANDOFF.md` the explicit AI handoff protocol | Future agents must update both for material changes. |
+| 2026-08-18 | Registered existing Go 1.26.6 installation in the user PATH and ran API formatting/tests | `go fmt ./...` and `go test ./...` passed; Docker daemon remains unavailable. |
+| 2026-08-18 | Added the AI execution handoff and completed the local verification matrix | Web lint, 12 web unit tests, web build, Go tests, Compose syntax, and diff hygiene passed; `npm ci` reports 20 dependency vulnerabilities for later reviewed remediation. |
 
-## مراجع repository
+## References
 
-- `apps/api/README.md`: راه‌اندازی backend جدید.
-- `apps/api/openapi/openapi.yaml`: قرارداد اولیهٔ API.
-- `apps/api/migrations/`: schema جدید PostgreSQL.
-- `docs/architecture.md`: boundaries و اصول معماری.
-- `docs/decisions/0001-go-modular-monolith.md`: تصمیم رسمی معماری.
-- `apps/web/src/contexts/WebSocketContext.jsx`: نقطهٔ migration client به SSE.
+- `docs/AI_HANDOFF.md` — exact next task, commands, acceptance criteria, and
+  final-response template.
+- `docs/architecture.md` — boundaries and scale design.
+- `docs/decisions/0001-go-modular-monolith.md` — architecture decision record.
+- `apps/api/openapi/openapi.yaml` — contract source of truth.

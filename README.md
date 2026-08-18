@@ -41,4 +41,6 @@ then run `go test ./...` from `apps/api`.
 
 Read [AGENTS.md](AGENTS.md) before making a change. API and SSE contract changes
 start in `apps/api/openapi/openapi.yaml`; after every material change, update
-`AGENTS.md`.
+both [AGENTS.md](AGENTS.md) and [the AI execution handoff](docs/AI_HANDOFF.md).
+The handoff document defines the exact next task, verification commands, and
+completion criteria.
