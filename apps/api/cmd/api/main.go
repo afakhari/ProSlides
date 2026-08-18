@@ -14,6 +14,7 @@ import (
 	"github.com/proslides/proslides/internal/platform/config"
 	"github.com/proslides/proslides/internal/platform/dependency"
 	platformhttp "github.com/proslides/proslides/internal/platform/http"
+	"github.com/proslides/proslides/internal/platform/migrate"
 	"github.com/proslides/proslides/internal/platform/postgres"
 	"github.com/proslides/proslides/internal/platform/redis"
 )
@@ -37,6 +38,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer postgresClient.Close()
+	if err := migrate.Apply(startupCtx, postgresClient.Pool()); err != nil {
+		logger.Error("migration failed", "error", err)
+		os.Exit(1)
+	}
 
 	redisClient, err := redis.New(cfg.RedisURL)
 	if err != nil {

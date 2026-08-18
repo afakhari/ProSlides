@@ -171,6 +171,7 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 | 2026-08-18 | Replaced blocked `gcr.io` runtime image with Docker Hub Alpine non-root runtime | Docker build and real Compose `healthz`/`readyz` passed with PostgreSQL and Redis. |
 | 2026-08-18 | Began identity boundary with forward-only opaque-session schema and OpenAPI contract | `0002_identity_sessions.sql`, `SESSION_TTL`, and register/login/logout/me contract added; HTTP auth behavior is not implemented yet. |
 | 2026-08-18 | Wired identity HTTP handlers into the Go API | Application routes are present; PostgreSQL-backed auth route integration tests remain required. |
+| 2026-08-18 | Added embedded forward-only migration runner | API applies tracked schema migrations before serving; auth runtime validation remains next. |
 
 ## References
 
