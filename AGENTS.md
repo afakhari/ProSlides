@@ -48,19 +48,20 @@ Go modular monolith
 
 | بخش | واقعیت فعلی |
 |---|---|
-| Frontend | React 19 + Vite + JavaScript/JSX + Tailwind + Playwright |
-| API قدیمی | Django 5 + DRF + SQLite |
-| realtime قدیمی | Rust Actix Web WebSocket در `backend/srvs/facade` |
-| state realtime قدیمی | Redis |
-| Compose قدیمی | فقط Redis؛ application container وجود نداشت |
+| Frontend | `apps/web`؛ React 19/Vite موجود و در حال مهاجرت تدریجی به TypeScript/SSE |
+| Backend | `apps/api`؛ Go foundation با REST/SSE contract |
+| Database | PostgreSQL 16 در Compose؛ migration اولیه موجود است |
+| Realtime | SSE مقصد؛ implementation هنوز در Phase 2 است |
+| Redis | Redis 7.4 در Compose برای foundation realtime |
 
-مسیر جدید Go از `backend-go/` آغاز می‌شود. Django/Rust کد legacy هستند و تا زمان
-رسیدن قابلیت‌های جدید به parity حذف یا تغییر destructive نمی‌شوند.
+کدهای Django، Rust، SQLite، static output و مستندات WebSocket از این branch حذف
+شده‌اند؛ تاریخچهٔ آن‌ها در Git و branch `master` باقی می‌ماند. `apps/web` به‌عنوان
+پایهٔ UI حفظ شده و وابستگی WebSocket آن باید در Phase 2 به SSE/HTTP منتقل شود.
 
 ## ساختار مقصد
 
 ```text
-backend-go/
+apps/api/
   cmd/api/                    # composition root
   internal/
     platform/                 # config, http, postgres, redis, observability
@@ -69,7 +70,7 @@ backend-go/
   migrations/                 # immutable PostgreSQL SQL migrations
   openapi/                    # API and event contracts
   Dockerfile
-frontend/                     # migration تدریجی از JS به TypeScript
+apps/web/                     # migration تدریجی از JS به TypeScript
 ```
 
 قانون dependency: handler → application/use-case → domain → repository adapter.
@@ -159,12 +160,20 @@ draft → lobby → content | question_open → question_closed → leaderboard 
 
 ## مراحل توسعه
 
-### Phase 0 — foundation (وضعیت فعلی)
+### Phase 0 — foundation and cleanup (وضعیت فعلی)
 
 - [x] تصمیم Go-first ثبت شد.
-- [x] ایجاد scaffold `backend-go`، Compose، OpenAPI و migration اولیه.
+- [x] ایجاد scaffold `apps/api`، Compose، OpenAPI و migration اولیه.
+- [x] حذف Django/Rust/SQLite و tooling و مستندات legacy از branch جدید.
+- [x] تبدیل repository به monorepo `apps/api` و `apps/web`.
 - [ ] نصب Go toolchain در محیط توسعه و اجرای تست محلی.
 - [ ] تکمیل adapterهای PostgreSQL و Redis و readiness واقعی.
+
+### محدودیت‌ها و ریسک‌های فعلی
+
+- `apps/web` هنوز در نقش مبنای مهاجرت UI، کدهای WebSocket دارد؛ توسعهٔ قابلیت جدید روی آن ممنوع است و در Phase 2 با SSE/HTTP جایگزین می‌شود.
+- Go در محیط توسعهٔ فعلی نصب نیست و Docker daemon در دسترس نبود؛ بنابراین آزمون Go و build کانتینر باید در CI یا محیط دارای Docker اجرا شوند.
+- `npm ci` در زمان پاک‌سازی 20 آسیب‌پذیری وابستگی گزارش کرد. پیش از انتشار، با بازبینی سازگاری و بدون اجرای کورکورانهٔ `npm audit fix` رسیدگی شود.
 
 ### Phase 1 — content platform
 
@@ -196,7 +205,7 @@ draft → lobby → content | question_open → question_closed → leaderboard 
 2. کد repository حقیقت نهایی است؛ اگر با سند ناسازگار بود، تفاوت را گزارش و سند را
    پس از فهم علت اصلاح کن.
 3. تغییرات را کوچک، قابل‌آزمون و در scope درخواست نگه دار.
-4. هر تغییر API/event ابتدا در `backend-go/openapi/` ثبت و سپس در backend/frontend
+4. هر تغییر API/event ابتدا در `apps/api/openapi/` ثبت و سپس در `apps/api` و `apps/web`
    هم‌راستا شود.
 5. قبل از اعلام اتمام، formatter، unit test و integration test متناسب را اجرا کن.
 6. پس از هر تغییر مؤثر، checkbox مرحله، وضعیت، تصمیم/ریسک جدید و جدول تغییرات زیر
@@ -211,13 +220,16 @@ draft → lobby → content | question_open → question_closed → leaderboard 
 | 2026-08-18 | تصمیم موقت Django-first | ظرفیت هدف ۱k تا ۵k |
 | 2026-08-18 | تصمیم رسمی Go-first و ظرفیت‌محور | درخواست صریح مالک: معماری آینده‌نگر و ظرفیت بالاتر |
 | 2026-08-18 | ایجاد Go scaffold، Compose، OpenAPI و schema اولیه | بازبینی فایل‌ها؛ Go toolchain در محیط فعلی نصب نیست، پس تست Go اجرا نشده است |
-| 2026-08-18 | افزودن راه‌اندازی Go stack به README ریشه | `docker compose --env-file backend-go/.env.example config` با موفقیت اعتبارسنجی شد |
+| 2026-08-18 | افزودن راه‌اندازی Go stack به README ریشه | Compose با env اختصاصی API اعتبارسنجی شد |
 | 2026-08-18 | تلاش برای build کانتینری API | انجام نشد: Go محلی نصب نیست و Docker daemon این محیط در دسترس نبود |
+| 2026-08-18 | پاک‌سازی branch جدید و تبدیل به monorepo | Django/Rust/Python/SQLite و مستندات legacy حذف شدند؛ ساختار `apps/api` و `apps/web` ایجاد شد |
+| 2026-08-18 | افزودن CI، ADR و قواعد repository | `npm run lint`، `npm run test:unit` و `npm run build` در `apps/web` پاس شدند؛ Compose معتبر است |
 
 ## مراجع repository
 
-- `backend-go/README.md`: راه‌اندازی backend جدید.
-- `backend-go/openapi/openapi.yaml`: قرارداد اولیهٔ API.
-- `backend-go/migrations/`: schema جدید PostgreSQL.
-- `SYSTEM_OVERVIEW.md`: topology legacy Django/Rust.
-- `frontend/src/contexts/WebSocketContext.jsx`: نقطهٔ migration client legacy.
+- `apps/api/README.md`: راه‌اندازی backend جدید.
+- `apps/api/openapi/openapi.yaml`: قرارداد اولیهٔ API.
+- `apps/api/migrations/`: schema جدید PostgreSQL.
+- `docs/architecture.md`: boundaries و اصول معماری.
+- `docs/decisions/0001-go-modular-monolith.md`: تصمیم رسمی معماری.
+- `apps/web/src/contexts/WebSocketContext.jsx`: نقطهٔ migration client به SSE.

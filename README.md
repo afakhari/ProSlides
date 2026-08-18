@@ -1,80 +1,44 @@
 # ProSlides
-a live interactive quiz
 
-## New Go Platform
+ProSlides is a capacity-oriented interactive presentation platform for quizzes,
+polls, word clouds, Q&A, live sessions, scoring, and reports.
 
-The capacity-oriented Go foundation lives in `backend-go/`. The legacy Django and
-Rust services remain in the repository only during the staged migration.
+## Architecture
 
-Start the new local stack (Go API, PostgreSQL, Redis):
+```text
+apps/web  → React + TypeScript + Vite
+apps/api  → Go modular monolith + REST + SSE
+             ↓
+        PostgreSQL + Redis
+```
+
+The backend uses HTTP POST for commands and Server-Sent Events for live
+server-to-client updates. PostgreSQL is the durable source of truth; Redis is
+used only for ephemeral realtime delivery, presence, and rate limits.
+
+## Repository layout
+
+- `apps/api` — Go API, SQL migrations, and OpenAPI contract.
+- `apps/web` — React client; its legacy WebSocket implementation is retained
+  temporarily as UI migration input.
+- `docs` — architecture and architectural decisions.
+- `AGENTS.md` — mandatory development context and update protocol.
+
+## Local stack
+
+Install Docker Desktop and run:
 
 ```powershell
-docker compose --env-file backend-go/.env.example up --build
+docker compose --env-file apps/api/.env.example up --build
 ```
 
-See `AGENTS.md` for the architecture decision and `backend-go/README.md` for the
-current Go-backend development status.
+The API health endpoint is `http://localhost:8080/healthz`.
 
-## Local Setup
-See `LOCAL_SETUP.md` for a step-by-step guide for running the backend locally.
+For direct Go development, install the version declared in `apps/api/go.mod`,
+then run `go test ./...` from `apps/api`.
 
-## Frontend Setup
-See `FRONTEND_SETUP.md` for how to run the Vite frontend locally.
+## Development rules
 
-## Rust Facade
-See `RUST_FACADE_SETUP.md` for service-token setup and the Django endpoints used by the Rust WebSocket facade.
-
-## Deployment
-See `DEPLOYMENT.md` for how to run the Django backend in production.
-
-## Frontend API requests
-Use the shared `apiFetch` helper so base URL selection and auth headers stay consistent.
-
-Example:
-```javascript
-import { apiFetch } from "./utils/apiFetch";
-
-const res = await apiFetch("/quizzes/", {
-  method: "POST",
-  json: { title: "Untitled" },
-});
-
-await apiFetch("/auth/token/", {
-  method: "POST",
-  auth: false,
-  json: { username, password },
-});
-```
-
-## Seed Demo Data
-
-This project provides a management command to generate bulk demo data.
-
-### Prerequisites
-- Activate the virtual environment.
-- Set `PYTHONPATH` to the project root.
-
-### Run (Windows PowerShell)
-```powershell
-$env:PYTHONPATH=(Get-Location).Path
-.\.venv\Scripts\python backend/srvs/office/manage.py seed_bulk
-```
-
-### Full seed with database reset
-```powershell
-$env:PYTHONPATH=(Get-Location).Path
-.\.venv\Scripts\python backend/srvs/office/manage.py seed_bulk --flush --quizzes 20 --slides-per-quiz 10 --players-per-quiz 30 --leaderboard-per-question 20
-```
-
-### Options
-- `--flush`: delete all data before seeding.
-- `--owners`: number of demo owners to create (if Quiz has `owner`).
-- `--quizzes`: number of quizzes.
-- `--slides-per-quiz`: number of slides per quiz.
-- `--content-ratio`: fraction of content slides (0-1).
-- `--options-per-question`: number of options per question.
-- `--players-per-quiz`: number of player sessions per quiz.
-- `--leaderboard-per-question`: leaderboard rows per question.
-- `--seed`: random seed for deterministic data.
-
-Note: `--flush` wipes the database. Use it only in development.
+Read [AGENTS.md](AGENTS.md) before making a change. API and SSE contract changes
+start in `apps/api/openapi/openapi.yaml`; after every material change, update
+`AGENTS.md`.
