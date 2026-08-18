@@ -7,10 +7,13 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/proslides-api ./cmd/api
 
-FROM gcr.io/distroless/static-debian13:nonroot
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S proslides \
+    && adduser -S -G proslides proslides
 WORKDIR /app
-COPY --from=build /out/proslides-api /app/proslides-api
+COPY --from=build --chown=proslides:proslides /out/proslides-api /app/proslides-api
 
 EXPOSE 8080
-USER nonroot:nonroot
+USER proslides:proslides
 ENTRYPOINT ["/app/proslides-api"]

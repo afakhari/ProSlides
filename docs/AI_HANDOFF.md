@@ -26,17 +26,17 @@ working quiz system yet. Do not represent placeholders as production behavior.
 | Node | v24.11.1 | web lint, tests, build |
 | npm | v11.6.2 | web dependencies/scripts; current `npm ci` reports 20 vulnerabilities (2 low, 4 moderate, 14 high) requiring a separately reviewed update |
 | Go | 1.26.6 installed at `C:\Program Files\Go\bin\go.exe`; its PATH was not visible to the previous shell | invoke via absolute path or refresh PATH before `go` commands |
-| Docker CLI | installed | Docker daemon was not running, so container build/integration tests were not executed |
+| Docker CLI/Desktop | installed and daemon available | API image and real Compose health/readiness checks passed; use Docker Hub base images because `gcr.io` returned 403 in this environment |
 | GitHub Actions | configured in `.github/workflows/ci.yml` | must run Go and web verification on pushed changes |
 
 Do not install a second Go version. Use the version declared by `apps/api/go.mod`.
 Do not run a broad `npm audit fix`; investigate updates as a dedicated,
 compatibility-tested change.
 
-Latest completed local verification (2026-08-18): Go format/tests, web lint,
-12 web unit tests, web production build, Compose syntax, and `git diff --check`
-all passed. Docker runtime checks remain unverified only because the local
-Docker daemon is not running.
+Latest completed local verification (2026-08-18): Go format/tests/vet, web
+lint, 12 web unit tests, web production build, Compose syntax, `git diff
+--check`, API image build, and a real Compose call to `/healthz` and `/readyz`
+all passed.
 
 ## Completed implementation: dependency adapters and readiness
 
@@ -59,12 +59,11 @@ PostgreSQL and Redis dependencies. This was the prerequisite for domain work.
    missing URLs and invalid timeout values.
 7. OpenAPI and API README now document this behavior.
 
-### Remaining verification limitation
+### Verification note
 
-Docker Desktop's daemon was not running, so the live Compose execution and
-driver-to-container checks are not yet verified. Unit tests use fake
-dependencies and pass locally. Do not claim container integration coverage
-until Docker runtime checks have passed.
+The real local Compose stack was verified with PostgreSQL and Redis. It creates
+named local volumes; use ordinary `docker compose down` after a test to preserve
+them. `down -v` remains destructive and requires owner authorization.
 
 ## Exact next implementation: identity boundary
 

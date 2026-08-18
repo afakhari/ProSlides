@@ -38,7 +38,7 @@ a shortcut.
 | PostgreSQL | PostgreSQL 16 in Compose, with an initial immutable SQL migration | Durable data belongs here. Add forward-only migrations only. |
 | Redis | Redis 7.4 in Compose | Use it only after the durable command/write path is correct. |
 | CI | GitHub Actions validates Go tests and web lint/unit tests | Keep CI passing and add checks with new tooling. |
-| Tests | Web lint, unit tests, and build last passed; Go 1.26.6 formatting and unit tests passed on 2026-08-18 | Run the relevant matrix before every handoff. |
+| Tests | Web lint, unit tests, and build last passed; Go 1.26.6 formatting/unit tests and the real Docker Compose health/readiness check passed on 2026-08-18 | Run the relevant matrix before every handoff. |
 
 The working branch is `feat/go-platform-foundation`. It uses a separate Git
 worktree, so `master` remains available to teammates. Do not merge, force-push,
@@ -168,6 +168,7 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 | 2026-08-18 | Registered existing Go 1.26.6 installation in the user PATH and ran API formatting/tests | `go fmt ./...` and `go test ./...` passed; Docker daemon remains unavailable. |
 | 2026-08-18 | Added the AI execution handoff and completed the local verification matrix | Web lint, 12 web unit tests, web build, Go tests, Compose syntax, and diff hygiene passed; `npm ci` reports 20 dependency vulnerabilities for later reviewed remediation. |
 | 2026-08-18 | Added PostgreSQL/Redis clients and truthful `/readyz` | `healthz` remains process-only; `readyz` reports only safe per-dependency states and returns 503 on missing, failed, or timed-out dependencies. |
+| 2026-08-18 | Replaced blocked `gcr.io` runtime image with Docker Hub Alpine non-root runtime | Docker build and real Compose `healthz`/`readyz` passed with PostgreSQL and Redis. |
 
 ## References
 
