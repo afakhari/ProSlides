@@ -35,4 +35,5 @@ creates quadratic work and unbounded risk for slow clients.
 - Correctness survives API or Redis loss because replay is durable.
 - Cross-instance event latency remains tied to the polling interval until a
   measured need justifies Redis wake-up fan-out.
-- Role-scoped snapshots, telemetry, retention, and load proof remain required.
+- Role-scoped snapshots and manager pagination are implemented. Telemetry,
+  retention policy, and measured load proof remain required.

@@ -4,8 +4,8 @@ This is the ProSlides Go modular monolith. It provides identity, owner-scoped
 presentation/slide/question APIs, durable live sessions, idempotent answers,
 pluggable scoring, role-scoped snapshots, manager-paginated rosters, and SSE
 replay. PostgreSQL uses
-`pgxpool` and is authoritative; Redis uses `go-redis` and is currently limited
-to readiness rather than durable live state.
+`pgxpool` and is authoritative. Redis uses `go-redis` for readiness and
+distributed fixed-window identity rate limits, never durable live state.
 
 ## Start with Docker Compose
 
@@ -34,6 +34,8 @@ go run ./cmd/api
 `DATABASE_URL` and `REDIS_URL` are required in every environment.
 `DEPENDENCY_CHECK_TIMEOUT` is a positive Go duration (default `2s`) that bounds
 each readiness check. Never place real credentials in `.env.example` or Git.
+All identity, SMTP, Google, and runtime variables are documented in
+[`docs/configuration.md`](../../docs/configuration.md).
 
 API contract changes begin in `openapi/openapi.yaml`. See the repository root
 `AGENTS.md` and `docs/AI_HANDOFF.md` before changing code.
@@ -75,6 +77,7 @@ workload and pass/fail gates.
 
 Run `powershell -ExecutionPolicy Bypass -File scripts/test-auth-integration.ps1`
 from the repository root to execute the identity, content, live, scoring,
-role-scoped snapshot, paginated roster, and SSE replay matrix. Use
+role-scoped snapshot, paginated roster, per-question results, atomic slide
+ordering, authorization/non-disclosure, and SSE replay matrix. Use
 `-SkipComposeStartup` only for an
 already-running local stack and `-StopAfter` only when it is safe to stop it.

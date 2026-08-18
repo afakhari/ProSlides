@@ -13,14 +13,14 @@ apps/api  → Go modular monolith + REST + SSE
 ```
 
 The backend uses HTTP POST for commands and Server-Sent Events for live
-server-to-client updates. PostgreSQL is the durable source of truth; Redis is
-used only for ephemeral realtime delivery, presence, and rate limits.
+server-to-client updates. PostgreSQL is the durable source of truth. Redis
+currently provides readiness and distributed identity rate limits; future live
+fan-out/presence acceleration must remain ephemeral.
 
 ## Repository layout
 
 - `apps/api` — Go API, SQL migrations, and OpenAPI contract.
-- `apps/web` — React client; its legacy WebSocket implementation is retained
-  temporarily as UI migration input.
+- `apps/web` — React client using the Go cookie API and snapshot-first SSE.
 - `docs` — architecture and architectural decisions.
 - `AGENTS.md` — mandatory development context and update protocol.
 
@@ -32,7 +32,8 @@ Install Docker Desktop and run:
 docker compose --env-file apps/api/.env.example up --build
 ```
 
-The API health endpoint is `http://localhost:8080/healthz`.
+The API health endpoint is `http://localhost:8080/healthz`. Readiness is
+`http://localhost:8080/readyz` and requires PostgreSQL and Redis.
 
 For direct Go development, install the version declared in `apps/api/go.mod`,
 then run `go test ./...` from `apps/api`.
@@ -43,4 +44,6 @@ Read [AGENTS.md](AGENTS.md) before making a change. API and SSE contract changes
 start in `apps/api/openapi/openapi.yaml`; after every material change, update
 both [AGENTS.md](AGENTS.md) and [the AI execution handoff](docs/AI_HANDOFF.md).
 The handoff document defines the exact next task, verification commands, and
-completion criteria.
+completion criteria. See [migration status](docs/migration-status.md) for the
+Django/Rust parity matrix and [configuration](docs/configuration.md) for all
+runtime settings.

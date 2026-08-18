@@ -58,6 +58,14 @@ RAM, network, PostgreSQL storage class, API replica count, pool configuration,
 TLS/proxy settings, Go version, and dataset size. Local Docker Compose is only a
 functional gate; it is not capacity evidence.
 
+## Current evidence
+
+Role-scoped snapshots, manager keyset pagination, aggregate-only leaderboard
+events, bounded subscriber buffers, presence compaction, and one ledger poller
+per active session/API process are implemented and functionally verified. No
+k6 capacity run has been accepted yet. The next admissible run is the 100-user
+smoke in step 2; do not skip directly to 1k.
+
 ## Ordered execution
 
 1. **Completed 2026-08-19:** add role-scoped/paginated snapshots so players
@@ -87,7 +95,8 @@ Any mismatch fails the run even when latency is excellent.
 
 ## Promotion rule
 
-Production rollout remains feature-flagged until functional parity, the 10k
-gate, observability, security controls, backup/restore, graceful drain, and a
-tested rollback all pass. Capacity claims must name the tested infrastructure;
-never extrapolate linearly beyond measured results.
+Functional product/API parity is complete. Production rollout remains
+feature-flagged until the 10k gate, observability, security controls,
+backup/restore, graceful drain, and a tested rollback all pass. Capacity claims
+must name the tested infrastructure; never extrapolate linearly beyond measured
+results.

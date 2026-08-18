@@ -1,5 +1,11 @@
 # Mock Data - راهنمای کامل
 
+> **Legacy fixture reference (2026-08-19):** examples below exist for isolated
+> component development and regression tests. Numeric WebSocket message types
+> are retired and must not be used for new integration work. Current live data
+> comes from the role-scoped Go snapshot, manager-only paginated queries, and
+> SSE event types under `src/live`; the OpenAPI file is authoritative.
+
 این فایل شامل **تمام** داده‌های Mock استفاده شده در پروژه است که از فایل‌های مختلف pages و components جمع‌آوری شده‌اند.
 
 ---

@@ -23,9 +23,15 @@ npm run build
 `VITE_API_BASE_URL` and `VITE_LIVE_API_BASE_URL` configure the Go API. Both
 default to same-origin `/api/v1`; the Vite development server proxies it to the
 local Go API. A cross-origin production override requires an explicitly
-restricted CORS policy at the trusted ingress. `VITE_GOOGLE_CLIENT_ID` keeps
-the existing Google UI available, but the matching Go verification endpoint
-must not be enabled until its audience/provider configuration is approved.
+restricted CORS policy at the trusted ingress. `VITE_GOOGLE_CLIENT_ID` enables
+the existing Google UI and must exactly match the backend `GOOGLE_CLIENT_ID`.
+The Go endpoint verifies the signature, JWKS key, issuer, audience, expiry, and
+verified-email claim before issuing the normal session/CSRF cookies.
+
+The original login/register/recovery presentation, animations, responsive
+behavior, OTP states, and validation UX are intentionally preserved. The
+integration no longer stores Django JWT access/refresh tokens in the browser;
+authentication is cookie-based.
 
 The presenter connection moves a new draft session idempotently into the lobby
 before displaying its join code. Participant retry/reconnect preserves one

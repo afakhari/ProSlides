@@ -8,9 +8,9 @@ both documents as part of the same change.
 
 Build ProSlides as a Go modular monolith with PostgreSQL, Redis, HTTP commands,
 and SSE delivery. Preserve the existing React product while replacing its
-legacy Django/Rust/WebSocket boundary. The backend now has a functional live
-quiz vertical slice, but production parity and the measured 10k capacity target
-are not complete. Never describe a design target as benchmark evidence.
+legacy Django/Rust/WebSocket boundary. Active product/API behavior now has Go
+coverage, but production certification and the measured 10k capacity target are
+not complete. Never describe a design target as benchmark evidence.
 
 ## Current objective and status at a glance
 
@@ -36,6 +36,8 @@ are not complete. Never describe a design target as benchmark evidence.
 - Capacity truth: architecture has a credible horizontal path, but 1k/5k/10k
   has not been measured. Use `docs/capacity-plan.md` as the only proof protocol.
 - Exact next task: bounded telemetry and the documented 100-user k6 smoke run.
+- Canonical parity and deployment references: `docs/migration-status.md` and
+  `docs/configuration.md`.
 
 ## Branch and collaboration boundary
 
@@ -61,7 +63,7 @@ Do not install a second Go version. Use the version declared by `apps/api/go.mod
 Do not run a broad `npm audit fix`; investigate updates as a dedicated,
 compatibility-tested change.
 
-Latest completed local verification (2026-08-19): Go tests/vet, SMTP and Google
+Latest completed revision (`8ae78d9`, 2026-08-19): Go tests/vet, SMTP and Google
 adapter tests, OpenAPI parsing, web lint/typecheck/unit/build passed; the API
 image rebuilt; and the real Compose matrix passed identity,
 owner presentation list/create/update/delete/duplicate, settings, atomic slide insert/replace/reorder,
@@ -74,7 +76,7 @@ TypeScript checking, 23 web unit tests, and the production
 build also passed; the generated sitemap timestamp was restored because it was
 unrelated to this change. Browser automation could not run because no in-app or
 extension browser was connected. `npm ci` still reports the already-known 20
-vulnerabilities. GitHub CI must confirm the pushed revision.
+vulnerabilities. Both GitHub Actions workflows passed for the pushed revision.
 
 ## Completed implementation: dependency adapters and readiness
 

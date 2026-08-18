@@ -19,7 +19,8 @@ Browser (manager/player)
   |-- HTTPS command/query --> Load balancer --> Go API instances
   |-- HTTPS SSE stream -----> Load balancer --> Go API instances
                                            |-- PostgreSQL (truth + event ledger)
-                                           `-- Redis (presence/fan-out/rate limits)
+                                           `-- Redis (identity rate limits now;
+                                                       presence/fan-out optional later)
 Object storage/CDN <---------------- media module (future)
 Telemetry backend <---------------- structured logs/metrics/traces (future)
 ```
@@ -37,7 +38,7 @@ can replay from the durable event ledger and then deliver new events locally.
 | `live` | live state machine, participants, answers, scoring, snapshots, events | account lifecycle |
 | `reports` (future) | immutable post-session projections and exports | live command handling |
 | `media` (future) | object metadata and access policy | binary storage in PostgreSQL |
-| `platform` | process lifecycle, config, HTTP, PostgreSQL, Redis, telemetry | product rules |
+| `platform` | process lifecycle, config, HTTP, PostgreSQL, Redis; future telemetry | product rules |
 
 Dependencies point inward:
 
@@ -144,7 +145,7 @@ Redis loss must degrade latency/presence, never lose a durable event or answer.
 | SSE disconnect | exponential reconnect, snapshot, resume from `last_event_id` |
 | slow SSE client | disconnect; bounded server memory; client recovers |
 | API process loss | committed PostgreSQL state survives; client reconnects elsewhere |
-| Redis loss | durable commands continue; ephemeral acceleration may degrade |
+| Redis loss | readiness fails; durable commands continue and identity limits fail open |
 | PostgreSQL unavailable | readiness fails and durable mutations fail closed |
 
 ## PostgreSQL design rules
@@ -192,4 +193,5 @@ the old version available until schema/event compatibility is confirmed.
 4. No k6 1k/5k/10k evidence exists yet; therefore 10k is a target, not a claim.
 
 The ordered capacity work and pass/fail thresholds are in
-`docs/capacity-plan.md`.
+`docs/capacity-plan.md`. Deployment inputs and migration status are recorded in
+`docs/configuration.md` and `docs/migration-status.md`.

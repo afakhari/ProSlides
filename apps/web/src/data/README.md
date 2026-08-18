@@ -1,5 +1,12 @@
 # Mock Data Documentation
 
+> **Legacy fixture reference (2026-08-19):** this directory supports isolated
+> UI examples and tests only. Its numeric `type` messages describe the removed
+> Django/Rust WebSocket view-model and are not a current backend contract. The
+> production runtime uses the typed Go HTTP/SSE adapters in `src/live`,
+> `src/utils/api.js`, and `src/utils/presentationApi.js`. Use the repository
+> OpenAPI document and `docs/architecture.md` for authoritative payloads.
+
 این فایل شامل داده‌های Mock برای توسعه و تست پروژه است.
 
 ## ساختار داده‌ها

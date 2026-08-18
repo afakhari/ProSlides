@@ -22,3 +22,9 @@ Use REST/HTTP POST for client commands and SSE for server-to-client events.
 - Django/Rust remain only in Git history and the existing `master` branch.
 - No broker, microservice, or Kubernetes deployment is introduced before a
   measured scaling need requires it.
+
+## Implementation note
+
+Functional product/API parity was completed on 2026-08-19. This decision does
+not itself certify capacity; telemetry and the staged 100/1k/5k/10k workload in
+`../capacity-plan.md` remain the evidence gates.

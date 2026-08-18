@@ -14,8 +14,8 @@ Read in this order: this file, `docs/AI_HANDOFF.md`, `docs/architecture.md`,
 The goal is to replace the historical Django/Rust/WebSocket backend with a
 maintainable Go modular monolith and HTTP/SSE protocol without losing product
 behavior. Correctness and durable recovery come before low-latency acceleration.
-The current branch contains a working backend live vertical slice, not a
-production-certified 10k system. The single next task is specified below.
+The current branch contains functional Go coverage for active product flows,
+not a production-certified 10k system. The single next task is specified below.
 
 ## Product and non-negotiable decisions
 
@@ -29,9 +29,10 @@ live sessions, scoring, leaderboards, and reports.
 - Client commands use HTTP; server-to-client live updates use SSE. Do not add a
   WebSocket feature unless the owner explicitly approves a documented,
   measured two-way need.
-- PostgreSQL is the durable source of truth. Redis is only for fan-out,
-  presence, cache, and distributed rate limits; it must never be the only copy
-  of a command, answer, score, or report.
+- PostgreSQL is the durable source of truth. Redis currently provides readiness
+  and distributed identity rate limits and may later accelerate fan-out,
+  presence, and cache; it must never be the only copy of a command, answer,
+  score, or report.
 - Start with the smallest maintainable component set. Do not introduce Kafka,
   RabbitMQ, NATS, ClickHouse, MongoDB, Kubernetes, or a microservice solely for
   anticipated scale.
@@ -44,12 +45,12 @@ a shortcut.
 
 | Area | Actual state | Rule for next work |
 |---|---|---|
-| `apps/api` | Go API with Compose-verified cookie identity, owner presentation/editor CRUD, content/live flows, public join-code resolution, role-scoped snapshots, manager-only keyset-paginated roster/leaderboard, durable replay, and bounded fan-out | Preserve ownership/role boundaries. Password-reset token storage is ready, but outbound delivery must remain unavailable until an approved provider is configured. |
-| `apps/web` | React 19/Vite UI with dashboard/editor/report/auth consumers on the Go cookie API; snapshot-first SSE recovery and incremental manager roster paging replace the legacy WebSocket runtime. The original 1,500-line auth presentation was preserved. | Preserve the established auth UI while completing approved external identity delivery/verification. |
-| PostgreSQL | PostgreSQL 16; migrations `0001`-`0011`; authoritative users/content/settings/reset-token hashes/sessions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
-| Redis | Redis 7.4 is wired for readiness but not live fan-out/rate limiting yet | It may accelerate ephemeral work, never replace the event/answer ledger. |
+| `apps/api` | Go API with Compose-verified cookie identity, optional email OTP, SMTP reset delivery, signed Google login, owner presentation/editor CRUD, content/live flows, role-scoped snapshots, keyset-paginated roster and per-question results, durable replay, and bounded fan-out | Preserve ownership/role boundaries and never accept an external score ledger. Provider secrets belong only in deployment configuration. |
+| `apps/web` | React 19/Vite UI with auth/dashboard/editor/report/live consumers on the Go cookie API; snapshot-first SSE and incremental manager paging replace the legacy WebSocket runtime. The original 1,500-line auth presentation is preserved. | Preserve the established auth UI and the participant non-disclosure boundary. |
+| PostgreSQL | PostgreSQL 16; migrations `0001`-`0012`; authoritative users/content/settings/OTP and reset hashes/sessions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
+| Redis | Redis 7.4 provides readiness and fixed-window identity rate limits; live fan-out/presence acceleration is not implemented | It may accelerate ephemeral work, never replace the event/answer ledger. |
 | CI | GitHub Actions validates Go tests/race and web lint/typecheck/unit/build | Keep CI passing and add checks with new tooling. |
-| Tests | Web lint/typecheck/23 unit tests/build, Go tests, and real Compose identity/presentation CRUD/editor/live/score/state/snapshot/roster/SSE replay passed on 2026-08-19; 1k/5k/10k load tests do not exist yet | Never claim the 10k target is proven until `docs/capacity-plan.md` passes. |
+| Tests | Web lint/typecheck/23 unit tests/build, Go tests/vet, SMTP/JWKS adapter tests, real Compose identity/presentation/editor/live/result/non-disclosure/SSE matrix, and both GitHub CI runs passed on 2026-08-19; browser visual automation was unavailable and 1k/5k/10k tests do not exist | Never claim visual-browser or 10k proof without evidence. |
 
 The working branch is `feat/go-platform-foundation`. It uses a separate Git
 worktree, so `master` remains available to teammates. Do not merge, force-push,
@@ -70,6 +71,8 @@ docs/
   AI_HANDOFF.md              precise execution plan and handoff template
   architecture.md            architecture boundaries
   capacity-plan.md           workload, SLOs, telemetry, and 1k/5k/10k gates
+  configuration.md           API/web environment and deployment checklist
+  migration-status.md        Django/Rust parity and remaining production work
   decisions/                 Architecture Decision Records
 AGENTS.md                    this mandatory guide
 docker-compose.yaml          local API + PostgreSQL + Redis stack
@@ -136,7 +139,7 @@ Slow clients are disconnected and recover; server memory must remain bounded.
 - Score reads use `participants.score`, not repeated full-history aggregation.
 - PostgreSQL polling grows with active sessions/API replicas, not SSE clients.
 - Redis failure must not lose answers, scores, command results, or replay events.
-- Known blockers before a serious 10k run: metrics/tracing, rate limits,
+- Known blockers before a serious 10k run: metrics/tracing, join/answer rate limits,
   proxy/TLS tuning, event retention, database/pool
   tuning, and k6 evidence.
 
@@ -174,16 +177,15 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 
 ## Single exact next task
 
-Complete the external identity-provider boundary after the owner supplies and
-approves the provider configuration: wire password-reset mail delivery and
-Google ID-token verification into the existing Go session model without
-changing the preserved auth-page design.
+Add bounded OpenTelemetry-compatible metrics and the reproducible 100-user k6
+smoke scenario defined in `docs/capacity-plan.md`. Instrument HTTP, PostgreSQL,
+SSE/broker, replay lag, and answer outcomes without participant/session/email
+labels. Record the commit, topology, raw results, and correctness reconciliation.
 
-Acceptance: reset links are sent only through the approved provider, tokens
-remain hashed/one-time/expiring, reset revokes all sessions, Google tokens are
-verified server-side for the configured audience, unknown accounts are not
-disclosed, and Compose/browser auth scenarios pass. Never log reset links,
-provider tokens, passwords, or mail credentials.
+Acceptance: metrics have bounded cardinality; the 100-user connect/join/answer/
+reconnect/close flow meets the initial SLOs; durable answers, aggregate scores,
+request IDs, states, and events reconcile exactly; no 1k run starts before this
+smoke gate passes.
 
 ## Phases and the single next task
 
@@ -195,18 +197,18 @@ provider tokens, passwords, or mail credentials.
 - [x] **Phase 1a:** identity contract, schema, password/session primitives,
   PostgreSQL adapter, secure cookie handlers, and the real Compose auth matrix
   are implemented and verified.
-- [ ] Phase 1: identity, content, quizzes, presentations, slides, media, and
-  typed React API client.
-- [ ] Phase 2: live state machine, commands, snapshots, SSE, idempotency,
-  presence, timers, score, and WebSocket-to-SSE UI migration.
-  The durable backend vertical slice, aggregate score projection, bounded local
-  event fan-out, presence compaction, and replay cursor are complete;
-  Redis acceleration and capacity proof remain. Role-scoped snapshots,
-  manager pagination, and the HTTP/SSE UI migration are complete.
-- [ ] Phase 3: integration/E2E tests plus k6 scenarios for 1k/5k/10k users,
-  reconnects, host disconnects, and answer bursts; document SLOs.
+- [x] Phase 1: identity, content, quizzes, presentations, slides, reports, and
+  React Go-API consumers. Media remains URL metadata; object storage is a
+  separate production capability, not a missing Django upload endpoint.
+- [x] Phase 2: functional live state machine, commands, role-scoped snapshots,
+  SSE, idempotency, timers, scoring, bounded fan-out, replay, and React
+  WebSocket-to-SSE migration. Redis wake-up/presence TTL and capacity proof are
+  later scale work, not functional parity gaps.
+- [ ] Phase 3: bounded telemetry, browser E2E coverage, and staged k6 scenarios
+  for 100/1k/5k/10k users, reconnects, host disconnects, and answer bursts;
+  document measured SLOs.
 - [ ] Phase 4: feature-flagged cutover and exercised rollback only after
-  parity is measured. Do not merge legacy code into this branch.
+  production gates pass. Do not merge legacy code into this branch.
 
 ## Change log
 
@@ -236,7 +238,8 @@ provider tokens, passwords, or mail credentials.
 | 2026-08-18 | Removed two immediate high-load bottlenecks | Durable aggregate participant scores replace repeated answer-history sums; bounded per-session event brokers replace per-SSE-connection database polling; snapshots expose a recovery cursor and presence bursts are compacted. Capacity still requires the documented load gates. |
 | 2026-08-19 | Implemented role-scoped snapshots and manager pagination | Participant snapshots expose only public state, self/score, counts, active slide, and cursor; manager roster/leaderboard uses bounded stable keyset pages; leaderboard SSE is aggregate-only. Go, Compose, and web checks passed. |
 | 2026-08-19 | Replaced the React live WebSocket runtime with typed HTTP + SSE | Snapshot-first recovery, event/version ordering, Go join-code resolution, participant non-disclosure (including correctness metadata), incremental manager paging, exhaustive UI/state navigation tests, web tests/build, Go tests/vet, and the real Compose matrix passed. |
-| 2026-08-19 | Migrated dashboard, editor, reports, and password-reset domain to the Go API | Owner CRUD/settings/slides/reorder/duplicate/results, cookie+CSRF route guards, bounded report/preview pages, one-time hashed reset tokens, and expanded authorization/non-disclosure Compose tests passed. The original auth UI was retained; external mail and Google verification await approved provider configuration. |
+| 2026-08-19 | Migrated dashboard, editor, reports, and password-reset domain to the Go API | Owner CRUD/settings/slides/reorder/duplicate/results, cookie+CSRF route guards, bounded report/preview pages, one-time hashed reset tokens, and expanded authorization/non-disclosure Compose tests passed. The original auth UI was retained; provider delivery followed in the next parity commit. |
+| 2026-08-19 | Completed remaining Django product parity in Go | Added keyed email OTP, SMTP verification/reset delivery, secure Google token verification, Redis identity limits, atomic slide insertion/movement, owner-only per-question results from durable Go answers, frontend adapters, OpenAPI/migration/tests/docs; Go/web/Compose and both GitHub CI runs passed. |
 
 ## References
 
@@ -244,6 +247,8 @@ provider tokens, passwords, or mail credentials.
   final-response template.
 - `docs/architecture.md` — boundaries and scale design.
 - `docs/capacity-plan.md` — exact high-load workload, SLOs, metrics, and proof gates.
+- `docs/configuration.md` — complete API/web environment and deployment checklist.
+- `docs/migration-status.md` — current parity matrix, evidence, and remaining work.
 - `docs/decisions/0001-go-modular-monolith.md` — architecture decision record.
 - `docs/decisions/0002-durable-events-and-bounded-sse-fanout.md` — replay/fan-out and backpressure decision.
 - `apps/api/openapi/openapi.yaml` — contract source of truth.
