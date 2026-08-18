@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import TopBar from "../../../components/TopBar";
 import QRSidebar from "../../../components/QRSidebar";
 // LeaderboardModal was removed; modal UI now lives on Manager LeaderBoard page
-import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useLiveSession } from "../../../hooks/useLiveSession";
 import { useServerData } from "../../../hooks/useServerData";
 import { isLightColor } from "../../../lib/colorUtils";
 import {
@@ -40,8 +40,19 @@ export default function ManagerJoinPage({
   currentSlide = 1,
   quiz,
 }) {
-  const { isConnected, connect, sendNavigation, sendEnd: _sendEnd, lastMessage } =
-    useWebSocket();
+  const {
+    isConnected,
+    connectionError,
+    connect,
+    sendNavigation,
+    sendEnd: _sendEnd,
+    lastMessage,
+    snapshot,
+    participantCount,
+    hasMoreRoster,
+    isRosterLoading,
+    loadMoreRoster,
+  } = useLiveSession();
   const {
     users,
     currentQuestion,
@@ -67,8 +78,10 @@ export default function ManagerJoinPage({
   const [sessionId] = useState(roomId); // Session ID from route
 
   // استفاده از بازیکنان از سرور یا mock data
-  const displayUsers = users.length > 0 ? users : User_adding.Users;
-  const playersReady = users.length || calculatePlayersReady(User_adding);
+  const displayUsers = snapshot ? users : User_adding.Users;
+  const playersReady = snapshot
+    ? participantCount
+    : users.length || calculatePlayersReady(User_adding);
   const currentQuestionIndex = Math.floor(currentSlide / 2);
   const hasLeaderboard =
     Array.isArray(leaderboardResults) ?
@@ -130,17 +143,21 @@ export default function ManagerJoinPage({
   // Auto-connect on mount
   useEffect(() => {
     if (!sessionId) return;
-    connect(sessionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (isConnected) return;
+    void connect(sessionId);
+  }, [sessionId, isConnected, connect]);
 
   useEffect(() => {
     if (!lastMessage) return;
     debugLog("[JoinPage] Received message:", lastMessage);
   }, [lastMessage]);
 
-  const handleStart = () => {
+  const handleStart = async () => {
     setStartError("");
+    if (!quiz?.slides?.length) {
+      setStartError("This presentation has no slides to start.");
+      return;
+    }
     if (sessionInProgress) {
       setStartError("Session is already in progress. Resuming current slide...");
       onNext?.();
@@ -165,7 +182,7 @@ export default function ManagerJoinPage({
     );
 
     // Send start command
-    const ok = sendNavigation("start");
+    const ok = await sendNavigation("start", { slide: quiz?.slides?.[0] });
     if (!ok) {
       setStartError("Failed to send start command. Please try again.");
       return;
@@ -450,6 +467,23 @@ export default function ManagerJoinPage({
                 {startError && (
                   <div className="mt-3 text-center text-sm text-red-500">
                     {startError}
+                  </div>
+                )}
+                {connectionError && (
+                  <div className="mt-3 text-center text-sm text-red-500">
+                    Live session connection failed. Sign in again or retry this page.
+                  </div>
+                )}
+                {hasMoreRoster && (
+                  <div className="mt-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => void loadMoreRoster()}
+                      disabled={isRosterLoading}
+                      className="rounded-lg border border-white/30 px-4 py-2 text-sm text-[color:var(--quiz-text)] disabled:opacity-50"
+                    >
+                      {isRosterLoading ? "Loading..." : "Load more players"}
+                    </button>
                   </div>
                 )}
               </div>

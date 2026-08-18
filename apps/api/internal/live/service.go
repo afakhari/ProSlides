@@ -29,6 +29,13 @@ func (s *Service) CreateSession(c context.Context, host, presentation, request s
 	}
 	return s.store.CreateSession(c, host, presentation, request, code)
 }
+func (s *Service) ResolveSession(c context.Context, code string) (SessionLocator, error) {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	if code == "" || len(code) > 32 {
+		return SessionLocator{}, ErrInvalid
+	}
+	return s.store.ResolveSession(c, code)
+}
 func (s *Service) Join(c context.Context, session, request, name, avatar string) (Participant, bool, error) {
 	name = strings.TrimSpace(name)
 	if session == "" || request == "" || name == "" || len(name) > 100 || len(avatar) > 100 {

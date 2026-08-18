@@ -15,21 +15,22 @@ are not complete. Never describe a design target as benchmark evidence.
 ## Current objective and status at a glance
 
 - Branch purpose: isolated Go migration; `master` remains untouched legacy work.
-- Overall migration estimate: about 52%; this is a roadmap estimate, not a
+- Overall migration estimate: about 60%; this is a roadmap estimate, not a
   code-coverage calculation.
 - Implemented: Go/Compose foundation, identity, owner-scoped presentations,
   content/question creation, live state machine, join, idempotent answers,
   replaceable scoring, aggregate scores, role-scoped snapshots, manager-only
-  keyset-paginated roster/leaderboard, durable events, and SSE.
+  keyset-paginated roster/leaderboard, durable events, typed React HTTP/SSE,
+  snapshot-first recovery, and public live-session join-code resolution.
 - High-load improvements in this stage: one event-ledger poller per active
   session/API process, bounded subscriber buffers, slow-client disconnect and
   replay, presence compaction, snapshot cursor, and indexed participant scores.
-- Not implemented: typed React HTTP/SSE client, rate limiting, telemetry, Redis
-  wake-up fan-out/presence TTL, media/reports,
+- Not implemented: rate limiting, telemetry, Redis wake-up fan-out/presence
+  TTL, media/reports,
   k6 proof, production proxy/security hardening, cutover, or rollback exercise.
 - Capacity truth: architecture has a credible horizontal path, but 1k/5k/10k
   has not been measured. Use `docs/capacity-plan.md` as the only proof protocol.
-- Exact next task: typed React HTTP + SSE migration, defined later in this document.
+- Exact next task: bounded telemetry plus a 100-user k6 smoke scenario, defined later in this document.
 
 ## Branch and collaboration boundary
 
@@ -56,12 +57,13 @@ Do not run a broad `npm audit fix`; investigate updates as a dedicated,
 compatibility-tested change.
 
 Latest completed local verification (2026-08-19): Go formatting, all API tests,
-and `go vet` passed; the API image rebuilt; migration `0009` applied to the
-preserved PostgreSQL volume; and the real Compose matrix passed identity,
+and `go vet` passed; the API image rebuilt; and the real Compose matrix passed identity,
 content/question creation, live commands, idempotent join/answer, role-scoped
 snapshots, participant non-disclosure, manager-only multi-page roster and score
 ordering, aggregate-only leaderboard events, 16 concurrent joins, and
-`Last-Event-ID` SSE replay. Web lint, 12 web unit tests, and the production
+`Last-Event-ID` SSE replay. It also verified join-code resolution and removal
+of question correctness metadata from participant snapshots. Web lint,
+TypeScript checking, 23 web unit tests, and the production
 build also passed; the generated sitemap timestamp was restored because it was
 unrelated to this change. `npm ci` still reports the already-known 20
 vulnerabilities. GitHub CI must confirm the pushed revision.
@@ -156,8 +158,8 @@ authoritative state first and avoids replaying old presence bursts.
 
 ### Out of scope
 
-The React client still uses the legacy boundary. Redis wake-up fan-out/presence
-TTL, rate limiting, telemetry, reports, media, load tests, event retention, and
+Redis wake-up fan-out/presence TTL, rate limiting, telemetry, reports, media,
+load tests, event retention, and
 production proxy tuning are not implemented. No database reset or volume
 deletion was performed.
 
@@ -170,23 +172,23 @@ deletion was performed.
 
 ### Current exact next task
 
-Replace the React legacy WebSocket boundary with a typed HTTP + SSE client.
+Add bounded OpenTelemetry-compatible live-path metrics and a reproducible
+100-participant k6 smoke scenario.
 
 Contract and acceptance criteria:
 
-1. Generate or hand-maintain narrow TypeScript types matching the existing
-   OpenAPI contract; do not change backend semantics as a shortcut.
-2. Fetch the role-scoped snapshot before opening SSE and send its
-   `last_event_id` as `Last-Event-ID`.
-3. Apply equal-state-version events in `event_id` order while rejecting true
-   state regressions; reconnect through a fresh snapshot plus cursor.
-4. Participant state must never expect a complete roster/score map. Manager
-   roster and leaderboard UI must page through the manager-only endpoint.
-5. Remove live runtime dependence on the legacy WebSocket client, preserve the
-   existing visual behavior, and add unit/E2E coverage for reconnect and roles.
-6. Run the full Go/Compose/web verification matrix and update status documents.
+1. Instrument HTTP request count/duration/status/in-flight, SSE connections and
+   lifetime/reconnect/replay lag, broker subscribers/drops, answer outcomes,
+   and PostgreSQL pool/query/transaction signals needed by the capacity plan.
+2. Use bounded labels only; never label by participant, request ID, raw session
+   ID, email, raw error text, or other unbounded values.
+3. Add a committed k6 smoke scenario for 100 participants covering join,
+   snapshot-first SSE, answer burst, reconnect, closure, and correctness
+   reconciliation against PostgreSQL.
+4. Document exact commands, topology, thresholds, and result artifact format.
+5. Run the full Go/Compose/web verification matrix.
 
-Do not add Redis Pub/Sub or run 1k/5k/10k load tests in the same change.
+Do not add Redis Pub/Sub or claim/run the 1k/5k/10k gates in the same change.
 
 ## Commands and verification matrix
 

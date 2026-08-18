@@ -10,8 +10,8 @@ import SiteHeader from "./components/SiteHeader";
 import LandingPage from "./pages/landing/LandingPage";
 import { apiFetch } from "./utils/apiFetch";
 import { AudioProvider, useAudio } from "./contexts/AudioContext";
-import { WebSocketProvider } from "./contexts/WebSocketContext";
-import { useWebSocket } from "./hooks/useWebSocket";
+import { LiveSessionProvider } from "./contexts/LiveSessionContext";
+import { useLiveSession } from "./hooks/useLiveSession";
 import { ServerDataProvider } from "./contexts/ServerDataContext";
 import { useServerData } from "./hooks/useServerData";
 import notFoundIllustration from "./assets/404.svg";
@@ -55,7 +55,7 @@ export default function App() {
             element={<PresentationEntry mode="presentation" />}
           />
           <Route path="/" element={<LandingPage />} />
-          {/* Access code route - resolves access code to quiz_id and redirects to player presentation */}
+          {/* Access code route resolves the active Go live session for a player. */}
           <Route path="/:accessCode" element={<PresentationEntry mode="accessCode" />} />
           {/* Manager/Role panel (supports both /manager and any role param) */}
           <Route path="/:role/panel" element={<HomePage />} />
@@ -141,14 +141,14 @@ export default function App() {
       return (
         <AudioProvider>
           <ServerDataProvider>
-            <WebSocketProvider role="player">
+            <LiveSessionProvider role="player">
               <AppPresentation
                 roomId={String(resolvedQuizId)}
                 role="player"
                 initialQuiz={resolvedMeta}
               />
-              <WSMessageHandler />
-            </WebSocketProvider>
+              <LiveMessageAdapter />
+            </LiveSessionProvider>
           </ServerDataProvider>
         </AudioProvider>
       );
@@ -332,10 +332,10 @@ export default function App() {
     return (
       <AudioProvider>
         <ServerDataProvider>
-          <WebSocketProvider role={wsRole}>
+          <LiveSessionProvider role={wsRole}>
             <AppPresentation roomId={roomId} role={role} />
-            <WSMessageHandler />
-          </WebSocketProvider>
+            <LiveMessageAdapter />
+          </LiveSessionProvider>
         </ServerDataProvider>
       </AudioProvider>
     );
@@ -580,9 +580,9 @@ export default function App() {
     return <WaitingPage />;
   }
 
-  /* ---------------- WebSocket Handler ---------------- */
-  function WSMessageHandler() {
-    const { lastMessage } = useWebSocket();
+  /* ---------------- Legacy message adapter ---------------- */
+  function LiveMessageAdapter() {
+    const { lastMessage } = useLiveSession();
     const { processMessage } = useServerData();
 
     useEffect(() => {

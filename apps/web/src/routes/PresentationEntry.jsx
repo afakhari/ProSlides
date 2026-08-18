@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef, lazy } from "react";
 import { useParams } from "react-router-dom";
 
 import { QuizSetup } from "../data/mockData";
-import { WebSocketProvider } from "../contexts/WebSocketContext";
+import { LiveSessionProvider } from "../contexts/LiveSessionContext";
 import { ServerDataProvider } from "../contexts/ServerDataContext";
 import { useServerData } from "../hooks/useServerData";
-import { useWebSocket } from "../hooks/useWebSocket";
+import { useLiveSession } from "../hooks/useLiveSession";
 import { AudioProvider, useAudio } from "../contexts/AudioContext";
-import { apiFetch } from "../utils/apiFetch";
+import { getPresentation, resolveLiveSession } from "../live/liveApi";
+import { presentationSlideToLegacy } from "../live/protocol";
 import { hasLeaderboardEntries } from "../pages/presentation/utils/leaderboardUtils";
 import { resolveQuestionTimer } from "../pages/presentation/utils/questionTimerSync";
 import {
@@ -70,6 +71,16 @@ const isContentSlide = (slide) =>
   !isQuestionSlide(slide) &&
   hasContentPayload(slide);
 
+const EMPTY_PRESENTATION = {
+  quiz_id: "",
+  title: "",
+  access_code: "",
+  background: { color: "#1e1e2e", image: "", text_color: "#111827" },
+  music_url: "",
+  slides: [],
+  text_color: "#111827",
+};
+
 export default function PresentationEntry({ mode }) {
   return (
     <ServerDataProvider>
@@ -89,31 +100,24 @@ function AccessCodeResolver() {
     let mounted = true;
     const resolveCode = async () => {
       try {
-        const res = await apiFetch(
-          `/quizzes/resolve-access-code/?access_code=${encodeURIComponent(
-            accessCode
-          )}`,
-          { auth: false }
-        );
-        const data = await res.json();
+        const data = await resolveLiveSession(accessCode);
 
         if (!mounted) return;
 
-        if (data.quiz_id) {
-          // Access code valid - store quiz_id and show player presentation
+        if (data.session_id) {
           setResolvedData(data);
           setResolvedMeta({
-            quiz_id: data.quiz_id,
-            title: data.title || "",
+            quiz_id: data.presentation_id,
+            title: "",
             access_code: accessCode,
             background: {
-              color: data.background_color || "#1e1e2e",
-              image: data.background_image_url || "",
-              text_color: data.text_color || "#111827",
+              color: "#1e1e2e",
+              image: "",
+              text_color: "#111827",
             },
-            music_url: data.music_url || "",
+            music_url: "",
             slides: [],
-            text_color: data.text_color || "#111827",
+            text_color: "#111827",
           });
           setStatus("success");
         } else {
@@ -146,14 +150,14 @@ function AccessCodeResolver() {
   if (status === "success" && resolvedData) {
     return (
       <AudioProvider>
-        <WebSocketProvider role="player">
+        <LiveSessionProvider role="player">
           <AppPresentation
-            roomId={String(resolvedData.quiz_id)}
+            roomId={String(resolvedData.session_id)}
             role="player"
             initialQuizData={resolvedMeta}
           />
-          <WSMessageHandler />
-        </WebSocketProvider>
+          <LiveMessageHandler />
+        </LiveSessionProvider>
       </AudioProvider>
     );
   }
@@ -164,14 +168,14 @@ function AccessCodeResolver() {
 /* ------------------------ Router Wrapper ------------------------ */
 function PresentationRouter() {
   const { roomId, role } = useParams();
-  const wsRole = role === "player" ? "player" : "manager";
+  const liveRole = role === "player" ? "player" : "manager";
 
   return (
     <AudioProvider>
-      <WebSocketProvider role={wsRole}>
+      <LiveSessionProvider role={liveRole}>
         <AppPresentation roomId={roomId} role={role} />
-        <WSMessageHandler />
-      </WebSocketProvider>
+        <LiveMessageHandler />
+      </LiveSessionProvider>
     </AudioProvider>
   );
 }
@@ -254,66 +258,18 @@ function AppPresentation({ roomId, role, initialQuizData }) {
         // But if user wants ONLY this API for player, we skip fetch for player
         if (role === "player") return;
 
-        const res = await apiFetch(`/quizzes/${roomId}/export/`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = await getPresentation(roomId);
         if (!mounted) return;
         if (data && Array.isArray(data.slides)) {
-          // Transform API format to internal format
-          const mappedSlides = data.slides.map((slide) => {
-            if (slide.slide_type === 1 && slide.question) {
-              const q = slide.question;
-              return {
-                slide_type: 1,
-                slide_id: slide.slide_id,
-                order: slide.order ?? q.order ?? null,
-                question_id: q.question_id,
-                question_text: q.text,
-                question_title: q.title || "",
-                question_time: q.time_limit,
-                max_point: q.max_point,
-                min_point: q.min_point,
-                access_code: q.access_code,
-                // New fields from API
-                question_type: q.question_type, // "single" or "multiple"
-                has_multiple: q.question_type === "multiple",
-                image_url: q.image_url || "",
-                faster_answers_more_points: q.faster_answers_more_points,
-                partial_scoring: q.partial_scoring,
-                show_leaderboard_after: slide.show_leaderboard_after,
-                // Leaderboard data from API
-                leaderboard: slide.leaderboard || [],
-                options: (q.options || []).map((opt) => ({
-                  option_id: opt.option_id,
-                  option_text: opt.text,
-                  answer: opt.is_correct,
-                  number_of_submits: opt.votes || 0,
-                  image_url: opt.image_url || "",
-                  order: opt.order,
-                })),
-              };
-            }
-            // Content slide or leaderboard slide
-            return {
-              slide_type: slide.slide_type || 2,
-              slide_id: slide.slide_id,
-              order: slide.order ?? null,
-              title: slide.title || "",
-              content_text: slide.content_text || "",
-              content_image_url: slide.content_image_url || "",
-              leaderboard: slide.leaderboard || [],
-            };
-          });
-
-          // Store quiz metadata as well
+          const mappedSlides = data.slides.map(presentationSlideToLegacy);
           const quizData = {
-            quiz_id: data.quiz_id,
+            quiz_id: data.id,
             title: data.title,
-            access_code: data.access_code || "",
-            background: data.background || { color: "#1e1e2e", image: "", text_color: "#111827" },
-            music_url: data.music_url || "",
+            access_code: "",
+            background: { color: "#1e1e2e", image: "", text_color: "#111827" },
+            music_url: "",
             slides: mappedSlides,
-            text_color: data.text_color || data.background?.text_color || "#111827",
+            text_color: "#111827",
           };
 
           setRemoteQuiz(quizData);
@@ -328,8 +284,24 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     };
   }, [role, roomId, initialQuizData]);
 
-  const quiz = remoteQuiz ?? QuizSetup;
-  const isRemoteReady = !!quiz; // Always ready (remote or fallback)
+  const {
+    isConnected,
+    connect,
+    sendMessage,
+    snapshot,
+    sessionId: liveSessionId,
+  } = useLiveSession();
+  useEffect(() => {
+    if (role !== "manager" || !roomId || liveSessionId) return;
+    void connect(roomId);
+  }, [role, roomId, liveSessionId, connect]);
+  const quiz = React.useMemo(() => {
+    const baseQuiz = remoteQuiz ?? (role === "player" ? QuizSetup : EMPTY_PRESENTATION);
+    return snapshot?.role === "manager"
+      ? { ...baseQuiz, access_code: snapshot.session.join_code }
+      : baseQuiz;
+  }, [remoteQuiz, role, snapshot]);
+  const isRemoteReady = role === "player" || !!remoteQuiz;
   const totalSlides = quiz.slides.length;
 
   // Set quiz music when loaded
@@ -348,7 +320,6 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     partialQuestionResults,
     modalLeaderboardResults,
   } = useServerData();
-  const { isConnected, connect, sendMessage } = useWebSocket();
   const hasLeaderboard = hasLeaderboardEntries(leaderboardResults);
   const playerResumeProfile =
     role === "player" ? readStoredProfile(roomId) : null;
@@ -383,16 +354,16 @@ function AppPresentation({ roomId, role, initialQuizData }) {
     if (playerResumeJoinSentRef.current) return;
     if (!playerResumeProfile) return;
 
-    const ok = sendMessage(
+    playerResumeJoinSentRef.current = true;
+    void sendMessage(
       createJoinMessage({
         name: playerResumeProfile.name,
         avatar: playerResumeProfile.avatar,
         persistedUserId: getPersistedUserIdForRoom(roomId),
       })
-    );
-    if (ok) {
-      playerResumeJoinSentRef.current = true;
-    }
+    ).then((ok) => {
+      if (!ok) playerResumeJoinSentRef.current = false;
+    });
   }, [
     shouldAutoResumePlayerSession,
     isConnected,
@@ -610,8 +581,10 @@ function AppPresentation({ roomId, role, initialQuizData }) {
         setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
       } else if (isContentSlide(nextSlide)) {
         setData({ type: "ManagerContentSlide" });
+        setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
       } else if (isQuestionSlide(nextSlide)) {
         setData({ type: "ManagerPickAnswerQuestion" });
+        setCurrentSlide((prev) => Math.min(prev + 1, totalSlides));
       }
     }
   };
@@ -625,7 +598,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
 
   /* ---------------- Manager Rendering (EXACT LIKE ORIGINAL) ---------------- */
   const getManagerRenderType = () => {
-    if (data.type === "ManagerFinalLeaderboard") {
+    if (data.type === "ManagerFinalLeaderboard" || snapshot?.session?.state === "ended") {
       return "ManagerFinalLeaderboard";
     }
     if (hasLeaderboardEntries(leaderboardResults)) {
@@ -731,7 +704,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
       );
     }
     // Do not show stale leaderboard to a fresh player before the quiz has actually started.
-    if (hasLeaderboard && playerHasSeenActiveSlide) {
+    if (hasLeaderboard) {
       return (
         <PlayerLeaderBoard
           roomId={roomId}
@@ -842,15 +815,20 @@ class PresentationErrorBoundary extends React.Component {
   }
 }
 
-/* ---------------- WebSocket Handler ---------------- */
-function WSMessageHandler() {
-  const { lastMessage } = useWebSocket();
-  const { processMessage } = useServerData();
+/* ---------------- Live HTTP/SSE synchronization ---------------- */
+function LiveMessageHandler() {
+  const { snapshot, roster, lastEvent } = useLiveSession();
+  const { applyLiveSnapshot, applyLiveEvent } = useServerData();
 
   useEffect(() => {
-    if (!lastMessage) return;
-    processMessage(lastMessage);
-  }, [lastMessage, processMessage]);
+    if (!snapshot) return;
+    applyLiveSnapshot(snapshot, roster);
+  }, [snapshot, roster, applyLiveSnapshot]);
+
+  useEffect(() => {
+    if (!lastEvent) return;
+    applyLiveEvent(lastEvent);
+  }, [lastEvent, applyLiveEvent]);
 
   return null;
 }

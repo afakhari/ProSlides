@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
-import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useLiveSession } from "../../../hooks/useLiveSession";
+import { createRequestId } from "../../../live/liveApi";
 import { useServerData } from "../../../hooks/useServerData";
 import { isLightColor } from "../../../lib/colorUtils";
 import { resolveQuestionTimer } from "../utils/questionTimerSync";
@@ -59,13 +60,14 @@ const pruneQueuedAnswersForCurrentQuestion = (roomId, questionId, runId) => {
   writeQueuedAnswers(roomId, next);
 };
 
-const flushQueuedAnswers = (roomId, sendMessage, questionId, runId) => {
+const flushQueuedAnswers = async (roomId, sendMessage, questionId, runId) => {
   const current = readQueuedAnswers(roomId);
   if (current.length === 0) {
     return { sentKeys: [], remaining: 0 };
   }
 
   const sentKeys = [];
+  const rejectedKeys = [];
   const remaining = [];
   let socketFailed = false;
 
@@ -80,9 +82,11 @@ const flushQueuedAnswers = (roomId, sendMessage, questionId, runId) => {
       continue;
     }
 
-    const ok = sendMessage(answer);
-    if (ok) {
+    const outcome = await sendMessage(answer);
+    if (outcome === true) {
       sentKeys.push(getAnswerKey(answer));
+    } else if (outcome === "rejected") {
+      rejectedKeys.push(getAnswerKey(answer));
     } else {
       socketFailed = true;
       remaining.push(answer);
@@ -90,7 +94,7 @@ const flushQueuedAnswers = (roomId, sendMessage, questionId, runId) => {
   }
 
   writeQueuedAnswers(roomId, remaining);
-  return { sentKeys, remaining: remaining.length };
+  return { sentKeys, rejectedKeys, remaining: remaining.length };
 };
 
 export default function PlayerPickAnswerQuestion({
@@ -100,7 +104,7 @@ export default function PlayerPickAnswerQuestion({
   quiz,
 }) {
   const { questionResults, partialQuestionResults } = useServerData();
-  const { sendMessage, isConnected, connectionError } = useWebSocket();
+  const { sendMessage, isConnected, connectionError } = useLiveSession();
 
   const questionId = question?.question_id;
   const questionTime = question?.question_time ?? 0;
@@ -180,29 +184,31 @@ export default function PlayerPickAnswerQuestion({
   useEffect(() => {
     if (!isConnected) return;
 
-    const { sentKeys, remaining } = flushQueuedAnswers(
-      roomId,
-      sendMessage,
-      questionId,
-      runId
-    );
-    if (sentKeys.length === 0) return;
-
-    const currentUserId = localStorage.getItem("user_id");
-    if (currentUserId && questionId != null) {
-      const currentKeyPrefix = `${currentUserId}:${questionId}:`;
-      const sentCurrent = sentKeys.some((key) => key.startsWith(currentKeyPrefix));
-      if (sentCurrent) {
-        setSubmitState("sent");
-        setSubmitMessage("پاسخ شما ارسال شد.");
-        return;
+    let cancelled = false;
+    void flushQueuedAnswers(roomId, sendMessage, questionId, runId).then(
+      ({ sentKeys, rejectedKeys, remaining }) => {
+        if (cancelled) return;
+        const currentUserId = localStorage.getItem("user_id");
+        const currentKeyPrefix = `${currentUserId}:${questionId}:`;
+        if (currentUserId && rejectedKeys.some((key) => key.startsWith(currentKeyPrefix))) {
+          setSubmitState("rejected");
+          setSubmitMessage("زمان پاسخ‌گویی پایان یافته یا پاسخ توسط جلسه پذیرفته نشد.");
+          return;
+        }
+        if (currentUserId && sentKeys.some((key) => key.startsWith(currentKeyPrefix))) {
+          setSubmitState("sent");
+          setSubmitMessage("پاسخ شما ارسال شد.");
+          return;
+        }
+        if (remaining === 0 && submitState === "queued") {
+          setSubmitState("sent");
+          setSubmitMessage("پاسخ شما ارسال شد.");
+        }
       }
-    }
-
-    if (remaining === 0 && submitState === "queued") {
-      setSubmitState("sent");
-      setSubmitMessage("پاسخ شما ارسال شد.");
-    }
+    );
+    return () => {
+      cancelled = true;
+    };
   }, [isConnected, sendMessage, roomId, questionId, runId, submitState]);
 
   const handleSelect = (option) => {
@@ -219,7 +225,7 @@ export default function PlayerPickAnswerQuestion({
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!question) return;
     if (selectedOptions.length === 0) return;
 
@@ -237,6 +243,7 @@ export default function PlayerPickAnswerQuestion({
     const options = question.options || [];
     const answer = {
       type: 4,
+      request_id: createRequestId(),
       question_id: question.question_id,
       user_id: userId,
       ...(runId != null ? { run_id: runId } : {}),
@@ -247,10 +254,18 @@ export default function PlayerPickAnswerQuestion({
       })),
     };
 
-    if (isConnected && sendMessage(answer)) {
+    const outcome = isConnected ? await sendMessage(answer) : false;
+    if (outcome === true) {
       removeQueuedAnswer(roomId, answer);
       setSubmitState("sent");
       setSubmitMessage("پاسخ شما ارسال شد.");
+      return;
+    }
+
+    if (outcome === "rejected") {
+      removeQueuedAnswer(roomId, answer);
+      setSubmitState("rejected");
+      setSubmitMessage("زمان پاسخ‌گویی پایان یافته یا پاسخ توسط جلسه پذیرفته نشد.");
       return;
     }
 
@@ -261,7 +276,7 @@ export default function PlayerPickAnswerQuestion({
 
   useEffect(() => {
     if (timeLeft <= 0 && !submitted) {
-      handleSubmit();
+      void handleSubmit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft]);
@@ -392,11 +407,12 @@ export default function PlayerPickAnswerQuestion({
                       String(option.option_id) === String(goz.option_id)
                   );
 
+                  const hasCorrectness = typeof foundOption?.answer === "boolean";
                   const isCorrect = foundOption?.answer === true;
 
-                  icon = isCorrect ? "✅" : "❌";
+                  icon = hasCorrectness ? (isCorrect ? "✅" : "❌") : null;
 
-                  if (selectedOptions.includes(goz) && submitted) {
+                  if (selectedOptions.includes(goz) && submitted && hasCorrectness) {
                     optionClass = isCorrect
                       ? "bg-green-600 text-white"
                       : "bg-red-600 text-white";

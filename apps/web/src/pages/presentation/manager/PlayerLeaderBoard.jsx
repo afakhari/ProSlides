@@ -103,7 +103,7 @@ import Footer from "../../../components/Footer";
 
 
 
-import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useLiveSession } from "../../../hooks/useLiveSession";
 
 
 
@@ -481,7 +481,7 @@ function ManagerPlayerLeaderBoard({
 
 
 
-  const { isConnected } = useWebSocket();
+  const { isConnected } = useLiveSession();
 
 
 

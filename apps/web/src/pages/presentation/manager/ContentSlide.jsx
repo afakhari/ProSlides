@@ -1,7 +1,7 @@
 import React from "react";
 import TopBar from "../../../components/TopBar";
 import Footer from "../../../components/Footer";
-import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useLiveSession } from "../../../hooks/useLiveSession";
 
 export default function ManagerContentSlide({
   roomId,
@@ -12,7 +12,7 @@ export default function ManagerContentSlide({
   onNext,
   onEndGame,
 }) {
-  const { sendNavigation, sendEnd } = useWebSocket();
+  const { sendNavigation, sendEnd } = useLiveSession();
   const slide = quiz?.slides?.[currentSlide - 1] || {};
   const source = content && typeof content === "object" ? content : slide;
 
@@ -21,13 +21,14 @@ export default function ManagerContentSlide({
   const image =
     source.content_image_url || source.image_url || source.image || "";
 
-  const handleNext = () => {
-    sendNavigation("next");
+  const handleNext = async () => {
+    const nextSlide = quiz?.slides?.[currentSlide];
+    if (!(await sendNavigation("next", { slide: nextSlide }))) return;
     onNext?.();
   };
 
-  const handleEnd = () => {
-    sendEnd();
+  const handleEnd = async () => {
+    if (!(await sendEnd())) return;
     onEndGame?.();
   };
 

@@ -10,6 +10,7 @@ export default function Footer({
   isQROpen = false,
   onShowLeaderboard = null,
   onNext = null,
+  endOnLastSlide = true,
   onEnd = null,
   textColor = "#ffffff",
 }) {
@@ -115,7 +116,7 @@ export default function Footer({
   const slideLabel = totalSlides
     ? `${currentSlide} / ${totalSlides}`
     : `${currentSlide}`;
-  const isAtEnd = totalSlides ? currentSlide >= totalSlides : false;
+  const isAtEnd = endOnLastSlide && totalSlides ? currentSlide >= totalSlides : false;
   const canGoNext =
     !!onNext || (onEnd && totalSlides && currentSlide >= totalSlides);
   const progressPercent =
@@ -164,7 +165,7 @@ export default function Footer({
 
           <button
             onClick={() => {
-              if (onEnd && totalSlides && currentSlide >= totalSlides) {
+              if (endOnLastSlide && onEnd && totalSlides && currentSlide >= totalSlides) {
                 onEnd();
                 return;
               }

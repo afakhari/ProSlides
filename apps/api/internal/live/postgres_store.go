@@ -52,6 +52,14 @@ func (s *PostgresStore) CreateSession(c context.Context, host, presentation, req
 	}
 	return out, false, nil
 }
+func (s *PostgresStore) ResolveSession(c context.Context, code string) (SessionLocator, error) {
+	var out SessionLocator
+	err := s.pool.QueryRow(c, `SELECT id::text,presentation_id::text FROM live_sessions WHERE join_code=$1 AND state<>'ended' LIMIT 1`, code).Scan(&out.SessionID, &out.PresentationID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, ErrNotFound
+	}
+	return out, err
+}
 func (s *PostgresStore) Join(c context.Context, session, request, name, avatar string, hash []byte) (Participant, bool, error) {
 	var p Participant
 	if e := s.pool.QueryRow(c, `SELECT id::text,display_name,COALESCE(avatar,'') FROM participants WHERE session_id=$1 AND request_id=$2`, session, request).Scan(&p.ID, &p.DisplayName, &p.Avatar); e == nil {
@@ -304,6 +312,9 @@ func (s *PostgresStore) ParticipantSnapshot(c context.Context, session string, h
 	if e = snapshotMeta(c, tx, session, &x.ParticipantCount, &x.LastEventID, full.ActiveSlideID, &x.ActiveSlide); e != nil {
 		return x, e
 	}
+	if x.ActiveSlide, e = sanitizeParticipantActiveSlide(x.ActiveSlide); e != nil {
+		return x, e
+	}
 	if e = tx.Commit(c); e != nil {
 		return x, e
 	}
@@ -385,6 +396,34 @@ func snapshotMeta(c context.Context, tx pgx.Tx, session string, participantCount
 		}
 	}
 	return nil
+}
+
+func sanitizeParticipantActiveSlide(raw json.RawMessage) (json.RawMessage, error) {
+	if len(raw) == 0 {
+		return raw, nil
+	}
+	var slide any
+	if err := json.Unmarshal(raw, &slide); err != nil {
+		return nil, err
+	}
+	stripCorrectnessMetadata(slide)
+	return json.Marshal(slide)
+}
+
+func stripCorrectnessMetadata(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		delete(typed, "is_correct")
+		delete(typed, "correct_answer")
+		delete(typed, "correct_option_indexes")
+		for _, child := range typed {
+			stripCorrectnessMetadata(child)
+		}
+	case []any:
+		for _, child := range typed {
+			stripCorrectnessMetadata(child)
+		}
+	}
 }
 
 func publicSession(session Session) PublicSession {

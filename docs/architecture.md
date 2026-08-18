@@ -119,6 +119,13 @@ bounded snapshot and fetch roster/leaderboard rows separately with `limit <=
 100` and stable keyset cursors. Joined order uses `(joined_at, id)`; score order
 uses `(score DESC, joined_at, id)`.
 
+The React live runtime mirrors this boundary with narrow TypeScript types. A
+public join code resolves directly to the active Go live-session ID; the client
+then joins over HTTP, applies the authoritative role-scoped snapshot, opens SSE
+with `Last-Event-ID`, and refreshes snapshot state before reconnecting. Manager
+roster pages are loaded in batches of at most 100; participant projections
+discard roster input and never hold a complete score map.
+
 Redis Pub/Sub can later replace PostgreSQL polling as the low-latency wake-up
 path across instances, but only through an outbox relay from `live_events`.
 Redis loss must degrade latency/presence, never lose a durable event or answer.

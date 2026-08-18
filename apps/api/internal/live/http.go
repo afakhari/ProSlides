@@ -28,12 +28,21 @@ func NewHTTP(service *Service, broker *EventBroker, auth ManagerAuth, secure boo
 }
 func (h *HTTP) Register(m *http.ServeMux) {
 	m.HandleFunc("POST /api/v1/live/sessions", h.createSession)
+	m.HandleFunc("GET /api/v1/live/sessions/resolve", h.resolveSession)
 	m.HandleFunc("POST /api/v1/live/sessions/{sessionId}/join", h.join)
 	m.HandleFunc("POST /api/v1/live/sessions/{sessionId}/actions", h.action)
 	m.HandleFunc("POST /api/v1/live/sessions/{sessionId}/answers", h.answer)
 	m.HandleFunc("GET /api/v1/live/sessions/{sessionId}/snapshot", h.snapshot)
 	m.HandleFunc("GET /api/v1/live/sessions/{sessionId}/roster", h.roster)
 	m.HandleFunc("GET /api/v1/live/sessions/{sessionId}/events", h.events)
+}
+func (h *HTTP) resolveSession(w http.ResponseWriter, r *http.Request) {
+	x, e := h.service.ResolveSession(r.Context(), r.URL.Query().Get("join_code"))
+	if e != nil {
+		returnError(w, e)
+		return
+	}
+	writeJSON(w, http.StatusOK, x)
 }
 func (h *HTTP) createSession(w http.ResponseWriter, r *http.Request) {
 	u, e := h.manager(r, true)

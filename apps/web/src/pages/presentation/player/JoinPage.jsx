@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from "react";
 import EmojiPicker from "emoji-picker-react";
 import { motion as Motion } from "framer-motion";
-import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useLiveSession } from "../../../hooks/useLiveSession";
 import { ErrorModal } from "../../quiz/manager/ErrorModal";
 import { isLightColor } from "../../../lib/colorUtils";
 import {
@@ -141,9 +141,10 @@ export default function PlayerJoinPage({ roomId, quiz }) {
   const [joinSent, setJoinSent] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectAttempt, setConnectAttempt] = useState(0);
 
   const { connect, sendMessage, isConnected, lastMessage, connectionError } =
-    useWebSocket();
+    useLiveSession();
 
   const [error, _setError] = useState(null);
   const [errorModalOpen, setErrorModalOpen] = useState(false);
@@ -180,14 +181,19 @@ export default function PlayerJoinPage({ roomId, quiz }) {
     if (!roomId) return;
     if (isConnected) return;
 
-    try {
-      setIsConnecting(true);
-      connect(roomId);
-    } catch (err) {
-      console.error("Failed to reconnect WebSocket:", err);
-      setIsConnecting(false);
-    }
-  }, [joined, roomId, isConnected, connect]);
+    let cancelled = false;
+    let retryTimer;
+    setIsConnecting(true);
+    void connect(roomId).then((ok) => {
+      if (cancelled || ok) return;
+      const retryDelay = Math.min(1000 * 2 ** connectAttempt, 10_000);
+      retryTimer = setTimeout(() => setConnectAttempt((attempt) => attempt + 1), retryDelay);
+    });
+    return () => {
+      cancelled = true;
+      clearTimeout(retryTimer);
+    };
+  }, [joined, roomId, isConnected, connect, connectAttempt]);
 
   const savePlayer = () => {
     if (!name.trim()) {
@@ -198,32 +204,11 @@ export default function PlayerJoinPage({ roomId, quiz }) {
     saveStoredProfile({ room_id: roomId, name, avatar, user_id: stableUserId });
     setJoined(true);
     setJoinSent(false);
-
-    try {
-      if (!roomId) {
-        console.error("Missing roomId for WebSocket connection");
-        return;
-      }
-      setIsConnecting(true);
-      connect(roomId);
-    } catch (err) {
-      console.error("Failed to connect WebSocket:", err);
-      setIsConnecting(false);
-    }
   };
 
-  const handleChangeProfile = () => {
-    try {
-      localStorage.removeItem("presentation_player_profile_v1");
-      localStorage.removeItem("player_name");
-      localStorage.removeItem("character");
-      localStorage.removeItem("user_id");
-    } catch {
-      // ignore storage errors
-    }
-    setJoinSent(false);
+  const handleEditBeforeJoin = () => {
     setJoined(false);
-    setIsConnecting(false);
+    setJoinSent(false);
   };
 
   useEffect(() => {
@@ -237,8 +222,13 @@ export default function PlayerJoinPage({ roomId, quiz }) {
       persistedUserId: getPersistedUserIdForRoom(roomId),
     });
 
-    const ok = sendMessage(msg);
-    if (ok) setJoinSent(true);
+    let cancelled = false;
+    void sendMessage(msg).then((outcome) => {
+      if (!cancelled && outcome === true) setJoinSent(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [joined, isConnected, joinSent, name, avatar, sendMessage, roomId]);
 
   useEffect(() => {
@@ -435,12 +425,15 @@ export default function PlayerJoinPage({ roomId, quiz }) {
             آزمون به‌زودی شروع می‌شود.
           </h3>
 
-          <button
-            onClick={handleChangeProfile}
-            className="mt-2 rounded-lg border border-white/30 bg-black/25 px-4 py-2 text-sm text-[color:var(--quiz-text)] hover:bg-black/40"
-          >
-            تغییر نام و آواتار
-          </button>
+          {!joinSent && connectionError && (
+            <button
+              onClick={handleEditBeforeJoin}
+              className="mt-2 rounded-lg border border-white/30 bg-black/25 px-4 py-2 text-sm text-[color:var(--quiz-text)] hover:bg-black/40"
+            >
+              ویرایش نام یا آواتار
+            </button>
+          )}
+
         </div>
 
         <ErrorModal isOpen={errorModalOpen} onClose={closeErrorModal} message={error} />

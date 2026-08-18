@@ -42,6 +42,10 @@ type ParticipantWithScore struct {
 	Participant
 	Score int `json:"score"`
 }
+type SessionLocator struct {
+	SessionID      string `json:"session_id"`
+	PresentationID string `json:"presentation_id"`
+}
 type AnswerResult struct {
 	AnswerID   string `json:"answer_id"`
 	ScoreDelta int    `json:"score_delta"`
@@ -99,6 +103,7 @@ type RosterPage struct {
 
 type Store interface {
 	CreateSession(context.Context, string, string, string, string) (Session, bool, error)
+	ResolveSession(context.Context, string) (SessionLocator, error)
 	Join(context.Context, string, string, string, string, []byte) (Participant, bool, error)
 	ApplyAction(context.Context, string, string, string, int64, string, string, int) (Session, bool, error)
 	SubmitAnswer(context.Context, string, []byte, string, string, []int, ScoringPolicy) (AnswerResult, error)

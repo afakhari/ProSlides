@@ -5,7 +5,7 @@ import Footer from "../../../components/Footer";
 import { getColorForUser, isLightColor } from "../../../lib/colorUtils";
 import { resolveQuestionTimer } from "../utils/questionTimerSync";
 // LeaderboardModal was removed; modal UI now lives on Manager LeaderBoard page
-import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useLiveSession } from "../../../hooks/useLiveSession";
 import { useServerData } from "../../../hooks/useServerData";
 import {
   QuizSetup,
@@ -43,7 +43,6 @@ const normalizeQuestion = (question) => {
 
 export default function ManagerPickAnswerQuestion({
   roomId,
-  onNext,
   currentSlide = 1,
   totalSlides = 5,
   quiz,
@@ -51,7 +50,7 @@ export default function ManagerPickAnswerQuestion({
   onEndGame,
 }) {
   const { isConnected, sendNavigation, sendEnd, lastMessage, type8Message } =
-    useWebSocket();
+    useLiveSession();
   const {
     questionResults,
     modalLeaderboardResults,
@@ -159,7 +158,7 @@ export default function ManagerPickAnswerQuestion({
     isRemoteReady,
   ]);
 
-  // Listen for WebSocket messages and save to ServerData
+  // Apply live server projections to the existing visual state.
   useEffect(() => {
     if (!lastMessage) return;
 
@@ -346,7 +345,7 @@ export default function ManagerPickAnswerQuestion({
   }, [questionResults, questionOptions, currentQuestion.question_id]);
 
   // Handle navigation and update server data
-  const handleNext = () => {
+  const handleNext = async () => {
     const newNavigationData = createNextPrevious(
       5,
       "next",
@@ -358,15 +357,14 @@ export default function ManagerPickAnswerQuestion({
       newNavigationData
     );
 
-    // Send navigation to WebSocket
-    sendNavigation("next");
+    const ok = await sendNavigation("next");
+    if (!ok) return;
 
-    if (onNext) onNext();
   };
 
-  const handleEnd = () => {
+  const handleEnd = async () => {
     debugLog("[PickAnswerQuestion] Sending end command to server");
-    sendEnd();
+    if (!(await sendEnd())) return;
     if (onEndGame) onEndGame();
   };
 
@@ -471,7 +469,7 @@ export default function ManagerPickAnswerQuestion({
           showQRModal ? "ml-[20%] w-[80%]" : "ml-0 w-full"
         }`}
       >
-        {/* WebSocket Connection Status */}
+        {/* Live connection status */}
         {isRemoteReady ? (
           <>
             {/* ØµÙˆØ±Øª Ø³ÙˆØ§Ù„ - Ø¨Ø§Ù„Ø§ Ø¨Ø§ ÙØ§ØµÙ„Ù‡ Ø¨ÛŒØ´ØªØ± */}
@@ -613,6 +611,7 @@ export default function ManagerPickAnswerQuestion({
         onShowLeaderboard={() => setShowLeaderboard(true)}
         onNext={handleNext}
         onEnd={handleEnd}
+        endOnLastSlide={false}
         textColor={textColor}
       />
 

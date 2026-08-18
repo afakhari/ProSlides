@@ -116,7 +116,8 @@ try {
   $loginCSRF = $loginCookieJar.GetCookies($apiBaseUrl)["proslides_csrf"].Value
   $created = Invoke-API -Method POST -Path "/api/v1/presentations" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ title = "Created through API" } | ConvertTo-Json -Compress) -ExpectedStatus 201
   $createdID = ($created.Content | ConvertFrom-Json).id
-  Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 0; kind = "content"; content = @{ text = "Created through API" } } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  $contentResponse = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 0; kind = "content"; content = @{ text = "Created through API" } } | ConvertTo-Json -Compress) -ExpectedStatus 201
+  $contentID = ($contentResponse.Content | ConvertFrom-Json).id
   $questionResponse = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/questions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 1; text = "Choose"; question_type = "multiple"; question_time = 30; max_point = 100; min_point = 0; partial_scoring = $true; faster_answers_more_points = $false; options = @(@{ text = "A"; is_correct = $true }, @{ text = "B"; is_correct = $true }, @{ text = "C"; is_correct = $false }) } | ConvertTo-Json -Compress -Depth 4) -ExpectedStatus 201
   $questionID = ($questionResponse.Content | ConvertFrom-Json).id
   $createdRead = Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200
@@ -175,12 +176,16 @@ try {
   if ($snapshotPayload.role -ne "participant" -or $snapshotPayload.participant.score -ne 100) { throw "Participant snapshot did not contain only the caller score" }
   if ($snapshotPayload.PSObject.Properties.Name -contains "participants" -or $snapshotPayload.PSObject.Properties.Name -contains "scores") { throw "Participant snapshot disclosed the complete roster or score map" }
   if ($snapshotPayload.session.PSObject.Properties.Name -contains "host_id" -or $snapshotPayload.session.PSObject.Properties.Name -contains "join_code") { throw "Participant snapshot disclosed manager-only session fields" }
+  if ($snapshot.Content -match 'is_correct|correct_option_indexes|correct_answer') { throw "Participant snapshot disclosed question correctness metadata" }
   if ($snapshotPayload.participant_count -ne 17 -or $snapshotPayload.last_event_id -lt 1) { throw "Snapshot did not include its participant count and SSE recovery cursor" }
 
   $managerSnapshot = Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/snapshot" -Client $loginClient -ExpectedStatus 200
   $managerSnapshotPayload = $managerSnapshot.Content | ConvertFrom-Json
   if ($managerSnapshotPayload.role -ne "manager" -or $managerSnapshotPayload.participant_count -ne 17 -or $managerSnapshotPayload.last_event_id -lt $snapshotPayload.last_event_id) { throw "Manager snapshot did not contain aggregate state and a valid recovery cursor" }
   if ($managerSnapshotPayload.PSObject.Properties.Name -contains "participants" -or $managerSnapshotPayload.PSObject.Properties.Name -contains "scores") { throw "Manager snapshot returned an unbounded roster" }
+  $resolvedSession = Invoke-API -Method GET -Path "/api/v1/live/sessions/resolve?join_code=$($liveSession.join_code)" -Client $participantClient -ExpectedStatus 200
+  $resolvedSessionPayload = $resolvedSession.Content | ConvertFrom-Json
+  if ($resolvedSessionPayload.session_id -ne $liveSession.id -or $resolvedSessionPayload.presentation_id -ne $createdID) { throw "Join-code resolution did not return the active live session" }
   Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/roster" -Client $participantClient -ExpectedStatus 401 | Out-Null
 
   $rosterIDs = @()
@@ -253,7 +258,16 @@ try {
   $resumeResponse.Dispose()
   $resumeRequest.Dispose()
 
-  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 5; action = "end" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 5; action = "open_content"; slide_id = $contentID } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 6; action = "open_question"; slide_id = $questionID } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 7; action = "end" } | ConvertTo-Json -Compress) -ExpectedStatus 409 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 7; action = "close_question" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 8; action = "show_leaderboard" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 9; action = "end" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  $endedSnapshot = Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/snapshot" -Client $participantClient -ExpectedStatus 200
+  $endedSnapshotPayload = $endedSnapshot.Content | ConvertFrom-Json
+  if ($endedSnapshotPayload.session.state -ne "ended" -or $endedSnapshotPayload.session.active_slide_id -ne $null -or $endedSnapshotPayload.participant.score -ne 100) { throw "Participant ended snapshot did not preserve final self state" }
+  Invoke-API -Method GET -Path "/api/v1/live/sessions/resolve?join_code=$($liveSession.join_code)" -Client $participantClient -ExpectedStatus 404 | Out-Null
 
   $presentationSQL = "INSERT INTO presentations (owner_id, title) VALUES ('$($registeredUser.id)', 'Integration presentation') RETURNING id::text;"
   $presentationID = (& docker @composeArgs exec -T postgres psql -U proslides -d proslides -q -t -A -v ON_ERROR_STOP=1 -c $presentationSQL).Trim()

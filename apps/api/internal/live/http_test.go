@@ -19,6 +19,12 @@ type snapshotStore struct {
 func (s *snapshotStore) CreateSession(context.Context, string, string, string, string) (Session, bool, error) {
 	return Session{}, false, errors.New("unexpected CreateSession")
 }
+func (s *snapshotStore) ResolveSession(_ context.Context, code string) (SessionLocator, error) {
+	if code != "JOIN" {
+		return SessionLocator{}, ErrNotFound
+	}
+	return SessionLocator{SessionID: "session", PresentationID: "presentation"}, nil
+}
 func (s *snapshotStore) Join(context.Context, string, string, string, string, []byte) (Participant, bool, error) {
 	return Participant{}, false, errors.New("unexpected Join")
 }
@@ -124,6 +130,21 @@ func TestParticipantSnapshotDoesNotDiscloseRosterScoresOrManagerFields(t *testin
 	participant := payload["participant"].(map[string]any)
 	if participant["id"] != "participant-1" || participant["score"] != float64(70) || payload["participant_count"] != float64(10_000) || payload["last_event_id"] != float64(42) {
 		t.Fatalf("unexpected participant snapshot: %#v", payload)
+	}
+}
+
+func TestResolveSessionUsesPublicJoinCode(t *testing.T) {
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/resolve?join_code=join", nil)
+	snapshotHandler(&snapshotStore{}).ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !jsonFieldEquals(response.Body.Bytes(), "session_id", "session") {
+		t.Fatalf("resolve response = %d %s", response.Code, response.Body.String())
+	}
+
+	missing := httptest.NewRecorder()
+	snapshotHandler(&snapshotStore{}).ServeHTTP(missing, httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/resolve", nil))
+	if missing.Code != http.StatusBadRequest {
+		t.Fatalf("missing join code status = %d", missing.Code)
 	}
 }
 

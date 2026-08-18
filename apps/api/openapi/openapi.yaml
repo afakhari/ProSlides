@@ -253,6 +253,21 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/live/sessions/resolve:
+    get:
+      operationId: resolveLiveSession
+      summary: Resolve a public join code to its active live session.
+      parameters:
+        - name: join_code
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 32 }
+      responses:
+        '200':
+          description: Active live session locator.
+          content: { application/json: { schema: { $ref: '#/components/schemas/LiveSessionLocator' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/live/sessions/{sessionId}/join:
     post:
       operationId: joinLiveSession
@@ -509,6 +524,13 @@ components:
         display_name: { type: string }
         avatar: { type: string }
         score: { type: integer, minimum: 0 }
+    LiveSessionLocator:
+      type: object
+      required: [session_id, presentation_id]
+      additionalProperties: false
+      properties:
+        session_id: { type: string, format: uuid }
+        presentation_id: { type: string, format: uuid }
     ParticipantLiveSnapshot:
       type: object
       required: [role, session, participant, participant_count, last_event_id]
@@ -516,7 +538,10 @@ components:
       properties:
         role: { type: string, enum: [participant] }
         session: { $ref: '#/components/schemas/PublicLiveSession' }
-        active_slide: { type: object, additionalProperties: true }
+        active_slide:
+          type: object
+          additionalProperties: true
+          description: Active slide projected for the participant; correctness metadata such as option is_correct flags is omitted.
         participant: { $ref: '#/components/schemas/ParticipantWithScore' }
         participant_count: { type: integer, minimum: 0 }
         last_event_id: { type: integer, format: int64, minimum: 0 }

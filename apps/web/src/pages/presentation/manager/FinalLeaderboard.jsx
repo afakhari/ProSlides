@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getColorForUser } from "../../../lib/colorUtils";
-import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useLiveSession } from "../../../hooks/useLiveSession";
 
 const MotionH1 = motion.h1;
 const MotionButton = motion.button;
@@ -9,7 +9,7 @@ const MotionDiv = motion.div;
 
 export default function FinalLeaderboard({ leaderboardData, onExit }) {
   const [visiblePlayers, setVisiblePlayers] = useState([]);
-  const { isConnected } = useWebSocket();
+  const { isConnected } = useLiveSession();
 
   const players = useMemo(
     () =>

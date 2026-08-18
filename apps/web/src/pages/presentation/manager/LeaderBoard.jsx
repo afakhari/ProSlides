@@ -5,7 +5,7 @@ import QRSidebar from "../../../components/QRSidebar";
 import Footer from "../../../components/Footer";
 import { getColorForUser, isLightColor } from "../../../lib/colorUtils";
 // LeaderboardModal component was inlined into this page per request
-import { useWebSocket } from "../../../hooks/useWebSocket";
+import { useLiveSession } from "../../../hooks/useLiveSession";
 import { useServerData } from "../../../hooks/useServerData";
 import { createNextPrevious, DefaultFooterStats } from "../../../data/mockData";
 
@@ -21,8 +21,8 @@ function ManagerLeaderBoard({
   getLeaderboardForQuestion,
   onEndGame,
 }) {
-  // ÙÙ‚Ø· Ø¯Ø§Ø¯Ù‡â€ŒÙ‡Ø§ÛŒ Ø³Ø±ÙˆØ± Ø±Ø§ Ø§Ø² useServerData Ø¨Ú¯ÛŒØ±ØŒ Ùˆ sendNavigation Ø±Ø§ Ø§Ø² useWebSocket
-  const { isConnected, sendNavigation, sendEnd } = useWebSocket();
+  // Server projections come from useServerData; live commands come from useLiveSession.
+  const { isConnected, sendNavigation, sendEnd, participantCount, hasMoreRoster, isRosterLoading, loadMoreRoster } = useLiveSession();
   const {
     managerLastLeaderboard,
     leaderboardResults,
@@ -113,7 +113,7 @@ function ManagerLeaderBoard({
   // Ù‡ÛŒÚ† Ù¾ÛŒØ§Ù… Ù…Ø³ØªÙ‚ÛŒÙ…ÛŒ Ø§Ø² Ø³Ø±ÙˆØ± Ù¾Ø±Ø¯Ø§Ø²Ø´ Ù†Ù…ÛŒâ€ŒØ´ÙˆØ¯ØŒ ÙÙ‚Ø· Ø¯Ø§Ø¯Ù‡ context Ø§Ø³ØªÙØ§Ø¯Ù‡ Ù…ÛŒâ€ŒØ´ÙˆØ¯
 
   // Handle navigation and update server data
-  const handleNext = () => {
+  const handleNext = async () => {
     const newNavigationData = createNextPrevious(
       5,
       "next",
@@ -125,15 +125,15 @@ function ManagerLeaderBoard({
       newNavigationData
     );
 
-    // Send navigation to WebSocket
-    sendNavigation("next");
+    const nextSlide = quiz?.slides?.[currentSlide];
+    if (!(await sendNavigation("next", { slide: nextSlide }))) return;
 
     if (onNext) onNext();
   };
 
-  const handleEnd = () => {
+  const handleEnd = async () => {
     debugLog("[LeaderBoard] Sending end command to server");
-    sendEnd();
+    if (!(await sendEnd())) return;
     if (onEndGame) onEndGame();
   };
 
@@ -221,14 +221,14 @@ function ManagerLeaderBoard({
       >
         <main className="flex-1 w-full overflow-hidden min-h-0 pb-16">
           <section className="flex-1 w-full flex flex-col items-center min-h-0 px-4">
-            {/* WebSocket Connection Status */}
+            {/* Live connection status */}
             {/* Title and player count */}
             <div className="text-center w-full">
               <h2 className="text-6xl text-[color:var(--quiz-text)] font-bold mb-4">
                 Leaderboard
               </h2>
               <p className="text-[color:var(--quiz-text-muted)] text-lg mt-2">
-                {players.length} players
+                {participantCount} players
               </p>
             </div>
 
@@ -361,6 +361,18 @@ function ManagerLeaderBoard({
                   </ul>
                 )}
               </div>
+              {hasMoreRoster && (
+                <div className="mt-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => void loadMoreRoster()}
+                    disabled={isRosterLoading}
+                    className="rounded-lg border border-white/30 px-4 py-2 text-sm text-[color:var(--quiz-text)] disabled:opacity-50"
+                  >
+                    {isRosterLoading ? "Loading..." : "Load more"}
+                  </button>
+                </div>
+              )}
             </div>
           </section>
           {/* <button

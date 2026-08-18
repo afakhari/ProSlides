@@ -51,7 +51,10 @@ arrays are sanitized to counts during replay without modifying ledger history.
 
 Participant snapshots expose public session state, active slide, the caller's
 participant/score, aggregate participant count, and `last_event_id`; they never
-include the complete roster or score map. Manager snapshots are also bounded.
+include the complete roster, score map, or question correctness metadata.
+`GET /api/v1/live/sessions/resolve?join_code=...` maps the public presenter code
+to the current non-ended Go live session without exposing manager fields.
+Manager snapshots are also bounded.
 Managers use `GET /api/v1/live/sessions/{sessionId}/roster` with a maximum
 `limit` of 100, opaque keyset cursors, and stable `joined` or `score` ordering.
 

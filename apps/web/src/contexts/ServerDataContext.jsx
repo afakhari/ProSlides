@@ -1,5 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useCallback, useRef } from "react";
+import {
+  projectLiveSnapshot,
+} from "../live/protocol";
 
 export const ServerDataContext = createContext(null);
 
@@ -48,6 +51,7 @@ export const ServerDataProvider = ({ children }) => {
   const lastProcessedMessageRef = useRef({ signature: null, at: 0 });
   // State برای ذخیره داده‌های دریافتی از سرور
   const [serverData, setServerData] = useState({
+    participantCount: 0,
     users: [], // Type 7: لیست بازیکنان
     questionResults: null, // Type 8: نتایج سوال
     partialQuestionResults: null, // Type 3: partial/result for current question (options_result)
@@ -61,6 +65,38 @@ export const ServerDataProvider = ({ children }) => {
   });
 
   // تابع برای به‌روزرسانی داده‌های بازیکنان (Type 7)
+  const applyLiveSnapshot = useCallback((snapshot, roster = []) => {
+    const projection = projectLiveSnapshot(snapshot, roster);
+    if (!projection) return;
+    setServerData((previous) => ({
+      ...previous,
+      ...projection,
+      managerLastLeaderboard:
+        snapshot.role === "manager" && projection.leaderboardResults
+          ? projection.leaderboardResults
+          : previous.managerLastLeaderboard,
+      lastMessageType: "live_snapshot",
+      lastUpdateTime: new Date().toISOString(),
+    }));
+  }, []);
+
+  const applyLiveEvent = useCallback((event) => {
+    if (event?.name !== "answer.stats" || !event.payload) return;
+    const counts = event.payload.option_counts || {};
+    setServerData((previous) => ({
+      ...previous,
+      questionResults: {
+        question_id: event.payload.question_slide_id,
+        optionsResult: Object.entries(counts).map(([optionId, count]) => ({
+          option_id: Number(optionId),
+          number_of_submits: Number(count),
+        })),
+      },
+      lastMessageType: "answer.stats",
+      lastUpdateTime: new Date().toISOString(),
+    }));
+  }, []);
+
   const updateUsers = useCallback((users) => {
     setServerData((prev) => ({
       ...prev,
@@ -150,7 +186,7 @@ export const ServerDataProvider = ({ children }) => {
     debugLog("[ServerData] Current content updated:", content);
   }, []);
 
-  // تابع کلی برای پردازش پیام از WebSocket
+  // Legacy numeric-message adapter retained for non-live visual callers.
   const processMessage = useCallback(
     (message) => {
       if (!message) return;
@@ -261,6 +297,7 @@ export const ServerDataProvider = ({ children }) => {
   // تابع برای پاک کردن داده‌ها
   const clearData = useCallback(() => {
     setServerData({
+      participantCount: 0,
       users: [],
       questionResults: null,
       partialQuestionResults: null,
@@ -278,6 +315,7 @@ export const ServerDataProvider = ({ children }) => {
   const value = {
     // State
     serverData,
+    participantCount: serverData.participantCount,
     users: serverData.users,
     questionResults: serverData.questionResults,
     partialQuestionResults: serverData.partialQuestionResults,
@@ -298,6 +336,8 @@ export const ServerDataProvider = ({ children }) => {
     updateCurrentQuestion,
     updateCurrentContent,
     processMessage,
+    applyLiveSnapshot,
+    applyLiveEvent,
     clearData,
   };
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { getColorForUser, isLightColor } from "../../../lib/colorUtils";
+import { getColorForUser, isLightColor } from "../../../lib/colorUtils";
+import { useLiveSession } from "../../../hooks/useLiveSession";
 
 // const players = [
 //   {
@@ -50,7 +51,9 @@ import { getColorForUser, isLightColor } from "../../../lib/colorUtils";
 //   },
 // ];
 
-function PlayerLeaderBoard({ players, quiz }) {
+function PlayerLeaderBoard({ players, quiz }) {
+
+  const { participantCount, snapshot } = useLiveSession();
   // Ensure players is always an array to prevent crashes and filter out invalid entries
   const validPlayers = useMemo(
     () =>
@@ -62,7 +65,7 @@ function PlayerLeaderBoard({ players, quiz }) {
 
   const [displayedPlayers, setDisplayedPlayers] = useState([]);
   const [animateBars, setAnimateBars] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState(null);
+  const currentUserId = snapshot?.role === "participant" ? snapshot.participant.id : null;
   // const navigate = useNavigate();
 
   console.log(
@@ -70,12 +73,6 @@ function PlayerLeaderBoard({ players, quiz }) {
     validPlayers.length,
     "players"
   );
-
-  // خواندن user_id بازیکن فعلی از localStorage
-  useEffect(() => {
-    const userId = localStorage.getItem("user_id");
-    setCurrentUserId(userId);
-  }, []);
 
   const maxScore =
     validPlayers.length > 0
@@ -152,7 +149,7 @@ function PlayerLeaderBoard({ players, quiz }) {
           <div className="text-center">
             <h1 className="px-4 text-5xl font-bold text-[color:var(--quiz-text)]">{"\u062c\u062f\u0648\u0644 \u0627\u0645\u062a\u06cc\u0627\u0632\u0627\u062a"}</h1>
             <p className="text-[color:var(--quiz-text-muted)] text-lg mt-2">
-              {validPlayers.length} {"\u0628\u0627\u0632\u06cc\u06a9\u0646"}
+              {participantCount} {"\u0628\u0627\u0632\u06cc\u06a9\u0646"}
             </p>
           </div>
 

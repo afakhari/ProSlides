@@ -9,6 +9,11 @@ const __dirname = dirname(__filename);
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      "/api/v1": "http://127.0.0.1:8080",
+    },
+  },
   resolve: {
     alias: {
       "@": resolve(__dirname, "src"),
