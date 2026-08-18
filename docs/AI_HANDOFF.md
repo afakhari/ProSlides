@@ -15,25 +15,27 @@ are not complete. Never describe a design target as benchmark evidence.
 ## Current objective and status at a glance
 
 - Branch purpose: isolated Go migration; `master` remains untouched legacy work.
-- Overall migration estimate: about 70%; this is a roadmap estimate, not a
+- Overall migration estimate: about 85%; this is a roadmap estimate, not a
   code-coverage calculation.
 - Implemented: Go/Compose foundation, cookie identity, owner-scoped dashboard
   and presentation/editor CRUD, settings, duplication/results management,
-  hashed one-time password-reset tokens, content/question creation, live state
+  hashed one-time password-reset tokens with SMTP delivery, optional hashed
+  email OTP verification, signed Google ID-token verification, Redis-backed
+  auth rate limits, content/question creation, live state
   machine, join, idempotent answers,
   replaceable scoring, aggregate scores, role-scoped snapshots, manager-only
   keyset-paginated roster/leaderboard, durable events, typed React HTTP/SSE,
-  snapshot-first recovery, and public live-session join-code resolution.
+  snapshot-first recovery, public live-session join-code resolution, and
+  owner-only keyset-paginated per-question results derived from Go answers.
 - High-load improvements in this stage: one event-ledger poller per active
   session/API process, bounded subscriber buffers, slow-client disconnect and
   replay, presence compaction, snapshot cursor, and indexed participant scores.
-- Not implemented: approved outbound password-reset delivery, Go-side Google
-  token verification/email verification, rate limiting, telemetry, Redis
-  wake-up fan-out/presence TTL, media upload,
+- Not implemented: production SMTP/Google secret provisioning, telemetry, Redis
+  wake-up fan-out/presence TTL, join/answer rate limiting, media object storage,
   k6 proof, production proxy/security hardening, cutover, or rollback exercise.
 - Capacity truth: architecture has a credible horizontal path, but 1k/5k/10k
   has not been measured. Use `docs/capacity-plan.md` as the only proof protocol.
-- Exact next task: approved external identity-provider wiring, defined later in this document.
+- Exact next task: bounded telemetry and the documented 100-user k6 smoke run.
 
 ## Branch and collaboration boundary
 
@@ -59,12 +61,13 @@ Do not install a second Go version. Use the version declared by `apps/api/go.mod
 Do not run a broad `npm audit fix`; investigate updates as a dedicated,
 compatibility-tested change.
 
-Latest completed local verification (2026-08-19): Go formatting and all API
-tests passed; the API image rebuilt; and the real Compose matrix passed identity,
-owner presentation list/create/update/delete/duplicate, settings, slide replace/reorder,
+Latest completed local verification (2026-08-19): Go tests/vet, SMTP and Google
+adapter tests, OpenAPI parsing, web lint/typecheck/unit/build passed; the API
+image rebuilt; and the real Compose matrix passed identity,
+owner presentation list/create/update/delete/duplicate, settings, atomic slide insert/replace/reorder,
 content/question creation, live commands, idempotent join/answer, role-scoped
 snapshots, participant non-disclosure, manager-only multi-page roster and score
-ordering, aggregate-only leaderboard events, 16 concurrent joins, and
+ordering, owner-only per-question option counts/leaderboard, aggregate-only leaderboard events, 16 concurrent joins, and
 `Last-Event-ID` SSE replay. It also verified join-code resolution and removal
 of question correctness metadata from participant snapshots. Web lint,
 TypeScript checking, 23 web unit tests, and the production
@@ -163,8 +166,8 @@ authoritative state first and avoids replaying old presence bursts.
 
 ### Out of scope
 
-Redis wake-up fan-out/presence TTL, rate limiting, telemetry, reports, media,
-load tests, event retention, and
+Redis wake-up fan-out/presence TTL, join/answer rate limiting, telemetry,
+immutable report exports, media object storage, load tests, event retention, and
 production proxy tuning are not implemented. No database reset or volume
 deletion was performed.
 
@@ -175,27 +178,27 @@ deletion was performed.
 - Go tests and the real Compose matrix pass.
 - `AGENTS.md`, API README, and this handoff describe the same implementation.
 
-### Current exact next task
+### Legacy parity decisions
 
-Complete the external identity-provider boundary after provider configuration
-is explicitly supplied and approved.
+The remaining Django product behavior is represented by Go or deliberately
+replaced at the architecture boundary:
 
-Contract and acceptance criteria:
+| Legacy behavior | Go behavior |
+|---|---|
+| JWT login/refresh/logout | opaque PostgreSQL session + CSRF cookies; no browser token storage |
+| email verification/reset | hashed one-time OTP/reset records, expiry/attempt controls, SMTP TLS/SSL adapter |
+| Google login | RS256/JWKS signature, issuer, audience, expiry, and verified-email validation |
+| persistent quiz access code | generated code for the current non-ended live session |
+| Rust result ingestion and duplicate score ledger | durable Go answers are the single source for option counts and per-question results |
+| Django slide insertion/order side effects | atomic zero-based insert/move/compact operations |
+| full quiz export used by the old runtime | bounded presentation definition plus role-scoped live snapshot and paginated result queries |
 
-1. Wire a production mail adapter to the existing password-reset service; keep
-   tokens hashed, one-time, expiring, and never logged.
-2. Verify Google ID tokens server-side against the configured audience before
-   issuing the same HttpOnly session/CSRF cookies used by password login.
-3. Preserve the existing auth-page layout, animation, OTP states, responsive
-   behavior, and recovery UX; only its transport/state integration may change.
-4. Keep unknown-email responses non-disclosing and revoke every account session
-   after a successful password reset.
-5. Add provider-adapter tests and run the full Go/Compose/web/browser matrix.
-
-Required owner inputs are the approved SMTP/provider settings, public reset
-base URL, and Google OAuth client ID. Secrets belong in environment/secret
-storage, never in Git or chat. After this task, return to bounded telemetry and
-the documented 100-user k6 smoke scenario; do not run 1k/5k/10k yet.
+Django admin is an operational framework UI, not a product API, and is not
+recreated. Actual provider values (`SMTP_*`, `PUBLIC_WEB_URL`,
+`EMAIL_VERIFICATION_PEPPER`,
+`GOOGLE_CLIENT_ID`) must be supplied through deployment secret/config storage;
+none belong in Git. Next, implement bounded telemetry and run the 100-user k6
+smoke gate before the documented 1k/5k/10k sequence.
 
 ## Commands and verification matrix
 

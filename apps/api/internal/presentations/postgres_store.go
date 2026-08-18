@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -141,30 +142,205 @@ func (s *PostgresStore) DeleteResults(c context.Context, id, owner string) error
 	return tx.Commit(c)
 }
 
-func (s *PostgresStore) CreateSlide(c context.Context, presentationID, owner string, position int, kind string, content json.RawMessage) (Slide, error) {
-	var slide Slide
-	err := s.pool.QueryRow(c, `INSERT INTO slides(presentation_id,position,kind,content) SELECT id,$3,$4,$5 FROM presentations WHERE id=$1 AND owner_id=$2 RETURNING id::text,position,kind,content::text`, presentationID, owner, position, kind, content).
-		Scan(&slide.ID, &slide.Position, &slide.Kind, &slide.Content)
+func (s *PostgresStore) QuestionResults(c context.Context, presentationID, sessionID, slideID, owner string, query QuestionResultsQuery) (QuestionResultsPage, error) {
+	page := QuestionResultsPage{SessionID: sessionID, QuestionSlideID: slideID, Limit: query.Limit, Options: []QuestionOptionResult{}, Leaderboard: []QuestionLeaderboardEntry{}}
+	var content json.RawMessage
+	err := s.pool.QueryRow(c, `SELECT sl.content::text
+		FROM live_sessions ls
+		JOIN presentations p ON p.id=ls.presentation_id
+		JOIN slides sl ON sl.presentation_id=p.id
+		WHERE p.id=$1 AND ls.id=$2 AND sl.id=$3 AND p.owner_id=$4`, presentationID, sessionID, slideID, owner).Scan(&content)
 	if errors.Is(err, pgx.ErrNoRows) {
+		return QuestionResultsPage{}, ErrNotFound
+	}
+	if err != nil {
+		return QuestionResultsPage{}, err
+	}
+	var definition struct {
+		Options []struct {
+			ID        string `json:"id"`
+			Text      string `json:"text"`
+			IsCorrect bool   `json:"is_correct"`
+		} `json:"options"`
+	}
+	if err = json.Unmarshal(content, &definition); err != nil {
+		return QuestionResultsPage{}, fmt.Errorf("decode question options: %w", err)
+	}
+	counts := map[int]int{}
+	rows, err := s.pool.Query(c, `SELECT selected.value::int,count(*)::int
+		FROM answers a CROSS JOIN LATERAL jsonb_array_elements_text(a.answer->'selected_option_indexes') selected(value)
+		WHERE a.session_id=$1 AND a.question_slide_id=$2 GROUP BY selected.value::int`, sessionID, slideID)
+	if err != nil {
+		return QuestionResultsPage{}, err
+	}
+	for rows.Next() {
+		var index, count int
+		if err = rows.Scan(&index, &count); err != nil {
+			rows.Close()
+			return QuestionResultsPage{}, err
+		}
+		counts[index] = count
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return QuestionResultsPage{}, err
+	}
+	for index, option := range definition.Options {
+		page.Options = append(page.Options, QuestionOptionResult{OptionIndex: index, OptionID: option.ID, OptionText: option.Text, IsCorrect: option.IsCorrect, NumberOfSubmits: counts[index]})
+	}
+	if err = s.pool.QueryRow(c, `SELECT count(*)::int FROM answers WHERE session_id=$1 AND question_slide_id=$2`, sessionID, slideID).Scan(&page.ResponseCount); err != nil {
+		return QuestionResultsPage{}, err
+	}
+	var cursorScore *int
+	var cursorTime *time.Time
+	var cursorID *string
+	if query.Cursor != nil {
+		cursorScore = &query.Cursor.Score
+		cursorTime = &query.Cursor.SubmittedAt
+		cursorID = &query.Cursor.AnswerID
+	}
+	rows, err = s.pool.Query(c, `WITH ranked AS (
+		SELECT a.id,a.participant_id,p.display_name,COALESCE(p.avatar,'') AS avatar,a.score_delta,a.submitted_at,
+		RANK() OVER (ORDER BY a.score_delta DESC)::int AS rank,
+		(SELECT GREATEST(0,EXTRACT(EPOCH FROM (a.submitted_at-max(e.occurred_at)))*1000)::bigint
+		 FROM live_events e WHERE e.session_id=a.session_id AND e.name='session.state_changed'
+		 AND e.payload->>'state'='question_open' AND e.payload->>'active_slide_id'=a.question_slide_id::text AND e.occurred_at<=a.submitted_at) AS elapsed_ms
+		FROM answers a JOIN participants p ON p.id=a.participant_id
+		WHERE a.session_id=$1 AND a.question_slide_id=$2)
+		SELECT id::text,participant_id::text,display_name,avatar,score_delta,rank,elapsed_ms,submitted_at
+		FROM ranked WHERE $3::int IS NULL OR score_delta<$3 OR (score_delta=$3 AND submitted_at>$4) OR (score_delta=$3 AND submitted_at=$4 AND id>$5::uuid)
+		ORDER BY score_delta DESC,submitted_at,id LIMIT $6`, sessionID, slideID, cursorScore, cursorTime, cursorID, query.Limit+1)
+	if err != nil {
+		return QuestionResultsPage{}, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var item QuestionLeaderboardEntry
+		if err = rows.Scan(&item.answerID, &item.ParticipantID, &item.DisplayName, &item.Avatar, &item.Score, &item.Rank, &item.TimeTakenMS, &item.SubmittedAt); err != nil {
+			return QuestionResultsPage{}, err
+		}
+		page.Leaderboard = append(page.Leaderboard, item)
+	}
+	if err = rows.Err(); err != nil {
+		return QuestionResultsPage{}, err
+	}
+	if len(page.Leaderboard) > query.Limit {
+		page.HasMore = true
+		page.Leaderboard = page.Leaderboard[:query.Limit]
+	}
+	return page, nil
+}
+
+func (s *PostgresStore) CreateSlide(c context.Context, presentationID, owner string, position int, kind string, content json.RawMessage) (Slide, error) {
+	tx, err := s.pool.BeginTx(c, pgx.TxOptions{})
+	if err != nil {
+		return Slide{}, err
+	}
+	defer tx.Rollback(c) //nolint:errcheck
+	var lockedID string
+	if err = tx.QueryRow(c, `SELECT id::text FROM presentations WHERE id=$1 AND owner_id=$2 FOR UPDATE`, presentationID, owner).Scan(&lockedID); errors.Is(err, pgx.ErrNoRows) {
 		return Slide{}, ErrNotFound
+	} else if err != nil {
+		return Slide{}, err
 	}
-	if err == nil {
-		_, _ = s.pool.Exec(c, `UPDATE presentations SET updated_at=now() WHERE id=$1`, presentationID)
+	var count int
+	if err = tx.QueryRow(c, `SELECT count(*) FROM slides WHERE presentation_id=$1`, presentationID).Scan(&count); err != nil {
+		return Slide{}, err
 	}
-	return slide, err
+	if position < 0 || position > count {
+		return Slide{}, ErrInvalidPosition
+	}
+	if _, err = tx.Exec(c, `UPDATE slides SET position=position+1000000 WHERE presentation_id=$1 AND position>=$2`, presentationID, position); err != nil {
+		return Slide{}, err
+	}
+	var slide Slide
+	if err = tx.QueryRow(c, `INSERT INTO slides(presentation_id,position,kind,content) VALUES($1,$2,$3,$4) RETURNING id::text,position,kind,content::text`, presentationID, position, kind, content).Scan(&slide.ID, &slide.Position, &slide.Kind, &slide.Content); err != nil {
+		return Slide{}, err
+	}
+	if _, err = tx.Exec(c, `UPDATE slides SET position=position-999999 WHERE presentation_id=$1 AND position>=1000000`, presentationID); err != nil {
+		return Slide{}, err
+	}
+	if _, err = tx.Exec(c, `UPDATE presentations SET updated_at=now() WHERE id=$1`, presentationID); err != nil {
+		return Slide{}, err
+	}
+	if err = tx.Commit(c); err != nil {
+		return Slide{}, err
+	}
+	return slide, nil
 }
 
 func (s *PostgresStore) ReplaceSlide(c context.Context, presentationID, slideID, owner string, position int, kind string, content json.RawMessage) (Slide, error) {
-	var slide Slide
-	err := s.pool.QueryRow(c, `UPDATE slides sl SET position=$4,kind=$5,content=$6,updated_at=now() FROM presentations p WHERE sl.id=$2 AND sl.presentation_id=$1 AND p.id=sl.presentation_id AND p.owner_id=$3 RETURNING sl.id::text,sl.position,sl.kind,sl.content::text`, presentationID, slideID, owner, position, kind, content).
-		Scan(&slide.ID, &slide.Position, &slide.Kind, &slide.Content)
-	if errors.Is(err, pgx.ErrNoRows) {
+	tx, err := s.pool.BeginTx(c, pgx.TxOptions{})
+	if err != nil {
+		return Slide{}, err
+	}
+	defer tx.Rollback(c) //nolint:errcheck
+	var lockedID string
+	if err = tx.QueryRow(c, `SELECT id::text FROM presentations WHERE id=$1 AND owner_id=$2 FOR UPDATE`, presentationID, owner).Scan(&lockedID); errors.Is(err, pgx.ErrNoRows) {
+		return Slide{}, ErrNotFound
+	} else if err != nil {
+		return Slide{}, err
+	}
+	rows, err := tx.Query(c, `SELECT id::text FROM slides WHERE presentation_id=$1 ORDER BY position FOR UPDATE`, presentationID)
+	if err != nil {
+		return Slide{}, err
+	}
+	ids := []string{}
+	found := false
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return Slide{}, err
+		}
+		if id != slideID {
+			ids = append(ids, id)
+		} else {
+			found = true
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return Slide{}, err
+	}
+	if !found {
 		return Slide{}, ErrNotFound
 	}
-	if err == nil {
-		_, _ = s.pool.Exec(c, `UPDATE presentations SET updated_at=now() WHERE id=$1`, presentationID)
+	var changesAnsweredQuestion bool
+	if err = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM answers WHERE question_slide_id=$1) AND EXISTS(SELECT 1 FROM slides WHERE id=$1 AND (kind<>$2 OR content<>$3::jsonb))`, slideID, kind, content).Scan(&changesAnsweredQuestion); err != nil {
+		return Slide{}, err
 	}
-	return slide, err
+	if changesAnsweredQuestion {
+		return Slide{}, ErrSlideHasResults
+	}
+	if position < 0 || position > len(ids) {
+		return Slide{}, ErrInvalidPosition
+	}
+	ordered := append(ids, "")
+	copy(ordered[position+1:], ordered[position:])
+	ordered[position] = slideID
+	if _, err = tx.Exec(c, `UPDATE slides SET position=position+1000000 WHERE presentation_id=$1`, presentationID); err != nil {
+		return Slide{}, err
+	}
+	for index, id := range ordered {
+		if id == slideID {
+			_, err = tx.Exec(c, `UPDATE slides SET position=$2,kind=$3,content=$4,updated_at=now() WHERE id=$1`, id, index, kind, content)
+		} else {
+			_, err = tx.Exec(c, `UPDATE slides SET position=$2,updated_at=now() WHERE id=$1`, id, index)
+		}
+		if err != nil {
+			return Slide{}, err
+		}
+	}
+	if _, err = tx.Exec(c, `UPDATE presentations SET updated_at=now() WHERE id=$1`, presentationID); err != nil {
+		return Slide{}, err
+	}
+	if err = tx.Commit(c); err != nil {
+		return Slide{}, err
+	}
+	return Slide{ID: slideID, Position: position, Kind: kind, Content: content}, nil
 }
 
 func (s *PostgresStore) DeleteSlide(c context.Context, presentationID, slideID, owner string) error {
@@ -180,6 +356,13 @@ func (s *PostgresStore) DeleteSlide(c context.Context, presentationID, slideID, 
 	}
 	if err != nil {
 		return err
+	}
+	var hasResults bool
+	if err = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM answers WHERE question_slide_id=$1)`, slideID).Scan(&hasResults); err != nil {
+		return err
+	}
+	if hasResults {
+		return ErrSlideHasResults
 	}
 	if _, err = tx.Exec(c, `DELETE FROM slides WHERE id=$1`, slideID); err != nil {
 		return err

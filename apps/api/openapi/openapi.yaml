@@ -47,8 +47,8 @@ paths:
   /api/v1/auth/register:
     post:
       operationId: registerAccount
-      summary: Create an account and start an authenticated session.
-      description: Sets an HttpOnly session cookie and a readable CSRF cookie. Passwords are never returned or logged.
+      summary: Create an account and either start a session or begin email verification.
+      description: When email verification is disabled, sets an HttpOnly session cookie and a readable CSRF cookie. Otherwise no session is issued until the six-digit code is verified. Passwords and verification codes are never returned or logged; OTPs are stored only as keyed hashes.
       requestBody:
         required: true
         content:
@@ -57,20 +57,22 @@ paths:
               $ref: '#/components/schemas/RegisterRequest'
       responses:
         '201':
-          description: Account created and session established.
+          description: Account created. The response states whether verification is required and whether a session was established.
           headers:
             Set-Cookie:
               schema: { type: string }
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CurrentUser'
+                $ref: '#/components/schemas/RegistrationResult'
         '400': { $ref: '#/components/responses/ValidationError' }
         '409':
           description: An account already uses this email address.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { description: Verification delivery is required but unavailable. }
   /api/v1/auth/login:
     post:
       operationId: loginAccount
@@ -93,6 +95,8 @@ paths:
               schema: { $ref: '#/components/schemas/CurrentUser' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Credentials are valid but email verification is still required. }
+        '429': { $ref: '#/components/responses/RateLimited' }
   /api/v1/auth/logout:
     post:
       operationId: logoutAccount
@@ -114,6 +118,49 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/CurrentUser' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/auth/verify:
+    post:
+      operationId: verifyAccountEmail
+      summary: Activate an account with its one-time six-digit email code.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/VerifyEmailRequest' } } }
+      responses:
+        '200':
+          description: Email verified and the normal session and CSRF cookies issued.
+          content: { application/json: { schema: { $ref: '#/components/schemas/CurrentUser' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/auth/verify/resend:
+    post:
+      operationId: resendAccountVerification
+      summary: Replace and resend an email verification code without disclosing unknown accounts.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ResendVerificationRequest' } } }
+      responses:
+        '202':
+          description: Accepted whether or not the account exists.
+          content: { application/json: { schema: { $ref: '#/components/schemas/VerificationDeliveryResult' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { description: Verification delivery is temporarily unavailable. }
+  /api/v1/auth/google:
+    post:
+      operationId: authenticateWithGoogle
+      summary: Verify a signed Google ID token and issue the normal session and CSRF cookies.
+      description: The backend validates the RS256 signature against Google's JWKS, issuer, audience, expiry, and verified-email claim. Unsigned claim decoding is prohibited.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GoogleAuthRequest' } } }
+      responses:
+        '200':
+          description: Google identity accepted and session established.
+          content: { application/json: { schema: { $ref: '#/components/schemas/GoogleAuthResult' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { description: Google authentication is not configured or its public keys are unavailable. }
   /api/v1/auth/password/reset:
     post:
       operationId: requestPasswordReset
@@ -124,6 +171,7 @@ paths:
       responses:
         '202': { description: Request accepted whether or not the email exists. }
         '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
         '503': { description: Password reset delivery is temporarily unavailable. }
   /api/v1/auth/password/reset/confirm:
     post:
@@ -135,6 +183,7 @@ paths:
       responses:
         '204': { description: Password changed and existing sessions revoked. }
         '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
   /api/v1/presentations/{presentationId}:
     get:
       operationId: getPresentation
@@ -230,6 +279,24 @@ paths:
         '200': { description: Latest session locator., content: { application/json: { schema: { $ref: '#/components/schemas/LiveSessionLocator' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/presentations/{presentationId}/sessions/{sessionId}/questions/{slideId}/results:
+    get:
+      operationId: getQuestionResults
+      summary: Return persisted option counts and a stable bounded per-question leaderboard for an owned session.
+      description: This is the Go-native replacement for Django's Rust result-ingestion endpoints. Results are derived from durable answers and never accept a second externally supplied score ledger.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+        - $ref: '#/components/parameters/SessionId'
+        - { name: slideId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/RosterLimit'
+        - $ref: '#/components/parameters/RosterCursor'
+      responses:
+        '200':
+          description: Question results for the requested owned live session.
+          content: { application/json: { schema: { $ref: '#/components/schemas/QuestionResultsPage' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/presentations/{presentationId}/results:
     delete:
       operationId: deletePresentationResults
@@ -246,7 +313,7 @@ paths:
     post:
       operationId: createSlide
       summary: Add a slide to an owned presentation.
-      description: Requires an authenticated owner and a CSRF token. Returns 404 for absent or non-owned presentations.
+      description: Requires an authenticated owner and a CSRF token. Inserting at an occupied zero-based position atomically shifts following slides. Returns 404 for absent or non-owned presentations.
       parameters:
         - $ref: '#/components/parameters/PresentationId'
         - $ref: '#/components/parameters/CSRFToken'
@@ -285,6 +352,7 @@ paths:
     put:
       operationId: replaceSlide
       summary: Replace the editable definition of one owned slide.
+      description: Moving to an occupied zero-based position atomically compacts the other positions. A slide with durable answers may be moved, but its question definition cannot change until presentation results are reset.
       parameters:
         - $ref: '#/components/parameters/PresentationId'
         - { name: slideId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -298,6 +366,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: The requested edit would change a slide with durable live answers. }
     delete:
       operationId: deleteSlide
       summary: Delete one owned slide and compact following positions.
@@ -310,6 +379,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: The slide has durable live answers; reset presentation results before deleting it. }
   /api/v1/presentations/{presentationId}/questions:
     post:
       operationId: createQuestionSlide
@@ -534,6 +604,39 @@ components:
       properties:
         email: { type: string, format: email, maxLength: 320 }
         password: { type: string, format: password, maxLength: 128 }
+    VerifyEmailRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        code: { type: string, pattern: '^[0-9]{6}$' }
+    ResendVerificationRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+    VerificationDeliveryResult:
+      type: object
+      required: [detail, resend_seconds, code_expires_in_seconds]
+      properties:
+        detail: { type: string }
+        resend_seconds: { type: integer, minimum: 0 }
+        code_expires_in_seconds: { type: integer, minimum: 0 }
+    GoogleAuthRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, minLength: 64, maxLength: 16384 }
+    GoogleAuthResult:
+      allOf:
+        - { $ref: '#/components/schemas/CurrentUser' }
+        - type: object
+          required: [needs_password_setup, is_new_user]
+          properties:
+            name: { type: string }
+            full_name: { type: string }
+            needs_password_setup: { type: boolean }
+            is_new_user: { type: boolean }
     PasswordResetRequest:
       type: object
       required: [email]
@@ -546,6 +649,15 @@ components:
         uid: { type: string, format: uuid }
         token: { type: string, minLength: 32, maxLength: 128 }
         new_password: { type: string, format: password, minLength: 12, maxLength: 128 }
+    RegistrationResult:
+      allOf:
+        - { $ref: '#/components/schemas/CurrentUser' }
+        - type: object
+          required: [verification_sent]
+          properties:
+            verification_sent: { type: boolean }
+            resend_seconds: { type: integer, minimum: 0 }
+            code_expires_in_seconds: { type: integer, minimum: 0 }
     CurrentUser:
       type: object
       required: [id, email, display_name, is_active]
@@ -553,7 +665,7 @@ components:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         display_name: { type: string }
-        is_active: { type: boolean, enum: [true], description: Go accounts are active immediately after successful registration. }
+        is_active: { type: boolean }
     Presentation:
       type: object
       required: [id, title, settings, created_at, updated_at, slides]
@@ -758,6 +870,45 @@ components:
         limit: { type: integer, minimum: 1, maximum: 100 }
         has_more: { type: boolean }
         next_cursor: { type: string, nullable: true }
+    QuestionOptionResult:
+      type: object
+      required: [option_index, option_id, option_text, is_correct, number_of_submits]
+      additionalProperties: false
+      properties:
+        option_index: { type: integer, minimum: 0 }
+        option_id: { type: string }
+        option_text: { type: string }
+        is_correct: { type: boolean }
+        number_of_submits: { type: integer, minimum: 0 }
+    QuestionLeaderboardEntry:
+      type: object
+      required: [participant_id, display_name, score, rank, submitted_at]
+      additionalProperties: false
+      properties:
+        participant_id: { type: string, format: uuid }
+        display_name: { type: string }
+        avatar: { type: string }
+        score: { type: integer, minimum: 0 }
+        rank: { type: integer, minimum: 1 }
+        time_taken_ms: { type: integer, minimum: 0, nullable: true }
+        submitted_at: { type: string, format: date-time }
+    QuestionResultsPage:
+      type: object
+      required: [session_id, question_slide_id, response_count, options, leaderboard, limit, has_more]
+      additionalProperties: false
+      properties:
+        session_id: { type: string, format: uuid }
+        question_slide_id: { type: string, format: uuid }
+        response_count: { type: integer, minimum: 0 }
+        options:
+          type: array
+          items: { $ref: '#/components/schemas/QuestionOptionResult' }
+        leaderboard:
+          type: array
+          items: { $ref: '#/components/schemas/QuestionLeaderboardEntry' }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        has_more: { type: boolean }
+        next_cursor: { type: string, nullable: true }
     LiveEventEnvelope:
       type: object
       required: [event_id, schema_version, session_id, state_version, name, payload, occurred_at]
@@ -868,6 +1019,13 @@ components:
               schema: { $ref: '#/components/schemas/Error' }
     NotFound:
       description: The requested resource does not exist or is not visible to the current account.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: The bounded authentication request budget was exceeded.
+      headers:
+        Retry-After: { schema: { type: integer, minimum: 1 } }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

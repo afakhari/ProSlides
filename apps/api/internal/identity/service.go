@@ -11,7 +11,10 @@ import (
 var ErrInvalidRegistration = errors.New("invalid registration")
 
 type Registration struct{ Email, DisplayName, Password string }
-type Account struct{ Email, DisplayName, PasswordHash string }
+type Account struct {
+	Email, DisplayName, PasswordHash string
+	IsActive                         bool
+}
 
 // PrepareRegistration validates and normalizes data before it reaches a repository.
 // Passwords never leave this function in plaintext.
@@ -21,18 +24,21 @@ func PrepareRegistration(input Registration) (Account, error) {
 	if len(email) > 320 || len(name) == 0 || len(name) > 100 || len(input.Password) < 12 || len(input.Password) > 128 {
 		return Account{}, ErrInvalidRegistration
 	}
-	_, err := mail.ParseAddress(email)
-	if err != nil {
+	parsed, err := mail.ParseAddress(email)
+	if err != nil || parsed.Address != email {
 		return Account{}, ErrInvalidRegistration
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return Account{}, err
 	}
-	return Account{Email: email, DisplayName: name, PasswordHash: string(hash)}, nil
+	return Account{Email: email, DisplayName: name, PasswordHash: string(hash), IsActive: true}, nil
 }
 
 func VerifyPassword(password, hash string) bool {
+	if hash == "" || hash == "!" {
+		return false
+	}
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 

@@ -755,7 +755,7 @@ export default function AuthPage() {
       setSubmitting(true);
       setStatus(null);
       try {
-        const googleResponse = await apiFetch("/auth/google/", {
+        const googleResponse = await apiFetch("/auth/google", {
           method: "POST",
           auth: false,
           json: { token: response.credential },
@@ -767,14 +767,8 @@ export default function AuthPage() {
           throw new Error(friendlyMessage || formatError(payload));
         }
 
-        const { access, refresh } = payload || {};
-        if (!access) {
-          throw new Error("ورود با گوگل انجام شد، اما توکن دسترسی دریافت نشد.");
-        }
-
-        localStorage.setItem("auth.access", access);
-        if (refresh) localStorage.setItem("auth.refresh", refresh);
-        const resolvedName = payload?.full_name || payload?.name;
+        const resolvedName =
+          payload?.display_name || payload?.full_name || payload?.name;
         if (resolvedName) localStorage.setItem("auth.name", resolvedName);
         if (payload?.email) {
           setAuthEmail(payload.email);
@@ -888,7 +882,10 @@ export default function AuthPage() {
     if (!response.ok) {
       const message = formatError(payload);
       setFieldErrors(extractFieldErrors(payload));
-      if (message.toLowerCase().includes("no active account")) {
+      if (
+        payload?.error === "email_not_verified" ||
+        message.toLowerCase().includes("no active account")
+      ) {
         setMode("verify");
         setStatus({
           type: "info",
@@ -1015,7 +1012,7 @@ export default function AuthPage() {
     setSubmitting(true);
     setStatus(null);
     try {
-      const response = await apiFetch("/auth/verify/", {
+      const response = await apiFetch("/auth/verify", {
         method: "POST",
         auth: false,
         json: {
@@ -1030,11 +1027,8 @@ export default function AuthPage() {
         throw new Error(formatError(payload));
       }
 
-      setStatus({
-        type: "info",
-        message: "ایمیل با موفقیت تأیید شد. اکنون می‌توانید وارد شوید.",
-      });
-      setMode("login");
+      setAuthEmail(trimmedEmail);
+      navigateToDashboard();
     } catch (error) {
       setStatus({
         type: "error",
@@ -1057,7 +1051,7 @@ export default function AuthPage() {
     setSubmitting(true);
     setStatus(null);
     try {
-      const response = await apiFetch("/auth/verify/resend/", {
+      const response = await apiFetch("/auth/verify/resend", {
         method: "POST",
         auth: false,
         json: { email: email.trim() },

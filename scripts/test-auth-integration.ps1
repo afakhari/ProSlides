@@ -120,6 +120,11 @@ try {
   $contentID = ($contentResponse.Content | ConvertFrom-Json).id
   $questionResponse = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/questions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 1; text = "Choose"; question_type = "multiple"; question_time = 30; max_point = 100; min_point = 0; partial_scoring = $true; faster_answers_more_points = $false; options = @(@{ text = "A"; is_correct = $true }, @{ text = "B"; is_correct = $true }, @{ text = "C"; is_correct = $false }) } | ConvertTo-Json -Compress -Depth 4) -ExpectedStatus 201
   $questionID = ($questionResponse.Content | ConvertFrom-Json).id
+  $insertedResponse = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 1; kind = "content"; content = @{ text = "Inserted between existing slides" } } | ConvertTo-Json -Compress) -ExpectedStatus 201
+  $insertedID = ($insertedResponse.Content | ConvertFrom-Json).id
+  $afterInsert = (Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  if ($afterInsert.slides.Count -ne 3 -or $afterInsert.slides[1].id -ne $insertedID -or $afterInsert.slides[2].id -ne $questionID) { throw "Slide insertion did not shift occupied positions atomically" }
+  Invoke-API -Method DELETE -Path "/api/v1/presentations/$createdID/slides/$insertedID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -ExpectedStatus 204 | Out-Null
 
   $updated = Invoke-API -Method PATCH -Path "/api/v1/presentations/$createdID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ title = "Updated through API"; settings = @{ background_color = "#112233"; show_music = $true } } | ConvertTo-Json -Compress) -ExpectedStatus 200
   $updatedPayload = $updated.Content | ConvertFrom-Json
@@ -184,6 +189,12 @@ try {
   if (($answer.Content | ConvertFrom-Json).score_delta -ne 100) { throw "Correct multiple answer was not scored at 100" }
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/answers" -Client $participantClient -Body (@{ request_id = $answerRequest; question_slide_id = $questionID; selected_option_indexes = @(0, 1) } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/answers" -Client $participantClient -Body (@{ request_id = [guid]::NewGuid().ToString(); question_slide_id = $questionID; selected_option_indexes = @(0) } | ConvertTo-Json -Compress) -ExpectedStatus 409 | Out-Null
+  Invoke-API -Method GET -Path "/api/v1/presentations/$createdID/sessions/$($liveSession.id)/questions/$questionID/results" -Client $participantClient -ExpectedStatus 401 | Out-Null
+  $questionResults = Invoke-API -Method GET -Path "/api/v1/presentations/$createdID/sessions/$($liveSession.id)/questions/$questionID/results?limit=1" -Client $loginClient -ExpectedStatus 200
+  $questionResultsPayload = $questionResults.Content | ConvertFrom-Json
+  if ($questionResultsPayload.response_count -ne 1 -or $questionResultsPayload.leaderboard.Count -ne 1 -or $questionResultsPayload.leaderboard[0].score -ne 100 -or $questionResultsPayload.leaderboard[0].rank -ne 1) { throw "Question leaderboard was not derived from the durable Go answer" }
+  if ($questionResultsPayload.options[0].number_of_submits -ne 1 -or $questionResultsPayload.options[1].number_of_submits -ne 1 -or $questionResultsPayload.options[2].number_of_submits -ne 0) { throw "Question option counts were incorrect" }
+  if ($questionResults.Content -match 'token|password_hash|request_id') { throw "Question results disclosed authentication or idempotency data" }
   $snapshot = Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/snapshot" -Client $participantClient -ExpectedStatus 200
   $snapshotPayload = $snapshot.Content | ConvertFrom-Json
   if ($snapshotPayload.role -ne "participant" -or $snapshotPayload.participant.score -ne 100) { throw "Participant snapshot did not contain only the caller score" }
@@ -309,6 +320,7 @@ try {
   Invoke-API -Method PATCH -Path "/api/v1/presentations/$createdID" -Client $otherClient -Headers @{ "X-CSRF-Token" = $otherCSRF } -Body (@{ title = "Unauthorized update" } | ConvertTo-Json -Compress) -ExpectedStatus 404 | Out-Null
   Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides/reorder" -Client $otherClient -Headers @{ "X-CSRF-Token" = $otherCSRF } -Body (@{ slide_ids = @() } | ConvertTo-Json -Compress) -ExpectedStatus 404 | Out-Null
   Invoke-API -Method DELETE -Path "/api/v1/presentations/$createdID/results" -Client $otherClient -Headers @{ "X-CSRF-Token" = $otherCSRF } -ExpectedStatus 404 | Out-Null
+  Invoke-API -Method GET -Path "/api/v1/presentations/$createdID/sessions/$($liveSession.id)/questions/$questionID/results" -Client $otherClient -ExpectedStatus 404 | Out-Null
 
   Invoke-API -Method DELETE -Path "/api/v1/presentations/$duplicateID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -ExpectedStatus 204 | Out-Null
   Invoke-API -Method GET -Path "/api/v1/presentations/$duplicateID" -Client $loginClient -ExpectedStatus 404 | Out-Null

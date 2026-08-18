@@ -40,7 +40,10 @@ API contract changes begin in `openapi/openapi.yaml`. See the repository root
 
 ## Implemented API status
 
-Authentication uses opaque server-side sessions and CSRF cookies. Live manager
+Authentication uses opaque server-side sessions and CSRF cookies. Optional
+email verification and password reset use hashed one-time secrets and the
+configured SMTP adapter; Google ID tokens are verified against signed JWKS
+claims. Redis-backed fixed-window limits protect identity entry points. Live manager
 commands use HTTP and state versions; participants receive a scoped HttpOnly
 cookie. The SSE endpoint supports durable `Last-Event-ID` replay and sends
 aggregate answer/leaderboard notifications rather than one event per answer or
@@ -57,6 +60,10 @@ to the current non-ended Go live session without exposing manager fields.
 Manager snapshots are also bounded.
 Managers use `GET /api/v1/live/sessions/{sessionId}/roster` with a maximum
 `limit` of 100, opaque keyset cursors, and stable `joined` or `score` ordering.
+Owned per-question results use
+`GET /api/v1/presentations/{presentationId}/sessions/{sessionId}/questions/{slideId}/results`
+and return bounded keyset-ranked rows plus option counts derived from durable
+answers.
 
 Event delivery uses one bounded process-local broker per active session rather
 than polling PostgreSQL from every SSE connection. Slow subscribers are closed

@@ -32,7 +32,7 @@ can replay from the durable event ledger and then deliver new events locally.
 
 | Module | Owns | Must not own |
 |---|---|---|
-| `identity` | accounts, password hashes, opaque sessions, CSRF | live state or scores |
+| `identity` | accounts, password hashes, email verification/reset delivery, Google verification, opaque sessions, CSRF | live state or scores |
 | `presentations` | presentations, slides, question definitions | accepting answers |
 | `live` | live state machine, participants, answers, scoring, snapshots, events | account lifecycle |
 | `reports` (future) | immutable post-session projections and exports | live command handling |
@@ -126,6 +126,10 @@ with `Last-Event-ID`, and refreshes snapshot state before reconnecting. Manager
 roster pages are loaded in batches of at most 100; participant projections
 discard roster input and never hold a complete score map.
 
+Per-question reports are owner-only and bounded. They derive option counts and
+`(score_delta DESC, submitted_at, answer_id)` keyset-ranked rows directly from
+durable Go answers; no Rust callback or second score ledger is accepted.
+
 Redis Pub/Sub can later replace PostgreSQL polling as the low-latency wake-up
 path across instances, but only through an outbox relay from `live_events`.
 Redis loss must degrade latency/presence, never lose a durable event or answer.
@@ -162,9 +166,11 @@ Redis loss must degrade latency/presence, never lose a durable event or answer.
 - Production cookies are Secure; CORS and origins must be explicitly restricted.
 - Logs must not contain passwords, cookies, credentials, or answers before a
   question closes.
-- Rate limits are required for register/login/join/answer/reconnect before public
-  exposure. Redis may coordinate them, but fail-open/fail-closed behavior must
-  be defined per endpoint.
+- Redis coordinates fixed-window limits for register, login, verification,
+  Google login, and password reset while hashing the client identifier in keys.
+  Identity limits fail open during Redis failure so authentication remains
+  available while readiness reports the outage. Join/answer limits are still
+  required before public exposure.
 
 ## Observability and operations required before production
 
@@ -179,8 +185,8 @@ the old version available until schema/event compatibility is confirmed.
 
 ## Known capacity gaps (truth, not aspirations)
 
-1. Distributed rate limiting, ephemeral presence TTLs, and Redis wake-up fan-out
-   are not implemented.
+1. Join/answer rate limiting, ephemeral presence TTLs, and Redis wake-up fan-out
+   are not implemented; identity rate limiting is implemented.
 2. Metrics/tracing and a production reverse-proxy configuration are absent.
 3. Event retention/compaction and PostgreSQL operational tuning are undefined.
 4. No k6 1k/5k/10k evidence exists yet; therefore 10k is a target, not a claim.

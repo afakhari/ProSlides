@@ -55,15 +55,41 @@ func main() {
 			logger.Warn("redis close failed", "error", err)
 		}
 	}()
+	var passwordMailer identity.PasswordResetMailer
+	var verificationMailer identity.VerificationMailer
+	if cfg.SMTPHost != "" || cfg.SMTPFromAddress != "" {
+		configuredMailer, mailErr := identity.NewSMTPMailer(identity.SMTPConfig{Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, FromAddress: cfg.SMTPFromAddress, FromName: cfg.SMTPFromName, UseTLS: cfg.SMTPUseTLS, UseSSL: cfg.SMTPUseSSL, Timeout: 10 * time.Second})
+		if mailErr != nil {
+			logger.Error("SMTP configuration invalid", "error", mailErr)
+			os.Exit(1)
+		}
+		passwordMailer = configuredMailer
+		verificationMailer = configuredMailer
+	}
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: platformhttp.NewRouterWithRoutes(cfg, []dependency.Dependency{postgresClient, redisClient}, func(m *http.ServeMux) {
-			identityService := identity.NewService(identity.NewPostgresStore(postgresClient.Pool()), cfg.SessionTTL)
+			var googleVerifier identity.GoogleVerifier
+			if cfg.GoogleClientID != "" {
+				googleVerifier = identity.NewGoogleTokenVerifier(cfg.GoogleClientID, cfg.GoogleJWKSURL, nil)
+			}
+			identityService := identity.NewServiceWithOptions(identity.NewPostgresStore(postgresClient.Pool()), cfg.SessionTTL, identity.ServiceOptions{
+				PasswordResetMailer:     passwordMailer,
+				VerificationMailer:      verificationMailer,
+				GoogleVerifier:          googleVerifier,
+				PasswordResetBaseURL:    cfg.PasswordResetBaseURL,
+				PasswordResetTTL:        cfg.PasswordResetTTL,
+				RequireVerification:     cfg.AuthRequireVerification,
+				VerificationTTL:         cfg.EmailVerificationTTL,
+				VerificationResendDelay: cfg.EmailResendDelay,
+				VerificationMaxAttempts: cfg.EmailMaxAttempts,
+				VerificationPepper:      cfg.EmailVerificationPepper,
+			})
 			liveStore := live.NewPostgresStore(postgresClient.Pool())
 			liveService := live.NewService(liveStore, live.DeductionPolicy{})
 			liveBroker := live.NewEventBroker(liveStore, 250*time.Millisecond, 256)
-			identity.NewHTTP(identityService, cfg.Environment == "production").Register(m)
+			identity.NewHTTP(identityService, cfg.Environment == "production", redisClient).Register(m)
 			presentations.NewHTTP(identityService, presentations.NewPostgresStore(postgresClient.Pool())).Register(m)
 			live.NewHTTP(liveService, liveBroker, identityService, cfg.Environment == "production").Register(m)
 		}),

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -11,13 +12,30 @@ import (
 // Config contains only process-wide configuration. Domain configuration belongs
 // to its owning module, not to this package.
 type Config struct {
-	Environment            string
-	HTTPAddr               string
-	LogLevel               slog.Level
-	DatabaseURL            string
-	RedisURL               string
-	DependencyCheckTimeout time.Duration
-	SessionTTL             time.Duration
+	Environment             string
+	HTTPAddr                string
+	LogLevel                slog.Level
+	DatabaseURL             string
+	RedisURL                string
+	DependencyCheckTimeout  time.Duration
+	SessionTTL              time.Duration
+	AuthRequireVerification bool
+	EmailVerificationTTL    time.Duration
+	EmailResendDelay        time.Duration
+	EmailMaxAttempts        int
+	EmailVerificationPepper string
+	PasswordResetBaseURL    string
+	PasswordResetTTL        time.Duration
+	SMTPHost                string
+	SMTPPort                int
+	SMTPUsername            string
+	SMTPPassword            string
+	SMTPFromAddress         string
+	SMTPFromName            string
+	SMTPUseTLS              bool
+	SMTPUseSSL              bool
+	GoogleClientID          string
+	GoogleJWKSURL           string
 }
 
 func Load() (Config, error) {
@@ -33,6 +51,60 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("SESSION_TTL must be a positive duration")
 	}
 	cfg.SessionTTL = sessionTTL
+
+	cfg.AuthRequireVerification, err = boolValue("AUTH_REQUIRE_EMAIL_VERIFICATION", false)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.EmailVerificationTTL, err = positiveDuration("EMAIL_VERIFICATION_TTL", "10m")
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.EmailResendDelay, err = positiveDuration("EMAIL_VERIFICATION_RESEND_DELAY", "60s")
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.PasswordResetTTL, err = positiveDuration("PASSWORD_RESET_TTL", "15m")
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.EmailMaxAttempts, err = positiveInt("EMAIL_VERIFICATION_MAX_ATTEMPTS", 5)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.SMTPPort, err = positiveInt("SMTP_PORT", 25)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.SMTPUseTLS, err = boolValue("SMTP_USE_TLS", false)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.SMTPUseSSL, err = boolValue("SMTP_USE_SSL", false)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.SMTPUseTLS && cfg.SMTPUseSSL {
+		return Config{}, fmt.Errorf("SMTP_USE_TLS and SMTP_USE_SSL cannot both be true")
+	}
+	cfg.PasswordResetBaseURL = strings.TrimRight(os.Getenv("PUBLIC_WEB_URL"), "/")
+	cfg.SMTPHost = os.Getenv("SMTP_HOST")
+	cfg.SMTPUsername = os.Getenv("SMTP_USERNAME")
+	cfg.SMTPPassword = os.Getenv("SMTP_PASSWORD")
+	cfg.SMTPFromAddress = os.Getenv("SMTP_FROM_ADDRESS")
+	cfg.SMTPFromName = valueOrDefault("SMTP_FROM_NAME", "ProSlides")
+	cfg.EmailVerificationPepper = os.Getenv("EMAIL_VERIFICATION_PEPPER")
+	cfg.GoogleClientID = os.Getenv("GOOGLE_CLIENT_ID")
+	cfg.GoogleJWKSURL = valueOrDefault("GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs")
+	if (cfg.SMTPHost == "") != (cfg.SMTPFromAddress == "") {
+		return Config{}, fmt.Errorf("SMTP_HOST and SMTP_FROM_ADDRESS must be configured together")
+	}
+	if cfg.AuthRequireVerification && cfg.SMTPHost == "" {
+		return Config{}, fmt.Errorf("SMTP is required when AUTH_REQUIRE_EMAIL_VERIFICATION is true")
+	}
+	if cfg.AuthRequireVerification && len(cfg.EmailVerificationPepper) < 32 {
+		return Config{}, fmt.Errorf("EMAIL_VERIFICATION_PEPPER must contain at least 32 characters when verification is required")
+	}
 
 	dependencyCheckTimeout, err := time.ParseDuration(valueOrDefault("DEPENDENCY_CHECK_TIMEOUT", "2s"))
 	if err != nil || dependencyCheckTimeout <= 0 {
@@ -50,6 +122,38 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("DATABASE_URL and REDIS_URL are required")
 	}
 	return cfg, nil
+}
+
+func positiveDuration(key, fallback string) (time.Duration, error) {
+	value, err := time.ParseDuration(valueOrDefault(key, fallback))
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive duration", key)
+	}
+	return value, nil
+}
+
+func positiveInt(key string, fallback int) (int, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", key)
+	}
+	return value, nil
+}
+
+func boolValue(key string, fallback bool) (bool, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("%s must be a boolean", key)
+	}
+	return value, nil
 }
 
 func valueOrDefault(key, fallback string) string {

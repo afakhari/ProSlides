@@ -223,16 +223,25 @@ export const quizService = {
   })).then((slide) => slide.question.options.find((option) => String(option.option_id) === String(optionId))),
   deleteOption: (quizId, slideId, optionId) => mutateSlide(quizId, slideId, (slide) => ({ ...slide, question: { ...slide.question, options: (slide.question?.options || []).filter((option) => String(option.option_id) !== String(optionId)) } })),
 
-  getQuestionLeaderboard: async (quizId) => {
+  getQuestionResults: async (quizId, slideId, limit = 100) => {
     try {
       const locator = await request(`/presentations/${quizId}/latest-session`);
-      const page = await request(`/live/sessions/${locator.session_id}/roster?order=score&limit=100`);
-      return (page.items || []).map((item, index) => ({
+      return await request(`/presentations/${quizId}/sessions/${locator.session_id}/questions/${slideId}/results?limit=${limit}`);
+    } catch (error) {
+      if (error?.response?.status === 404) return null;
+      throw error;
+    }
+  },
+  getQuestionLeaderboard: async (quizId, slideId) => {
+    try {
+      const page = await quizService.getQuestionResults(quizId, slideId, 100);
+      return (page?.leaderboard || []).map((item) => ({
         rust_session_id: item.participant_id,
         player_name: item.display_name,
         avatar: item.avatar || "",
         score: Number(item.score || 0),
-        rank: index + 1,
+        rank: Number(item.rank || 0),
+        time_taken: item.time_taken_ms == null ? null : Number(item.time_taken_ms) / 1000,
       }));
     } catch (error) {
       if (error?.response?.status === 404) return [];

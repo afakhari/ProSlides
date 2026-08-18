@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"time"
@@ -17,7 +18,7 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore { return &PostgresStore
 
 func (s *PostgresStore) CreateUser(ctx context.Context, a Account) (User, error) {
 	var u User
-	err := s.pool.QueryRow(ctx, `INSERT INTO users (email, display_name, password_hash) VALUES ($1,$2,$3) RETURNING id::text,email,display_name,password_hash`, a.Email, a.DisplayName, a.PasswordHash).Scan(&u.ID, &u.Email, &u.DisplayName, &u.PasswordHash)
+	err := s.pool.QueryRow(ctx, `INSERT INTO users (email, display_name, password_hash, is_active) VALUES ($1,$2,$3,$4) RETURNING id::text,email,display_name,password_hash,is_active`, a.Email, a.DisplayName, a.PasswordHash, a.IsActive).Scan(&u.ID, &u.Email, &u.DisplayName, &u.PasswordHash, &u.IsActive)
 	if err != nil {
 		var e *pgconn.PgError
 		if errors.As(err, &e) && e.Code == "23505" {
@@ -29,7 +30,7 @@ func (s *PostgresStore) CreateUser(ctx context.Context, a Account) (User, error)
 }
 func (s *PostgresStore) FindUserByEmail(ctx context.Context, email string) (User, error) {
 	var u User
-	err := s.pool.QueryRow(ctx, `SELECT id::text,email,display_name,password_hash FROM users WHERE lower(email)=lower($1)`, email).Scan(&u.ID, &u.Email, &u.DisplayName, &u.PasswordHash)
+	err := s.pool.QueryRow(ctx, `SELECT id::text,email,display_name,password_hash,is_active FROM users WHERE lower(email)=lower($1)`, email).Scan(&u.ID, &u.Email, &u.DisplayName, &u.PasswordHash, &u.IsActive)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrInvalidCredentials
 	}
@@ -47,7 +48,7 @@ func (s *PostgresStore) CreateSession(ctx context.Context, userID string, secret
 }
 func (s *PostgresStore) FindSession(ctx context.Context, hash []byte) (StoredSession, error) {
 	var x StoredSession
-	err := s.pool.QueryRow(ctx, `SELECT u.id::text,u.email,u.display_name,u.password_hash,s.csrf_token_hash,s.expires_at FROM user_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()`, hash).Scan(&x.User.ID, &x.User.Email, &x.User.DisplayName, &x.User.PasswordHash, &x.CSRFTokenHash, &x.ExpiresAt)
+	err := s.pool.QueryRow(ctx, `SELECT u.id::text,u.email,u.display_name,u.password_hash,u.is_active,s.csrf_token_hash,s.expires_at FROM user_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.is_active`, hash).Scan(&x.User.ID, &x.User.Email, &x.User.DisplayName, &x.User.PasswordHash, &x.User.IsActive, &x.CSRFTokenHash, &x.ExpiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return StoredSession{}, ErrInvalidCredentials
 	}
@@ -100,6 +101,132 @@ func (s *PostgresStore) ConsumePasswordReset(ctx context.Context, userID string,
 		return false, err
 	}
 	return true, nil
+}
+
+func (s *PostgresStore) CreateEmailVerification(ctx context.Context, userID string, codeHash []byte, expiresAt time.Time) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO email_verifications(user_id,code_hash,attempts,expires_at,sent_at,verified_at)
+		VALUES($1,$2,0,$3,now(),NULL)
+		ON CONFLICT(user_id) DO UPDATE SET code_hash=excluded.code_hash,attempts=0,expires_at=excluded.expires_at,sent_at=now(),verified_at=NULL`, userID, codeHash, expiresAt)
+	return err
+}
+
+func (s *PostgresStore) VerifyEmail(ctx context.Context, email string, codeHash []byte, maxAttempts int) (VerifyEmailResult, error) {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return VerifyEmailInvalid, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	var userID string
+	var active bool
+	err = tx.QueryRow(ctx, `SELECT id::text,is_active FROM users WHERE lower(email)=lower($1) FOR UPDATE`, email).Scan(&userID, &active)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return VerifyEmailInvalid, nil
+	}
+	if err != nil {
+		return VerifyEmailInvalid, err
+	}
+	if active {
+		return VerifyEmailAlreadyDone, nil
+	}
+	var expected []byte
+	var attempts int
+	var expiresAt time.Time
+	err = tx.QueryRow(ctx, `SELECT code_hash,attempts,expires_at FROM email_verifications WHERE user_id=$1 AND verified_at IS NULL FOR UPDATE`, userID).Scan(&expected, &attempts, &expiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return VerifyEmailInvalid, nil
+	}
+	if err != nil {
+		return VerifyEmailInvalid, err
+	}
+	if attempts >= maxAttempts {
+		return VerifyEmailTooMany, nil
+	}
+	if !expiresAt.After(time.Now()) {
+		return VerifyEmailExpired, nil
+	}
+	if len(expected) != len(codeHash) || subtle.ConstantTimeCompare(expected, codeHash) != 1 {
+		if _, err = tx.Exec(ctx, `UPDATE email_verifications SET attempts=attempts+1 WHERE user_id=$1`, userID); err != nil {
+			return VerifyEmailInvalid, err
+		}
+		if err = tx.Commit(ctx); err != nil {
+			return VerifyEmailInvalid, err
+		}
+		return VerifyEmailInvalid, nil
+	}
+	if _, err = tx.Exec(ctx, `UPDATE users SET is_active=TRUE,updated_at=now() WHERE id=$1`, userID); err != nil {
+		return VerifyEmailInvalid, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE email_verifications SET code_hash=NULL,verified_at=now() WHERE user_id=$1`, userID); err != nil {
+		return VerifyEmailInvalid, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return VerifyEmailInvalid, err
+	}
+	return VerifyEmailAccepted, nil
+}
+
+func (s *PostgresStore) ReplaceEmailVerification(ctx context.Context, email string, codeHash []byte, expiresAt, notBefore time.Time) (VerificationIssue, error) {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return VerificationIssue{}, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	var issue VerificationIssue
+	err = tx.QueryRow(ctx, `SELECT id::text,email,display_name,password_hash,is_active FROM users WHERE lower(email)=lower($1) FOR UPDATE`, email).Scan(&issue.User.ID, &issue.User.Email, &issue.User.DisplayName, &issue.User.PasswordHash, &issue.User.IsActive)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return VerificationIssue{Unknown: true}, nil
+	}
+	if err != nil {
+		return VerificationIssue{}, err
+	}
+	if issue.User.IsActive {
+		return issue, nil
+	}
+	var sentAt time.Time
+	err = tx.QueryRow(ctx, `SELECT sent_at FROM email_verifications WHERE user_id=$1`, issue.User.ID).Scan(&sentAt)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return VerificationIssue{}, err
+	}
+	if err == nil && sentAt.After(notBefore) {
+		issue.RetryAfter = sentAt.Sub(notBefore)
+		return issue, nil
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO email_verifications(user_id,code_hash,attempts,expires_at,sent_at,verified_at)
+		VALUES($1,$2,0,$3,now(),NULL)
+		ON CONFLICT(user_id) DO UPDATE SET code_hash=excluded.code_hash,attempts=0,expires_at=excluded.expires_at,sent_at=now(),verified_at=NULL`, issue.User.ID, codeHash, expiresAt); err != nil {
+		return VerificationIssue{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return VerificationIssue{}, err
+	}
+	issue.Issued = true
+	return issue, nil
+}
+
+func (s *PostgresStore) UpsertGoogleUser(ctx context.Context, email, displayName string) (User, bool, error) {
+	user, err := s.FindUserByEmail(ctx, email)
+	if err == nil {
+		_, err = s.pool.Exec(ctx, `UPDATE users SET is_active=TRUE,display_name=CASE WHEN display_name='' THEN $2 ELSE display_name END,updated_at=now() WHERE id=$1`, user.ID, displayName)
+		if err != nil {
+			return User{}, false, err
+		}
+		user.IsActive = true
+		if user.DisplayName == "" {
+			user.DisplayName = displayName
+		}
+		return user, false, nil
+	}
+	if !errors.Is(err, ErrInvalidCredentials) {
+		return User{}, false, err
+	}
+	if displayName == "" {
+		displayName = email
+	}
+	user, err = s.CreateUser(ctx, Account{Email: email, DisplayName: displayName, PasswordHash: "!", IsActive: true})
+	if errors.Is(err, ErrEmailTaken) {
+		return s.UpsertGoogleUser(ctx, email, displayName)
+	}
+	return user, true, err
 }
 
 var _ = time.Time{}
