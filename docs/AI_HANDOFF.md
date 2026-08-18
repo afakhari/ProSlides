@@ -80,6 +80,9 @@ default of `168h`. The OpenAPI contract defines register, login, logout, and
 current-user behavior. No auth HTTP endpoint exists yet; the remaining scope
 below must be completed before calling this phase done.
 
+The identity core now validates/normalizes registration data and hashes
+passwords with bcrypt; repository and HTTP session handlers remain pending.
+
 ### Scope
 
 1. Add an OpenAPI design for account registration/sign-in/sign-out/current-user
