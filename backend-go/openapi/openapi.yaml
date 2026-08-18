@@ -1,0 +1,53 @@
+openapi: 3.0.3
+info:
+  title: ProSlides API
+  version: 0.1.0
+  description: Contract-first API for the Go modular monolith.
+servers:
+  - url: /api/v1
+paths:
+  /version:
+    get:
+      operationId: getVersion
+      responses:
+        '200':
+          description: API version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Version'
+  /live/sessions/{sessionId}/events:
+    get:
+      operationId: subscribeLiveSession
+      summary: Subscribe to server-sent live events.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: text/event-stream response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+components:
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Version:
+      type: object
+      required: [service, environment, api_version]
+      properties:
+        service: { type: string }
+        environment: { type: string }
+        api_version: { type: string }

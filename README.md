@@ -1,6 +1,20 @@
 # ProSlides
 a live interactive quiz
 
+## New Go Platform
+
+The capacity-oriented Go foundation lives in `backend-go/`. The legacy Django and
+Rust services remain in the repository only during the staged migration.
+
+Start the new local stack (Go API, PostgreSQL, Redis):
+
+```powershell
+docker compose --env-file backend-go/.env.example up --build
+```
+
+See `AGENTS.md` for the architecture decision and `backend-go/README.md` for the
+current Go-backend development status.
+
 ## Local Setup
 See `LOCAL_SETUP.md` for a step-by-step guide for running the backend locally.
 

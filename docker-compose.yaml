@@ -1,16 +1,53 @@
-version: '3.9'
 services:
-    redis:
-        container_name: "redis"
-        image: docker.arvancloud.ir/redis:7.4.3-alpine
-        hostname: redis
-        volumes:
-            - cache:/data
-        ports:
-            - '127.0.0.1:6379:6379'
-        command: "redis-server --save 10 1 --loglevel warning"
-        restart: always
+  api:
+    build:
+      context: ./backend-go
+    environment:
+      APP_ENV: development
+      HTTP_ADDR: :8080
+      LOG_LEVEL: INFO
+      DATABASE_URL: postgres://proslides:proslides@postgres:5432/proslides?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: proslides
+      POSTGRES_USER: proslides
+      POSTGRES_PASSWORD: proslides
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proslides -d proslides"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: redis-server --appendonly yes --save 60 1000 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
 
 volumes:
-    cache:
-        driver: local
+  postgres_data:
+  redis_data:
