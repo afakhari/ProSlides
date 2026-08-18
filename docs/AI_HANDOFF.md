@@ -72,6 +72,13 @@ them. `down -v` remains destructive and requires owner authorization.
 Create the first domain boundary: identity and authentication. It must be
 contract-first, durable in PostgreSQL, and independent from quiz/live modules.
 
+### Current progress
+
+`migrations/0002_identity_sessions.sql` creates opaque server-side sessions and
+a case-insensitive email uniqueness index. `SESSION_TTL` is configured with a
+default of `168h`. No auth HTTP endpoint exists yet; the remaining scope below
+must be completed before calling this phase done.
+
 ### Scope
 
 1. Add an OpenAPI design for account registration/sign-in/sign-out/current-user

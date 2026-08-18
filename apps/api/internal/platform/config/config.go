@@ -17,6 +17,7 @@ type Config struct {
 	DatabaseURL            string
 	RedisURL               string
 	DependencyCheckTimeout time.Duration
+	SessionTTL             time.Duration
 }
 
 func Load() (Config, error) {
@@ -26,6 +27,12 @@ func Load() (Config, error) {
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		RedisURL:    os.Getenv("REDIS_URL"),
 	}
+
+	sessionTTL, err := time.ParseDuration(valueOrDefault("SESSION_TTL", "168h"))
+	if err != nil || sessionTTL <= 0 {
+		return Config{}, fmt.Errorf("SESSION_TTL must be a positive duration")
+	}
+	cfg.SessionTTL = sessionTTL
 
 	dependencyCheckTimeout, err := time.ParseDuration(valueOrDefault("DEPENDENCY_CHECK_TIMEOUT", "2s"))
 	if err != nil || dependencyCheckTimeout <= 0 {

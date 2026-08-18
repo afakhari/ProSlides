@@ -25,4 +25,6 @@ func (c *Client) Name() string { return "postgres" }
 
 func (c *Client) Ping(ctx context.Context) error { return c.pool.Ping(ctx) }
 
+func (c *Client) Pool() *pgxpool.Pool { return c.pool }
+
 func (c *Client) Close() { c.pool.Close() }
