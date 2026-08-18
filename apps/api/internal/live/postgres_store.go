@@ -81,7 +81,7 @@ func (s *PostgresStore) Join(c context.Context, session, request, name, avatar s
 		}
 		return p, false, mapPG(e)
 	}
-	if e = insertEvent(c, tx, session, version, "participant.joined", map[string]any{"participant_id": p.ID, "display_name": p.DisplayName, "avatar": p.Avatar}); e != nil {
+	if e = insertEvent(c, tx, session, version, "presence.updated", map[string]any{"participant_delta": 1}); e != nil {
 		return p, false, e
 	}
 	if e = tx.Commit(c); e != nil {
@@ -270,6 +270,9 @@ func (s *PostgresStore) SubmitAnswer(c context.Context, session string, hash []b
 		}
 		return result, mapPG(e)
 	}
+	if _, e = tx.Exec(c, `UPDATE participants SET score=score+$2 WHERE id=$1`, participant, score); e != nil {
+		return result, e
+	}
 	if e = tx.Commit(c); e != nil {
 		return result, e
 	}
@@ -286,7 +289,10 @@ func (s *PostgresStore) Snapshot(c context.Context, session string) (Snapshot, e
 	}
 	x.Participants = []Participant{}
 	x.Scores = map[string]int{}
-	rows, e := s.pool.Query(c, `SELECT p.id::text,p.display_name,COALESCE(p.avatar,''),COALESCE(sum(a.score_delta),0)::int FROM participants p LEFT JOIN answers a ON a.participant_id=p.id WHERE p.session_id=$1 GROUP BY p.id ORDER BY p.joined_at`, session)
+	if e = s.pool.QueryRow(c, `SELECT (SELECT count(*)::int FROM participants WHERE session_id=$1),COALESCE((SELECT max(event_id) FROM live_events WHERE session_id=$1),0) FROM live_sessions WHERE id=$1`, session).Scan(&x.ParticipantCount, &x.LastEventID); e != nil {
+		return x, e
+	}
+	rows, e := s.pool.Query(c, `SELECT p.id::text,p.display_name,COALESCE(p.avatar,''),p.score FROM participants p WHERE p.session_id=$1 ORDER BY p.joined_at`, session)
 	if e != nil {
 		return x, e
 	}
@@ -320,6 +326,11 @@ func (s *PostgresStore) Events(c context.Context, session string, after int64, l
 		out = append(out, x)
 	}
 	return out, rows.Err()
+}
+func (s *PostgresStore) LatestEventID(c context.Context, session string) (int64, error) {
+	var id int64
+	e := s.pool.QueryRow(c, `SELECT COALESCE(max(event_id),0) FROM live_events WHERE session_id=$1`, session).Scan(&id)
+	return id, e
 }
 func (s *PostgresStore) AuthorizeViewer(c context.Context, session, manager string, hash []byte) error {
 	var ok bool
@@ -371,12 +382,10 @@ func answerStats(c context.Context, tx pgx.Tx, session, slide string) (map[strin
 }
 
 func leaderboardSnapshot(c context.Context, tx pgx.Tx, session string) ([]map[string]any, error) {
-	rows, e := tx.Query(c, `SELECT p.id::text,p.display_name,COALESCE(sum(a.score_delta),0)::int
+	rows, e := tx.Query(c, `SELECT p.id::text,p.display_name,p.score
 		FROM participants p
-		LEFT JOIN answers a ON a.participant_id=p.id
 		WHERE p.session_id=$1
-		GROUP BY p.id
-		ORDER BY COALESCE(sum(a.score_delta),0) DESC,p.joined_at,p.id`, session)
+		ORDER BY p.score DESC,p.joined_at,p.id`, session)
 	if e != nil {
 		return nil, e
 	}

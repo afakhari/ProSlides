@@ -7,8 +7,28 @@ both documents as part of the same change.
 ## Mission
 
 Build ProSlides as a Go modular monolith with PostgreSQL, Redis, HTTP commands,
-and SSE delivery. The present foundation is intentionally minimal: it is not a
-working quiz system yet. Do not represent placeholders as production behavior.
+and SSE delivery. Preserve the existing React product while replacing its
+legacy Django/Rust/WebSocket boundary. The backend now has a functional live
+quiz vertical slice, but production parity and the measured 10k capacity target
+are not complete. Never describe a design target as benchmark evidence.
+
+## Current objective and status at a glance
+
+- Branch purpose: isolated Go migration; `master` remains untouched legacy work.
+- Overall migration estimate: about 48%; this is a roadmap estimate, not a
+  code-coverage calculation.
+- Implemented: Go/Compose foundation, identity, owner-scoped presentations,
+  content/question creation, live state machine, join, idempotent answers,
+  replaceable scoring, aggregate scores, snapshots, durable events, and SSE.
+- High-load improvements in this stage: one event-ledger poller per active
+  session/API process, bounded subscriber buffers, slow-client disconnect and
+  replay, presence compaction, snapshot cursor, and indexed participant scores.
+- Not implemented: role-scoped/paginated snapshots, typed React HTTP/SSE client,
+  rate limiting, telemetry, Redis wake-up fan-out/presence TTL, media/reports,
+  k6 proof, production proxy/security hardening, cutover, or rollback exercise.
+- Capacity truth: architecture has a credible horizontal path, but 1k/5k/10k
+  has not been measured. Use `docs/capacity-plan.md` as the only proof protocol.
+- Exact next task: role-scoped live snapshots, defined later in this document.
 
 ## Branch and collaboration boundary
 
@@ -28,17 +48,25 @@ working quiz system yet. Do not represent placeholders as production behavior.
 | Go | 1.26.6 installed at `C:\Program Files\Go\bin\go.exe`; its PATH was not visible to the previous shell | invoke via absolute path or refresh PATH before `go` commands |
 | Docker CLI/Desktop | installed and daemon available | API image and real Compose health/readiness checks passed; use Docker Hub base images because `gcr.io` returned 403 in this environment |
 | GitHub Actions | configured in `.github/workflows/ci.yml` | must run Go and web verification on pushed changes |
+| C compiler | `gcc` is not installed | Go `-race` cannot run locally; CI runs the live-module race detector on Linux instead |
 
 Do not install a second Go version. Use the version declared by `apps/api/go.mod`.
 Do not run a broad `npm audit fix`; investigate updates as a dedicated,
 compatibility-tested change.
 
-Latest completed local verification (2026-08-18): Go formatting and all API
-tests passed; the API image rebuilt; and the real Compose matrix passed identity,
-content/question creation, live commands, idempotent join/answer, scoring,
-snapshot, aggregate event delivery, and `Last-Event-ID` SSE replay. Web lint,
-12 web unit tests, and the production build last passed before this backend-only
-slice and were not affected.
+Latest completed local verification (2026-08-18): Go formatting, all API tests,
+50 repeated `internal/live` concurrency-oriented test runs, and `go vet` passed;
+the API image rebuilt; migrations `0007` and `0008` applied to the preserved PostgreSQL
+volume; and the real Compose matrix passed identity, content/question creation,
+live commands, idempotent join/answer, aggregate scoring, snapshot count/cursor,
+16 concurrent joins without deadlock, aggregate event delivery, and
+`Last-Event-ID` SSE replay. Local `go test -race`
+was attempted but could not build because `gcc` is absent; the pushed CI runs
+that race check on Linux. Web lint, 12 web unit
+tests, and the production build also passed; the generated sitemap timestamp was
+restored because it was unrelated to this change. GitHub CI must confirm the
+pushed revision. Direct PostgreSQL reconciliation found zero mismatches between
+participant aggregate scores and answer deltas.
 
 ## Completed implementation: dependency adapters and readiness
 
@@ -85,12 +113,21 @@ then applies the configured maximum and optional server-timed range. Exact-match
 mode remains available when partial scoring is disabled, and another policy can
 replace this implementation without changing HTTP or storage code.
 
-Migrations `0004` through `0006` add durable sessions, participants, answers,
-idempotent command results, participant credential hashes, and versioned event
-replay. Answer transactions use shared session locks: concurrent answers do not
+Migrations `0004` through `0008` add durable sessions, participants, answers,
+idempotent command results, participant credential hashes, versioned event
+replay, atomic participant score projections, and hot-path indexes. Migration
+`0008` removes an attempted session-row presence counter so concurrent joins do
+not serialize on a hot counter; snapshots compute the exact indexed count and
+presence events carry compactable deltas. Answer transactions use shared session locks: concurrent answers do not
 serialize against one another, while closing a question cannot race past an
-in-flight accepted answer. PostgreSQL remains authoritative; Redis fan-out has
-not yet been added.
+in-flight accepted answer. PostgreSQL remains authoritative.
+
+`EventBroker` replaces per-connection database polling with one poller per
+active session per API process. Each SSE subscriber has a bounded buffer; a slow
+subscriber is disconnected and recovers from PostgreSQL using snapshot plus
+`Last-Event-ID`. Consecutive `presence.updated` events are compacted before
+fan-out. Snapshot returns `last_event_id`, so a normal client applies the
+authoritative state first and avoids replaying old presence bursts.
 
 ### Scope
 
@@ -101,17 +138,20 @@ not yet been added.
    answer per question; retries return the original score without double count.
 3. Answers are accepted only for the active question while server `ends_at` is
    still in the future.
-4. Snapshot is authoritative. SSE replays the PostgreSQL event ledger after
-   `Last-Event-ID`, emits heartbeats, and disables proxy buffering.
+4. Snapshot is authoritative and exposes `last_event_id`. SSE replays the
+   PostgreSQL ledger, switches to bounded shared fan-out, emits heartbeats, and
+   disables proxy buffering.
 5. `answer.stats` is aggregated at question close and `leaderboard.updated` at
    leaderboard display; no per-answer SSE event is published.
 
 ### Out of scope
 
-The React client still uses the legacy boundary and is not migrated in this
-slice. Redis fan-out/presence, rate limiting, reports, media, load tests, and
-production proxy tuning are also not implemented. No database reset or volume
-deletion was performed.
+The React client still uses the legacy boundary. Audience snapshots still
+contain the full roster/score maps and are therefore unsuitable at 10k; this is
+the highest-priority capacity gap. Redis wake-up fan-out/presence TTL, rate
+limiting, telemetry, reports, media, load tests, event retention, and production
+proxy tuning are also not implemented. No database reset or volume deletion was
+performed.
 
 ### Definition of done
 
@@ -122,11 +162,25 @@ deletion was performed.
 
 ### Current exact next task
 
-Build a typed React API/SSE client for the implemented live contract and replace
-the first legacy WebSocket-backed audience/manager flow. Recovery must fetch the
-snapshot and reconnect with `Last-Event-ID`; commands must decide success from
-their HTTP response rather than waiting for an SSE echo. Preserve the existing
-visual UI and do not add Redis fan-out until this single-node client flow passes.
+Implement role-scoped live snapshots before migrating the React client or
+running serious load tests.
+
+Contract and acceptance criteria:
+
+1. Edit OpenAPI first. Define a participant snapshot containing public session
+   state, active slide, aggregate counts, caller participant/score, and
+   `last_event_id`; it must not contain the complete roster or score map.
+2. Define a manager-only paginated roster/leaderboard query with bounded `limit`,
+   stable ordering, and cursor or deterministic offset semantics.
+3. Authorization must distinguish manager from participant without exposing a
+   participant credential in URLs or logs.
+4. Snapshot plus `Last-Event-ID` must remain race-safe and authoritative.
+5. Add unit/behavior tests and extend the real Compose matrix for both roles,
+   non-disclosure, pagination, and reconnect cursor behavior.
+6. Run the full verification matrix and update `AGENTS.md`, this file,
+   architecture/OpenAPI, then commit and push.
+
+Do not begin Redis Pub/Sub, k6 10k, or broad UI replacement in the same change.
 
 ## Commands and verification matrix
 
@@ -140,6 +194,7 @@ git status --short --branch
 Push-Location apps/api
 & 'C:\Program Files\Go\bin\go.exe' fmt ./...
 & 'C:\Program Files\Go\bin\go.exe' test ./...
+& 'C:\Program Files\Go\bin\go.exe' vet ./...
 Pop-Location
 
 # Web checks
@@ -164,6 +219,7 @@ endpoint classes:
 docker compose --env-file apps/api/.env.example up --build -d
 Invoke-RestMethod http://localhost:8080/healthz
 Invoke-RestMethod http://localhost:8080/readyz
+powershell -ExecutionPolicy Bypass -File .\scripts\test-auth-integration.ps1 -SkipComposeStartup
 docker compose --env-file apps/api/.env.example down
 ```
 
@@ -176,11 +232,17 @@ authorization because they destroy local data.
 2. Command payloads include `request_id`; manager mutations include
    `expected_state_version`.
 3. Every SSE event has a stable name and the standard metadata described in
-   `AGENTS.md`; clients discard stale state versions.
+   `AGENTS.md`; `event_id` orders delivery, while `state_version` prevents state
+   regressions. Equal state versions are valid for aggregate events.
 4. A reconnection uses `Last-Event-ID` and snapshot recovery; Redis Pub/Sub is
    not an event ledger.
 5. Return a documented status for validation, authentication, conflict,
    idempotency, rate-limit, and dependency errors.
+6. A snapshot is applied before opening SSE; pass snapshot `last_event_id` in
+   `Last-Event-ID`. Treat the snapshot as truth and discard stale event versions.
+7. Do not introduce one poll/query/goroutine with unbounded memory per event or
+   participant. Per-connection goroutines are acceptable for Go SSE only with
+   bounded buffers and measured resource use.
 
 ## Documentation update protocol
 

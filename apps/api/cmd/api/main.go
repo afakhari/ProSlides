@@ -60,9 +60,12 @@ func main() {
 		Addr: cfg.HTTPAddr,
 		Handler: platformhttp.NewRouterWithRoutes(cfg, []dependency.Dependency{postgresClient, redisClient}, func(m *http.ServeMux) {
 			identityService := identity.NewService(identity.NewPostgresStore(postgresClient.Pool()), cfg.SessionTTL)
+			liveStore := live.NewPostgresStore(postgresClient.Pool())
+			liveService := live.NewService(liveStore, live.DeductionPolicy{})
+			liveBroker := live.NewEventBroker(liveStore, 250*time.Millisecond, 256)
 			identity.NewHTTP(identityService, cfg.Environment == "production").Register(m)
 			presentations.NewHTTP(identityService, presentations.NewPostgresStore(postgresClient.Pool())).Register(m)
-			live.NewHTTP(live.NewService(live.NewPostgresStore(postgresClient.Pool()), live.DeductionPolicy{}), identityService, cfg.Environment == "production").Register(m)
+			live.NewHTTP(liveService, liveBroker, identityService, cfg.Environment == "production").Register(m)
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       75 * time.Second,

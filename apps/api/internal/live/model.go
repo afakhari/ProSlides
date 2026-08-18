@@ -45,10 +45,12 @@ type Event struct {
 	OccurredAt    time.Time       `json:"occurred_at"`
 }
 type Snapshot struct {
-	Session      Session         `json:"session"`
-	ActiveSlide  json.RawMessage `json:"active_slide,omitempty"`
-	Participants []Participant   `json:"participants"`
-	Scores       map[string]int  `json:"scores"`
+	Session          Session         `json:"session"`
+	ActiveSlide      json.RawMessage `json:"active_slide,omitempty"`
+	Participants     []Participant   `json:"participants"`
+	Scores           map[string]int  `json:"scores"`
+	ParticipantCount int             `json:"participant_count"`
+	LastEventID      int64           `json:"last_event_id"`
 }
 
 type Store interface {
@@ -58,5 +60,11 @@ type Store interface {
 	SubmitAnswer(context.Context, string, []byte, string, string, []int, ScoringPolicy) (AnswerResult, error)
 	Snapshot(context.Context, string) (Snapshot, error)
 	Events(context.Context, string, int64, int) ([]Event, error)
+	LatestEventID(context.Context, string) (int64, error)
 	AuthorizeViewer(context.Context, string, string, []byte) error
+}
+
+type EventStore interface {
+	Events(context.Context, string, int64, int) ([]Event, error)
+	LatestEventID(context.Context, string) (int64, error)
 }

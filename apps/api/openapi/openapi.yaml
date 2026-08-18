@@ -194,7 +194,7 @@ paths:
     get:
       operationId: subscribeLiveSession
       summary: Subscribe to server-sent live events.
-      description: Requires either the manager session cookie or participant cookie. Replays events after Last-Event-ID and sends heartbeats.
+      description: Requires either the manager session cookie or participant cookie. Replays events after Last-Event-ID and sends heartbeats. event_id orders delivery; state_version prevents state regressions, but aggregate events with a newer event_id may share the same state_version and must still be applied.
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - name: Last-Event-ID
@@ -206,7 +206,7 @@ paths:
         '200':
           description: >-
             Versioned text/event-stream. Each data field is a LiveEventEnvelope.
-            Event names are session.created, participant.joined,
+            Event names are session.created, presence.updated,
             session.state_changed, answer.stats, and leaderboard.updated.
             answer.stats is emitted once when a question closes and
             leaderboard.updated is emitted when the leaderboard is shown;
@@ -286,7 +286,8 @@ paths:
   /api/v1/live/sessions/{sessionId}/snapshot:
     get:
       operationId: getLiveSnapshot
-      summary: Get authoritative session state, participants, scores, and active slide.
+      summary: Get authoritative session state, participants, scores, active slide, and SSE recovery cursor.
+      description: Clients apply this snapshot first, then connect to events using last_event_id as Last-Event-ID so historical presence bursts are not replayed unnecessarily.
       parameters: [{ $ref: '#/components/parameters/SessionId' }]
       responses:
         '200': { description: Current snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/LiveSnapshot' } } } }
@@ -438,12 +439,14 @@ components:
         duplicate: { type: boolean }
     LiveSnapshot:
       type: object
-      required: [session, participants, scores]
+      required: [session, participants, scores, participant_count, last_event_id]
       properties:
         session: { $ref: '#/components/schemas/LiveSession' }
         active_slide: { type: object, additionalProperties: true }
         participants: { type: array, items: { $ref: '#/components/schemas/Participant' } }
         scores: { type: object, additionalProperties: { type: integer } }
+        participant_count: { type: integer, minimum: 0 }
+        last_event_id: { type: integer, format: int64, minimum: 0 }
     LiveEventEnvelope:
       type: object
       required: [event_id, schema_version, session_id, state_version, name, payload, occurred_at]
@@ -454,31 +457,33 @@ components:
         state_version: { type: integer, format: int64 }
         name:
           type: string
-          enum: [session.created, participant.joined, session.state_changed, answer.stats, leaderboard.updated]
+          enum: [session.created, presence.updated, session.state_changed, answer.stats, leaderboard.updated]
         payload:
           oneOf:
             - { $ref: '#/components/schemas/SessionEventPayload' }
-            - { $ref: '#/components/schemas/ParticipantJoinedPayload' }
+            - { $ref: '#/components/schemas/PresenceUpdatedPayload' }
             - { $ref: '#/components/schemas/AnswerStatsPayload' }
             - type: array
               items: { $ref: '#/components/schemas/LeaderboardEntry' }
         occurred_at: { type: string, format: date-time }
     SessionEventPayload:
       type: object
+      required: [state]
+      additionalProperties: false
       properties:
         state: { type: string, enum: [draft, lobby, content, question_open, question_closed, leaderboard, ended] }
         active_slide_id: { type: string, format: uuid, nullable: true }
         ends_at: { type: string, format: date-time, nullable: true }
-    ParticipantJoinedPayload:
+    PresenceUpdatedPayload:
       type: object
-      required: [participant_id, display_name, avatar]
+      required: [participant_delta]
+      additionalProperties: false
       properties:
-        participant_id: { type: string, format: uuid }
-        display_name: { type: string }
-        avatar: { type: string }
+        participant_delta: { type: integer, minimum: 1, description: Number of committed joins compacted into this event. Apply it to the authoritative participant_count from the latest snapshot. }
     AnswerStatsPayload:
       type: object
       required: [question_slide_id, response_count, option_counts]
+      additionalProperties: false
       properties:
         question_slide_id: { type: string, format: uuid }
         response_count: { type: integer, minimum: 0 }
@@ -488,6 +493,7 @@ components:
     LeaderboardEntry:
       type: object
       required: [participant_id, display_name, score]
+      additionalProperties: false
       properties:
         participant_id: { type: string, format: uuid }
         display_name: { type: string }

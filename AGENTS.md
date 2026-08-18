@@ -6,6 +6,17 @@ deleting code. It is the operational source of truth; if it conflicts with the
 repository, investigate the discrepancy, correct this document in the same
 change, and state the discrepancy in the final handoff.
 
+## Sixty-second orientation
+
+Read in this order: this file, `docs/AI_HANDOFF.md`, `docs/architecture.md`,
+`docs/capacity-plan.md`, the relevant ADR, then the OpenAPI and code in scope.
+
+The goal is to replace the historical Django/Rust/WebSocket backend with a
+maintainable Go modular monolith and HTTP/SSE protocol without losing product
+behavior. Correctness and durable recovery come before low-latency acceleration.
+The current branch contains a working backend live vertical slice, not a
+production-certified 10k system. The single next task is specified below.
+
 ## Product and non-negotiable decisions
 
 ProSlides is a capacity-oriented, interactive presentation platform in the
@@ -33,12 +44,12 @@ a shortcut.
 
 | Area | Actual state | Rule for next work |
 |---|---|---|
-| `apps/api` | Go API with Compose-verified identity/content plus durable live sessions, answers, swappable scoring policy, snapshots, and SSE replay | Add the typed React HTTP/SSE client against the published contract; keep WebSocket out of new work. |
+| `apps/api` | Go API with Compose-verified identity/content/live flows; durable idempotency/event replay; atomic participant scores; one bounded event poller per active session/process | Implement role-scoped snapshots before load or frontend migration. |
 | `apps/web` | React 19/Vite UI migration baseline; still JavaScript and still contains legacy WebSocket client code | Preserve visual work, but do not extend WebSocket. Replace its boundary with typed HTTP + SSE in Phase 2. |
-| PostgreSQL | PostgreSQL 16 in Compose, with an initial immutable SQL migration | Durable data belongs here. Add forward-only migrations only. |
-| Redis | Redis 7.4 in Compose | Use it only after the durable command/write path is correct. |
+| PostgreSQL | PostgreSQL 16; migrations `0001`-`0008`; authoritative users/content/sessions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
+| Redis | Redis 7.4 is wired for readiness but not live fan-out/rate limiting yet | It may accelerate ephemeral work, never replace the event/answer ledger. |
 | CI | GitHub Actions validates Go tests and web lint/unit tests | Keep CI passing and add checks with new tooling. |
-| Tests | Web lint/unit/build last passed; Go formatting/unit tests and the full real Compose identity/content/live/score/SSE matrix passed on 2026-08-18 | Run the relevant matrix before every handoff. |
+| Tests | Web lint/unit/build, Go tests/vet, and real Compose identity/content/live/score/SSE replay passed on 2026-08-18; 1k/5k/10k load tests do not exist yet | Never claim the 10k target is proven until `docs/capacity-plan.md` passes. |
 
 The working branch is `feat/go-platform-foundation`. It uses a separate Git
 worktree, so `master` remains available to teammates. Do not merge, force-push,
@@ -52,12 +63,13 @@ apps/
     cmd/api/                 composition root; process lifecycle only
     internal/platform/       config, HTTP, Postgres, Redis, observability
     internal/<module>/       module-specific application, domain, adapters
-    migrations/              ordered, forward-only PostgreSQL SQL migrations
+    internal/platform/migrate/sql/ ordered, embedded, forward-only SQL migrations
     openapi/                 REST and SSE contract source
   web/                       React client, progressive JS -> TypeScript migration
 docs/
   AI_HANDOFF.md              precise execution plan and handoff template
   architecture.md            architecture boundaries
+  capacity-plan.md           workload, SLOs, telemetry, and 1k/5k/10k gates
   decisions/                 Architecture Decision Records
 AGENTS.md                    this mandatory guide
 docker-compose.yaml          local API + PostgreSQL + Redis stack
@@ -91,8 +103,14 @@ must not create a second answer or score.
 
 Every event must be documented and versioned in `apps/api/openapi/` with at
 least `event_id`, `schema_version`, `session_id`, `state_version`,
-`occurred_at`, and `payload`. Use named events such as `slide.opened`,
-`answer.stats`, and `leaderboard.updated`; never opaque numeric messages.
+`occurred_at`, and `payload`. Current names are `session.created`,
+`presence.updated`, `session.state_changed`, `answer.stats`, and
+`leaderboard.updated`; never use opaque numeric messages.
+
+`event_id` orders delivery and replay. `state_version` orders state-machine
+changes, but several aggregate events may legitimately share the same state
+version. Clients reject a state regression; they must not discard a newer
+`event_id` merely because its state version equals the last applied version.
 
 The state machine is:
 
@@ -100,11 +118,27 @@ The state machine is:
 draft -> lobby -> content | question_open -> question_closed -> leaderboard -> ended
 ```
 
-Answers are accepted only during `question_open` and before the server-side
-`ends_at`. Invalid transitions return `409 Conflict`. Batch answer statistics
-and leaderboard publications (normally 250–500 ms); never broadcast one event
-per answer at capacity. SSE reconnect uses `Last-Event-ID`, then an authoritative
-snapshot if replay is incomplete.
+Answers are accepted only during `question_open` and before server `ends_at`.
+Invalid transitions return `409 Conflict`. Never broadcast one event per answer.
+The process-local broker polls once per active session (not per connection),
+uses bounded subscriber buffers, and compacts presence bursts. Clients first
+fetch the snapshot, then connect with its `last_event_id` as `Last-Event-ID`.
+Slow clients are disconnected and recover; server memory must remain bounded.
+
+## Capacity invariants and current gaps
+
+- 10,000 concurrent participants in one session is the target workload, not a
+  verified claim. The only valid proof is `docs/capacity-plan.md` on a recorded
+  production-like topology.
+- HTTP success means the durable mutation committed. SSE is delivery/recovery,
+  not command acknowledgement.
+- Answer writes remain concurrent; closure cannot pass an admitted answer.
+- Score reads use `participants.score`, not repeated full-history aggregation.
+- PostgreSQL polling grows with active sessions/API replicas, not SSE clients.
+- Redis failure must not lose answers, scores, command results, or replay events.
+- Known blockers before a serious 10k run: role-scoped/paginated snapshots,
+  metrics/tracing, rate limits, proxy/TLS tuning, event retention, database/pool
+  tuning, and k6 evidence.
 
 ## Required workflow for every change
 
@@ -138,6 +172,20 @@ tickets, CSRF protection for mutations, restricted CORS, disabled proxy
 buffering for SSE, appropriate timeouts/heartbeats, OpenTelemetry/metrics, and
 load tests. Long-lived JWTs in an SSE query string are prohibited.
 
+## Single exact next task
+
+Implement contract-first, role-scoped live snapshots. A participant response
+must contain only public session state, the caller's participant/score, aggregate
+counts, active slide, and `last_event_id`; it must not return the complete 10k
+roster/score map. A manager may request a paginated roster/leaderboard view with
+explicit limits and stable ordering. Update OpenAPI first, add a forward-only
+migration only if the projection needs schema support, add authorization and
+behavior tests, extend the Compose matrix, and update all status documents.
+
+Acceptance: no unbounded participant collection is returned to an audience
+client, reconnect remains snapshot + cursor correct, manager pagination is
+deterministic, and Go/Compose/web checks pass.
+
 ## Phases and the single next task
 
 - [x] Phase 0a: choose Go modular monolith + PostgreSQL + Redis + HTTP/SSE.
@@ -152,8 +200,9 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
   typed React API client.
 - [ ] Phase 2: live state machine, commands, snapshots, SSE, idempotency,
   presence, timers, score, and WebSocket-to-SSE UI migration.
-  The durable backend vertical slice through score and SSE replay is complete;
-  Redis fan-out/presence, UI migration, and capacity validation remain.
+  The durable backend vertical slice, aggregate score projection, bounded local
+  event fan-out, presence compaction, and replay cursor are complete;
+  role-scoped views, Redis acceleration, UI migration, and capacity proof remain.
 - [ ] Phase 3: integration/E2E tests plus k6 scenarios for 1k/5k/10k users,
   reconnects, host disconnects, and answer bursts; document SLOs.
 - [ ] Phase 4: feature-flagged cutover and exercised rollback only after
@@ -184,11 +233,14 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 | 2026-08-18 | Implemented question creation with single/multiple choice | Question validation requires two options and correct answers; single has exactly one correct option. |
 | 2026-08-18 | Verified question creation against Compose | Content and multiple-choice question slides were created and read back through the API. |
 | 2026-08-18 | Implemented the durable live-session backend vertical slice | Forward-only live schema, versioned state transitions, idempotent commands/join/answers, deduction-based partial scoring behind `ScoringPolicy`, snapshots, aggregate answer/leaderboard events, and `Last-Event-ID` SSE replay passed Go and Compose tests. |
+| 2026-08-18 | Removed two immediate high-load bottlenecks | Durable aggregate participant scores replace repeated answer-history sums; bounded per-session event brokers replace per-SSE-connection database polling; snapshots expose a recovery cursor and presence bursts are compacted. Capacity still requires the documented load gates. |
 
 ## References
 
 - `docs/AI_HANDOFF.md` — exact next task, commands, acceptance criteria, and
   final-response template.
 - `docs/architecture.md` — boundaries and scale design.
+- `docs/capacity-plan.md` — exact high-load workload, SLOs, metrics, and proof gates.
 - `docs/decisions/0001-go-modular-monolith.md` — architecture decision record.
+- `docs/decisions/0002-durable-events-and-bounded-sse-fanout.md` — replay/fan-out and backpressure decision.
 - `apps/api/openapi/openapi.yaml` — contract source of truth.

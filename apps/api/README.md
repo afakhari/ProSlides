@@ -46,6 +46,14 @@ aggregate answer/leaderboard events rather than one event per answer. Multiple
 choice scoring is behind `ScoringPolicy`; the current deduction policy supports
 partial credit and can be replaced later.
 
+Event delivery uses one bounded process-local broker per active session rather
+than polling PostgreSQL from every SSE connection. Slow subscribers are closed
+and recover from the durable ledger. Snapshots return `last_event_id`, presence
+bursts are compacted, and participant scores are maintained atomically for
+indexed snapshot/leaderboard reads. This removes known immediate bottlenecks but
+does not certify the 10k target; see `docs/capacity-plan.md` for the required
+workload and pass/fail gates.
+
 Run `powershell -ExecutionPolicy Bypass -File scripts/test-auth-integration.ps1`
 from the repository root to execute the identity, content, live, scoring,
 snapshot, and SSE replay matrix. Use `-SkipComposeStartup` only for an

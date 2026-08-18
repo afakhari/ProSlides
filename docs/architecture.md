@@ -1,32 +1,173 @@
-# Architecture
+# ProSlides target architecture
 
-## Current target
+## Status and intent
 
-ProSlides is a Go modular monolith with a React client. The design is optimized
-for high-participant live sessions without early operational complexity.
+This is the target and current architecture for the Go migration. It is designed
+to scale to a measured 10,000 concurrent participants in one live session, but
+that capacity is **not yet certified**. Certification requires the workload and
+gates in `docs/capacity-plan.md`; architecture alone is not proof.
 
-## Boundaries
+The governing design is a Go modular monolith with PostgreSQL as the durable
+system of record, Redis for optional ephemeral coordination, HTTP for commands,
+and SSE for server-to-client delivery. It deliberately avoids the operational
+cost of microservices and a message broker until measurements justify them.
 
-- `identity`: accounts, sessions, authorization.
-- `quizzes`: presentations, slides, questions, options.
-- `live`: session state machine, commands, scoring, presence, SSE delivery.
-- `reports`: immutable post-session projections and exports.
-- `media`: object-storage metadata and access policy.
-- `platform`: HTTP, database, Redis, telemetry, configuration.
+## System context
 
-Dependencies flow inward: transport handlers call application services; services
-call domain and repository interfaces; adapters live in `platform` or the owning
-module. No domain package may import HTTP or Redis packages.
+```text
+Browser (manager/player)
+  |-- HTTPS command/query --> Load balancer --> Go API instances
+  |-- HTTPS SSE stream -----> Load balancer --> Go API instances
+                                           |-- PostgreSQL (truth + event ledger)
+                                           `-- Redis (presence/fan-out/rate limits)
+Object storage/CDN <---------------- media module (future)
+Telemetry backend <---------------- structured logs/metrics/traces (future)
+```
 
-## Realtime
+No sticky session is required for correctness. Session cookies and participant
+credential hashes are validated against shared PostgreSQL. Each API instance
+can replay from the durable event ledger and then deliver new events locally.
 
-Clients issue idempotent HTTP commands. The server publishes named SSE events.
-Every event includes a session state version. A reconnect obtains a snapshot and
-only applies newer events. High-frequency answer statistics are aggregated before
-broadcasting.
+## Module boundaries
 
-## Data
+| Module | Owns | Must not own |
+|---|---|---|
+| `identity` | accounts, password hashes, opaque sessions, CSRF | live state or scores |
+| `presentations` | presentations, slides, question definitions | accepting answers |
+| `live` | live state machine, participants, answers, scoring, snapshots, events | account lifecycle |
+| `reports` (future) | immutable post-session projections and exports | live command handling |
+| `media` (future) | object metadata and access policy | binary storage in PostgreSQL |
+| `platform` | process lifecycle, config, HTTP, PostgreSQL, Redis, telemetry | product rules |
 
-PostgreSQL is the durable source of truth. Redis supports local fan-out across
-API instances, presence TTLs, rate limits, and cache. Redis loss must never create
-or destroy a durable answer or score.
+Dependencies point inward:
+
+```text
+HTTP adapter -> application service -> domain policy -> repository interface
+                                                    -> PostgreSQL/Redis adapter
+```
+
+Only `live` may transition a session, accept an answer, change a live score, or
+publish a live-domain event. Domain policy does not import HTTP or Redis.
+
+## Durable command path
+
+1. The client sends an HTTP mutation with a cryptographically random
+   `request_id`. Manager actions also send `expected_state_version`.
+2. Authentication/CSRF and domain validation run before mutation.
+3. One PostgreSQL transaction verifies state and deadline, writes the command
+   result/answer, updates the participant score, and writes any durable event.
+4. The HTTP response is definitive. The client never waits for an SSE echo to
+   decide whether its own command succeeded.
+5. A retry with the same `request_id` returns the original stored result and
+   cannot double-apply a score.
+
+Answer transactions take a shared lock on the live-session row. Answers from
+different participants therefore remain concurrent, while a manager transition
+that closes the question waits for all already-admitted answers to commit. The
+server-side `ends_at` deadline remains authoritative.
+
+## Scoring
+
+`ScoringPolicy` is a replaceable domain interface. The current
+`DeductionPolicy` supports exact match or partial multiple-choice scoring:
+
+```text
+fraction = max(0, correct_selected - incorrect_selected) / correct_option_count
+score    = fraction * time_adjusted_available_points
+```
+
+Each accepted answer stores its immutable `score_delta` and atomically adds it
+to `participants.score`. Snapshots and leaderboards read the indexed aggregate
+instead of summing the full answer history. A policy change must be versioned if
+historical sessions need reproducible recalculation.
+
+## SSE, replay, and fan-out
+
+PostgreSQL `live_events` is the replay ledger. Every event has a monotonic
+`event_id`, schema version, session/state version, name, payload, and timestamp.
+`event_id` orders delivery; `state_version` prevents state-machine regression.
+Multiple aggregate events can share one state version and still apply in event
+order.
+
+The current single/multi-instance-safe delivery path is:
+
+1. Client fetches an authoritative snapshot.
+2. Snapshot returns `last_event_id`.
+3. Client connects to SSE using that value as `Last-Event-ID`.
+4. API subscribes the connection to one process-local session broker.
+5. The broker polls PostgreSQL once per active session per API process, not once
+   per SSE connection, and fans events to local subscribers.
+6. A slow subscriber whose bounded buffer fills is disconnected. It recovers
+   through snapshot plus durable replay; the server never grows memory without
+   bound for a slow client.
+
+Presence bursts are compacted so only the newest consecutive
+`presence.updated` event in a fetched batch is fanned out, with its
+`participant_delta` equal to the number of committed joins in that compacted
+burst. The exact count always comes from the snapshot. Answers never produce
+one SSE event per participant; `answer.stats` is emitted after closure and
+`leaderboard.updated` when the leaderboard is shown.
+
+Redis Pub/Sub can later replace PostgreSQL polling as the low-latency wake-up
+path across instances, but only through an outbox relay from `live_events`.
+Redis loss must degrade latency/presence, never lose a durable event or answer.
+
+## Consistency and failure semantics
+
+| Failure | Required behavior |
+|---|---|
+| duplicate HTTP request | original result, no second mutation |
+| stale manager version | `409 Conflict`, snapshot then retry with a new request ID |
+| answer after deadline/closure | `409 Conflict`, never scored |
+| SSE disconnect | exponential reconnect, snapshot, resume from `last_event_id` |
+| slow SSE client | disconnect; bounded server memory; client recovers |
+| API process loss | committed PostgreSQL state survives; client reconnects elsewhere |
+| Redis loss | durable commands continue; ephemeral acceleration may degrade |
+| PostgreSQL unavailable | readiness fails and durable mutations fail closed |
+
+## PostgreSQL design rules
+
+- Migrations are ordered and forward-only. Never edit an applied migration.
+- Foreign keys and unique constraints enforce ownership and idempotency.
+- Hot reads use `participants(session_id, score ...)` and event-ledger indexes.
+- Large unbounded lists require pagination or role-scoped projections.
+- The event ledger needs a measured retention/archive policy before production.
+- Pool sizes, statement timeouts, autovacuum, and connection limits are tuned
+  from load-test evidence rather than copied from arbitrary defaults.
+
+## Security boundary
+
+- TLS terminates at the trusted ingress in production.
+- Manager mutations use opaque server sessions plus CSRF.
+- Participant credentials are high-entropy values stored only as SHA-256 hashes
+  and sent in scoped HttpOnly cookies, never SSE query strings.
+- Production cookies are Secure; CORS and origins must be explicitly restricted.
+- Logs must not contain passwords, cookies, credentials, or answers before a
+  question closes.
+- Rate limits are required for register/login/join/answer/reconnect before public
+  exposure. Redis may coordinate them, but fail-open/fail-closed behavior must
+  be defined per endpoint.
+
+## Observability and operations required before production
+
+At minimum expose RED/USE metrics for HTTP, SSE, PostgreSQL, broker subscribers,
+dropped slow subscribers, answer acceptance/conflicts, replay size, event lag,
+and active sessions. Structured logs need request/session IDs; traces must sample
+hot paths rather than recording every answer at full rate.
+
+Deployments require graceful draining: stop accepting new connections, allow
+in-flight HTTP transactions to finish, close SSE so clients reconnect, and keep
+the old version available until schema/event compatibility is confirmed.
+
+## Known capacity gaps (truth, not aspirations)
+
+1. Participant snapshots still include the complete participant/score maps.
+   They must become role-scoped and paginated before a 10k audience test.
+2. Distributed rate limiting, ephemeral presence TTLs, and Redis wake-up fan-out
+   are not implemented.
+3. Metrics/tracing and a production reverse-proxy configuration are absent.
+4. Event retention/compaction and PostgreSQL operational tuning are undefined.
+5. No k6 1k/5k/10k evidence exists yet; therefore 10k is a target, not a claim.
+
+The ordered capacity work and pass/fail thresholds are in
+`docs/capacity-plan.md`.

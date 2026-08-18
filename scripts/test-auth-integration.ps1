@@ -141,6 +141,29 @@ try {
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/join" -Client $participantClient -Body (@{ request_id = $joinRequest; display_name = "Live Player"; avatar = "P" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/join" -Client $participantClient -Body (@{ request_id = $joinRequest; display_name = "Live Player"; avatar = "P" } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
 
+  $burstJoinClients = @()
+  $burstJoinTasks = @()
+  for ($burstIndex = 0; $burstIndex -lt 16; $burstIndex++) {
+    $burstHandler = [System.Net.Http.HttpClientHandler]::new()
+    $burstHandler.UseProxy = $false
+    $burstClient = [System.Net.Http.HttpClient]::new($burstHandler)
+    $burstPayload = @{ request_id = [guid]::NewGuid().ToString(); display_name = "Burst Player $burstIndex"; avatar = "B" } | ConvertTo-Json -Compress
+    $burstContent = [System.Net.Http.StringContent]::new($burstPayload, [System.Text.Encoding]::UTF8, "application/json")
+    $burstJoinClients += @{ Client = $burstClient; Handler = $burstHandler; Content = $burstContent }
+    $burstJoinTasks += $burstClient.PostAsync("$apiBaseUrl/api/v1/live/sessions/$($liveSession.id)/join", $burstContent)
+  }
+  [System.Threading.Tasks.Task]::WaitAll([System.Threading.Tasks.Task[]]$burstJoinTasks)
+  foreach ($burstTask in $burstJoinTasks) {
+    $burstResponse = $burstTask.GetAwaiter().GetResult()
+    if ([int]$burstResponse.StatusCode -ne 201) { throw "Concurrent join burst returned $([int]$burstResponse.StatusCode)" }
+    $burstResponse.Dispose()
+  }
+  foreach ($burstResource in $burstJoinClients) {
+    $burstResource.Content.Dispose()
+    $burstResource.Client.Dispose()
+    $burstResource.Handler.Dispose()
+  }
+
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 2; action = "open_question"; slide_id = $questionID } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
   $answerRequest = [guid]::NewGuid().ToString()
   $answer = Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/answers" -Client $participantClient -Body (@{ request_id = $answerRequest; question_slide_id = $questionID; selected_option_indexes = @(0, 1) } | ConvertTo-Json -Compress) -ExpectedStatus 201
@@ -148,7 +171,9 @@ try {
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/answers" -Client $participantClient -Body (@{ request_id = $answerRequest; question_slide_id = $questionID; selected_option_indexes = @(0, 1) } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/answers" -Client $participantClient -Body (@{ request_id = [guid]::NewGuid().ToString(); question_slide_id = $questionID; selected_option_indexes = @(0) } | ConvertTo-Json -Compress) -ExpectedStatus 409 | Out-Null
   $snapshot = Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/snapshot" -Client $participantClient -ExpectedStatus 200
-  if ((($snapshot.Content | ConvertFrom-Json).scores.PSObject.Properties.Value | Measure-Object -Sum).Sum -ne 100) { throw "Snapshot score was not 100" }
+  $snapshotPayload = $snapshot.Content | ConvertFrom-Json
+  if (($snapshotPayload.scores.PSObject.Properties.Value | Measure-Object -Sum).Sum -ne 100) { throw "Snapshot score was not 100" }
+  if ($snapshotPayload.participant_count -ne 17 -or $snapshotPayload.last_event_id -lt 1) { throw "Snapshot did not include its participant count and SSE recovery cursor" }
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 3; action = "close_question" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 4; action = "show_leaderboard" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
 

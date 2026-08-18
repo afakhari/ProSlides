@@ -18,12 +18,13 @@ type ManagerAuth interface {
 }
 type HTTP struct {
 	service *Service
+	broker  *EventBroker
 	auth    ManagerAuth
 	secure  bool
 }
 
-func NewHTTP(service *Service, auth ManagerAuth, secure bool) *HTTP {
-	return &HTTP{service: service, auth: auth, secure: secure}
+func NewHTTP(service *Service, broker *EventBroker, auth ManagerAuth, secure bool) *HTTP {
+	return &HTTP{service: service, broker: broker, auth: auth, secure: secure}
 }
 func (h *HTTP) Register(m *http.ServeMux) {
 	m.HandleFunc("POST /api/v1/live/sessions", h.createSession)
@@ -144,14 +145,34 @@ func (h *HTTP) events(w http.ResponseWriter, r *http.Request) {
 		returnError(w, errors.New("stream unsupported"))
 		return
 	}
+	subscription, unsubscribe, e := h.broker.Subscribe(r.Context(), r.PathValue("sessionId"))
+	if e != nil {
+		returnError(w, e)
+		return
+	}
+	defer unsubscribe()
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache, no-store")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 	after, _ := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64)
-	ticker := time.NewTicker(500 * time.Millisecond)
+	for {
+		events, eventErr := h.service.Events(r.Context(), r.PathValue("sessionId"), after)
+		if eventErr != nil {
+			return
+		}
+		for _, event := range compactEvents(events) {
+			writeEvent(w, event)
+		}
+		if len(events) > 0 {
+			after = events[len(events)-1].EventID
+		}
+		if len(events) < eventPageSize {
+			break
+		}
+	}
+	f.Flush()
 	heartbeat := time.NewTicker(15 * time.Second)
-	defer ticker.Stop()
 	defer heartbeat.Stop()
 	for {
 		select {
@@ -160,21 +181,23 @@ func (h *HTTP) events(w http.ResponseWriter, r *http.Request) {
 		case <-heartbeat.C:
 			fmt.Fprint(w, ": heartbeat\n\n")
 			f.Flush()
-		case <-ticker.C:
-			events, e := h.service.Events(r.Context(), r.PathValue("sessionId"), after)
-			if e != nil {
+		case event, open := <-subscription:
+			if !open {
 				return
 			}
-			for _, event := range events {
-				data, _ := json.Marshal(event)
-				fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", event.EventID, event.Name, data)
-				after = event.EventID
+			if event.EventID <= after {
+				continue
 			}
-			if len(events) > 0 {
-				f.Flush()
-			}
+			writeEvent(w, event)
+			after = event.EventID
+			f.Flush()
 		}
 	}
+}
+
+func writeEvent(w http.ResponseWriter, event Event) {
+	data, _ := json.Marshal(event)
+	fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", event.EventID, event.Name, data)
 }
 func (h *HTTP) manager(r *http.Request, csrf bool) (identity.User, error) {
 	c, e := r.Cookie("proslides_session")
