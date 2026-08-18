@@ -33,7 +33,7 @@ func (h *HTTP) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a, e := h.service.Register(r.Context(), Registration{v.Email, v.DisplayName, v.Password})
-	h.auth(w, a, e)
+	h.auth(w, a, e, http.StatusCreated)
 }
 func (h *HTTP) login(w http.ResponseWriter, r *http.Request) {
 	var v credentials
@@ -42,9 +42,9 @@ func (h *HTTP) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a, e := h.service.Login(r.Context(), v.Email, v.Password)
-	h.auth(w, a, e)
+	h.auth(w, a, e, http.StatusOK)
 }
-func (h *HTTP) auth(w http.ResponseWriter, a Authenticated, e error) {
+func (h *HTTP) auth(w http.ResponseWriter, a Authenticated, e error, successStatus int) {
 	if e != nil {
 		if errors.Is(e, ErrInvalidRegistration) {
 			errJSON(w, 400, "invalid_request")
@@ -58,6 +58,7 @@ func (h *HTTP) auth(w http.ResponseWriter, a Authenticated, e error) {
 	exp := a.Secrets.ExpiresAt
 	http.SetCookie(w, &http.Cookie{Name: "proslides_session", Value: a.Secrets.Token, Path: "/", Expires: exp, HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode})
 	http.SetCookie(w, &http.Cookie{Name: "proslides_csrf", Value: a.Secrets.CSRFToken, Path: "/", Expires: exp, Secure: h.secure, SameSite: http.SameSiteLaxMode})
+	w.WriteHeader(successStatus)
 	json.NewEncoder(w).Encode(map[string]string{"id": a.User.ID, "email": a.User.Email, "display_name": a.User.DisplayName})
 }
 func (h *HTTP) me(w http.ResponseWriter, r *http.Request) {

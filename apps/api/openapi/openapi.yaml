@@ -114,6 +114,64 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/CurrentUser' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/presentations/{presentationId}:
+    get:
+      operationId: getPresentation
+      summary: Return one presentation and its ordered slides for its owner.
+      description: Requires the current authenticated session. Returns 404 when the presentation does not exist or is not owned by the current account, so identifiers are not disclosed.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+      responses:
+        '200':
+          description: The presentation with slides ordered by ascending position.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Presentation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/presentations:
+    post:
+      operationId: createPresentation
+      summary: Create an empty presentation owned by the current account.
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePresentationRequest' }
+      responses:
+        '201':
+          description: Presentation created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Presentation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+  /api/v1/presentations/{presentationId}/slides:
+    post:
+      operationId: createSlide
+      summary: Add a slide to an owned presentation.
+      description: Requires an authenticated owner and a CSRF token. Returns 404 for absent or non-owned presentations.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSlideRequest' }
+      responses:
+        '201':
+          description: Slide created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Slide' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/live/sessions/{sessionId}/events:
     get:
       operationId: subscribeLiveSession
@@ -146,6 +204,13 @@ components:
       schema:
         type: string
         format: uuid
+    PresentationId:
+      name: presentationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   schemas:
     RegisterRequest:
       type: object
@@ -167,6 +232,37 @@ components:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         display_name: { type: string }
+    Presentation:
+      type: object
+      required: [id, title, slides]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 500 }
+        slides:
+          type: array
+          items: { $ref: '#/components/schemas/Slide' }
+    CreatePresentationRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+    CreateSlideRequest:
+      type: object
+      required: [position, kind, content]
+      properties:
+        position: { type: integer, minimum: 0 }
+        kind: { type: string, minLength: 1, maxLength: 100 }
+        content: { type: object, additionalProperties: true }
+    Slide:
+      type: object
+      required: [id, position, kind, content]
+      properties:
+        id: { type: string, format: uuid }
+        position: { type: integer, minimum: 0 }
+        kind: { type: string, minLength: 1, maxLength: 100 }
+        content:
+          type: object
+          additionalProperties: true
     Error:
       type: object
       required: [error]
@@ -211,6 +307,11 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
     CSRFError:
       description: The CSRF header and cookie do not match a valid current session.
+      content:
+        application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: The requested resource does not exist or is not visible to the current account.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

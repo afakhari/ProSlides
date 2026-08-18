@@ -42,6 +42,13 @@ func (s *Service) Login(ctx context.Context, email, password string) (Authentica
 func (s *Service) Current(ctx context.Context, token string) (StoredSession, error) {
 	return s.store.FindSession(ctx, hashToken(token))
 }
+func (s *Service) Authorize(ctx context.Context, token, csrf string) (User, error) {
+	session, err := s.Current(ctx, token)
+	if err != nil || !VerifyCSRF(csrf, session.CSRFTokenHash) {
+		return User{}, ErrInvalidCredentials
+	}
+	return session.User, nil
+}
 func (s *Service) Logout(ctx context.Context, token, csrf string) error {
 	session, err := s.Current(ctx, token)
 	if err != nil {

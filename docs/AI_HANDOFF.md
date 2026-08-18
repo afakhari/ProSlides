@@ -76,22 +76,19 @@ contract-first, durable in PostgreSQL, and independent from quiz/live modules.
 
 `migrations/0002_identity_sessions.sql` creates opaque server-side sessions and
 a case-insensitive email uniqueness index. `SESSION_TTL` is configured with a
-default of `168h`. The OpenAPI contract defines register, login, logout, and
-current-user behavior. No auth HTTP endpoint exists yet; the remaining scope
-below must be completed before calling this phase done.
+default of `168h`. The OpenAPI contract and HTTP handlers define register,
+login, logout, and current-user behavior.
 
 The identity core validates/normalizes registration data, hashes passwords with
 bcrypt, and generates opaque session/CSRF values while retaining only their
 SHA-256 hashes for persistence. The PostgreSQL store and register/login/logout/
 me handlers are wired into the API composition root.
 
-Authentication is **not complete yet**. The Go test suite passes, migration
-startup is implemented, and Compose successfully builds/runs the service. The
-remaining mandatory proof is an end-to-end runtime suite covering successful
-register, login, authenticated `me`, CSRF-protected logout, revoked-session
-rejection, duplicate email, invalid credentials, and invalid/missing CSRF.
-Do not start content, quiz, or live-engine work until those tests pass and are
-recorded here.
+Authentication is implemented and verified. `scripts/test-auth-integration.ps1`
+successfully started Compose through normal startup and covered successful
+register/login/`me`, duplicate email, invalid credentials, missing and invalid
+CSRF, successful logout, and revoked-session rejection. Registration returns
+the contract-required `201 Created`.
 
 ### Scope
 
@@ -120,11 +117,31 @@ message queue, UI rewrite, database reset, or destructive Compose operation.
 
 ### Current exact next task
 
-Create an automated integration test script or Go integration test which starts
-the Compose stack, applies migrations through normal startup, and verifies the
-complete auth matrix above. Fix any runtime failure it exposes, rerun the full
-matrix, then update `AGENTS.md`, this document, OpenAPI, and API README with
-the verified behavior before marking Phase 1a complete.
+`GET /api/v1/presentations/{presentationId}` is implemented as the first
+`presentations` slice. It authenticates via the opaque session cookie, enforces
+ownership in the PostgreSQL query, returns slides by ascending position, and
+uses 404 for absent or unauthorized resources. Unit behavior tests cover missing
+sessions, owner-scoped success, and the non-disclosing 404 path.
+
+The Compose auth matrix now also inserts a presentation with ordered slides,
+verifies the owner read, and verifies a second authenticated user receives 404.
+`0003_presentations.sql` is an embedded, forward-only migration that creates
+the required durable schema on normal API startup.
+
+Define the OpenAPI contract for creating a presentation. Require the current
+authenticated user as owner and CSRF protection; do not implement it, add a web
+client, or begin live/SSE behavior until that contract is reviewed.
+
+`POST /api/v1/presentations` is now implemented and verified end to end. It
+requires the session and CSRF header, creates an empty owner-scoped presentation,
+and returns 201. Next, complete the slide-create vertical slice with the same
+contract-to-Compose workflow; do not begin live/SSE behavior.
+
+`POST /api/v1/presentations/{presentationId}/slides` is implemented and verified
+end to end. It accepts a non-negative position, a generic kind, and JSON content;
+it requires the owner session plus CSRF, and returns 404 for absent or non-owned
+presentations. The Compose flow creates a presentation, creates a slide, and
+reads it back. Next, define the first question-slide contract before implementation.
 
 ## Commands and verification matrix
 

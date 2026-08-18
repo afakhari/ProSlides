@@ -33,7 +33,7 @@ a shortcut.
 
 | Area | Actual state | Rule for next work |
 |---|---|---|
-| `apps/api` | Go 1.26.0 foundation: config, graceful HTTP server, PostgreSQL/Redis adapters, embedded migrations, health/readiness/version, and partially runtime-verified identity routes | Finish the auth runtime suite and integration tests before content work. |
+| `apps/api` | Go 1.26.0 foundation with Compose-verified presentation and slide creation | Define the first quiz-question contract before implementation. |
 | `apps/web` | React 19/Vite UI migration baseline; still JavaScript and still contains legacy WebSocket client code | Preserve visual work, but do not extend WebSocket. Replace its boundary with typed HTTP + SSE in Phase 2. |
 | PostgreSQL | PostgreSQL 16 in Compose, with an initial immutable SQL migration | Durable data belongs here. Add forward-only migrations only. |
 | Redis | Redis 7.4 in Compose | Use it only after the durable command/write path is correct. |
@@ -145,10 +145,9 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
   contract skeleton, CI, architecture documents, and remove legacy stack.
 - [x] Phase 0c: PostgreSQL and Redis adapters, safe dependency readiness,
   configuration validation, route tests, and API contract documentation.
-- [ ] **Phase 1a (in progress):** identity contract, schema, password/session
-  primitives, PostgreSQL adapter, and secure cookie handlers exist. Finish
-  real register/login/logout/me tests, route tests, and auth documentation
-  before beginning quiz/content endpoints.
+- [x] **Phase 1a:** identity contract, schema, password/session primitives,
+  PostgreSQL adapter, secure cookie handlers, and the real Compose auth matrix
+  are implemented and verified.
 - [ ] Phase 1: identity, content, quizzes, presentations, slides, media, and
   typed React API client.
 - [ ] Phase 2: live state machine, commands, snapshots, SSE, idempotency,
@@ -174,6 +173,12 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 | 2026-08-18 | Wired identity HTTP handlers into the Go API | Application routes are present; PostgreSQL-backed auth route integration tests remain required. |
 | 2026-08-18 | Added embedded forward-only migration runner | API applies tracked schema migrations before serving; auth runtime validation remains next. |
 | 2026-08-18 | Corrected overly strict email parser comparison | Go identity tests pass; repeat the full Compose auth flow before declaring auth complete. |
+| 2026-08-18 | Added Compose auth-matrix script and corrected registration success status to 201 | Go tests, Compose startup, and the full register/login/me/logout/CSRF matrix passed. |
+| 2026-08-18 | Defined owner-scoped presentation read contract | `GET /api/v1/presentations/{presentationId}` documents authentication, ordered slides, and non-disclosing 404 behavior. |
+| 2026-08-18 | Implemented owner-scoped presentation read slice | PostgreSQL adapter, authenticated handler, composition wiring, and behavior tests pass. |
+| 2026-08-18 | Verified presentation read against Compose | Embedded presentation schema migration, owner read, ordered slides, and non-owner 404 passed end to end. |
+| 2026-08-18 | Implemented and verified presentation creation | CSRF-protected owner creation and subsequent owner read passed through Compose. |
+| 2026-08-18 | Implemented and verified slide creation | Contract, CSRF-protected handler, owner-scoped PostgreSQL write, Go behavior tests, and Compose flow passed. |
 
 ## References
 

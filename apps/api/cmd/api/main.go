@@ -17,6 +17,7 @@ import (
 	"github.com/proslides/proslides/internal/platform/migrate"
 	"github.com/proslides/proslides/internal/platform/postgres"
 	"github.com/proslides/proslides/internal/platform/redis"
+	"github.com/proslides/proslides/internal/presentations"
 )
 
 func main() {
@@ -56,9 +57,11 @@ func main() {
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
-		Handler: platformhttp.NewRouterWithRoutes(cfg, []dependency.Dependency{postgresClient, redisClient},
-			identity.NewHTTP(identity.NewService(identity.NewPostgresStore(postgresClient.Pool()), cfg.SessionTTL), cfg.Environment == "production").Register,
-		),
+		Handler: platformhttp.NewRouterWithRoutes(cfg, []dependency.Dependency{postgresClient, redisClient}, func(m *http.ServeMux) {
+			identityService := identity.NewService(identity.NewPostgresStore(postgresClient.Pool()), cfg.SessionTTL)
+			identity.NewHTTP(identityService, cfg.Environment == "production").Register(m)
+			presentations.NewHTTP(identityService, presentations.NewPostgresStore(postgresClient.Pool())).Register(m)
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       75 * time.Second,
 	}

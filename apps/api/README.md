@@ -38,6 +38,9 @@ API contract changes begin in `openapi/openapi.yaml`. See the repository root
 ## Authentication status
 
 The API contains contract-defined register, login, logout, and current-user
-routes using opaque server-side sessions and CSRF cookies. Treat this feature as
-in progress until the Compose-backed end-to-end auth matrix documented in
-`docs/AI_HANDOFF.md` has passed.
+routes using opaque server-side sessions and CSRF cookies. The Compose-backed
+end-to-end auth matrix has passed.
+
+Run `powershell -ExecutionPolicy Bypass -File scripts/test-auth-integration.ps1`
+from the repository root to execute the matrix. Use `-SkipComposeStartup` only
+for an already-running local stack and `-StopAfter` only when it is safe to stop it.
