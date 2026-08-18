@@ -147,6 +147,9 @@ reads it back. Next, define the first question-slide contract before implementat
 single- or multiple-choice question slides. Next, define answer submission and
 scoring contracts before live/SSE work.
 
+The Compose matrix has verified creation and read-back of both content and
+multiple-choice question slides. This question slice is complete.
+
 ## Commands and verification matrix
 
 Run from repository root unless indicated otherwise.

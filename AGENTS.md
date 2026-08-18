@@ -180,6 +180,7 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 | 2026-08-18 | Implemented and verified presentation creation | CSRF-protected owner creation and subsequent owner read passed through Compose. |
 | 2026-08-18 | Implemented and verified slide creation | Contract, CSRF-protected handler, owner-scoped PostgreSQL write, Go behavior tests, and Compose flow passed. |
 | 2026-08-18 | Implemented question creation with single/multiple choice | Question validation requires two options and correct answers; single has exactly one correct option. |
+| 2026-08-18 | Verified question creation against Compose | Content and multiple-choice question slides were created and read back through the API. |
 
 ## References
 

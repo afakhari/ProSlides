@@ -119,7 +119,7 @@ try {
   Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 0; kind = "content"; content = @{ text = "Created through API" } } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
   Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/questions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 1; text = "Choose"; question_type = "multiple"; options = @(@{ text = "A"; is_correct = $true }, @{ text = "B"; is_correct = $true }) } | ConvertTo-Json -Compress -Depth 4) -ExpectedStatus 201 | Out-Null
   $createdRead = Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200
-  if (($createdRead.Content | ConvertFrom-Json).slides.Count -ne 1) { throw "Created presentation did not contain its slide" }
+  if (($createdRead.Content | ConvertFrom-Json).slides.Count -ne 2) { throw "Created presentation did not contain both slides" }
 
   $presentationSQL = "INSERT INTO presentations (owner_id, title) VALUES ('$($registeredUser.id)', 'Integration presentation') RETURNING id::text;"
   $presentationID = (& docker @composeArgs exec -T postgres psql -U proslides -d proslides -q -t -A -v ON_ERROR_STOP=1 -c $presentationSQL).Trim()
