@@ -57,14 +57,18 @@ not complete. Never describe a design target as benchmark evidence.
 | Go | 1.26.6 installed at `C:\Program Files\Go\bin\go.exe`; its PATH was not visible to the previous shell | invoke via absolute path or refresh PATH before `go` commands |
 | Docker CLI/Desktop | installed and daemon available | API image and real Compose health/readiness checks passed; use Docker Hub base images because `gcr.io` returned 403 in this environment |
 | Chrome | 151 at `C:\Program Files\Google\Chrome\Application\chrome.exe` | Playwright launches this system browser through `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`; the Playwright CDN returned a location-based 403 |
-| GitHub Actions | configured in `.github/workflows/ci.yml` | must run Go and web verification on pushed changes |
+| Python | 3.13.15 installed user-scoped | runs official Codex skill helper scripts; the incomplete `C:\Python314` installation cannot import `encodings` |
+| Codex skills | official `security-best-practices`, `playwright`, `gh-fix-ci`, and `yeet` installed personally | available from the next Codex turn; they are developer tooling, not repository/runtime dependencies |
+| GitHub CLI / Actions | `gh` 2.97.0; Actions configured in `.github/workflows/ci.yml` | `gh auth status` currently reports an invalid default token and must be repaired before `gh-fix-ci` or `yeet`; normal Git credential-manager pushes still work |
 | C compiler | `gcc` is not installed | Go `-race` cannot run locally; CI runs the live-module race detector on Linux instead |
 
 Do not install a second Go version. Use the version declared by `apps/api/go.mod`.
 Do not run a broad `npm audit fix`; investigate updates as a dedicated,
 compatibility-tested change.
 
-Latest completed revision (`8ae78d9`, 2026-08-19): Go tests/vet, SMTP and Google
+Latest pushed revision (`d118d4b`, 2026-08-19) adds the system-Chrome browser
+smoke coverage and local runtime fixes. The earlier parity revision (`8ae78d9`)
+passed Go tests/vet, SMTP and Google
 adapter tests, OpenAPI parsing, web lint/typecheck/unit/build passed; the API
 image rebuilt; and the real Compose matrix passed identity,
 owner presentation list/create/update/delete/duplicate, settings, atomic slide insert/replace/reorder,
@@ -76,11 +80,25 @@ of question correctness metadata from participant snapshots. Web lint,
 TypeScript checking, 23 web unit tests, and the production
 build also passed; the generated sitemap timestamp was restored because it was
 unrelated to this change. Browser automation could not run because no in-app or
-extension browser was connected. The current local change adds three system-Chrome
+extension browser was connected. Revision `d118d4b` adds three system-Chrome
 Playwright smoke flows and verifies registration/login/logout, presentation and
 slide creation, report/history navigation, responsive auth, and invalid join
 codes. `npm ci` still reports the already-known 20 vulnerabilities. Both GitHub
-Actions workflows passed for the pushed revision.
+Actions workflows passed for `8ae78d9`; CI status for `d118d4b` was not queried
+because the local `gh` authentication is invalid.
+
+## Installed Codex workflow prerequisites
+
+- `security-best-practices` is explicit-request-only and must load the matching
+  Go and React/JavaScript guidance before a security report or fix.
+- `playwright` is CLI-first for interactive browser automation, requires `npx`,
+  and writes disposable artifacts to ignored `output/playwright/`. The checked-in
+  `@playwright/test` suite remains the regression-test path when tests are requested.
+- `gh-fix-ci` inspects GitHub Actions failures and requires an approved plan
+  before code changes. It requires authenticated `gh` repository/workflow access.
+- `yeet` is reserved for explicit stage+commit+push+PR requests, reuses an
+  existing PR, and preserves that PR's draft/review state. It also requires
+  authenticated `gh` access.
 
 ## Completed implementation: dependency adapters and readiness
 

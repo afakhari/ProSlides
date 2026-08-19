@@ -30,6 +30,7 @@ coverage/
 .eslintcache
 
 # Playwright output and local browser state
+output/playwright/
 test-results/
 playwright-report/
 blob-report/

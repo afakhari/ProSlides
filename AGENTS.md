@@ -78,6 +78,24 @@ AGENTS.md                    this mandatory guide
 docker-compose.yaml          local API + PostgreSQL + Redis stack
 ```
 
+## Installed Codex workflow skills
+
+The following official personal skills are installed under
+`C:\Users\AVAJANG\.codex\skills`. They are developer tooling, not application
+dependencies, and become discoverable from the next Codex turn.
+
+| Skill | Trigger and rule |
+|---|---|
+| `security-best-practices` | Use only for an explicit Go or JavaScript/TypeScript security review, report, or secure-by-default request. Load the matching frontend and backend references before findings or fixes. |
+| `playwright` | Use for terminal-driven real-browser interaction. It is CLI-first, requires `npx`, snapshots before element references, and stores artifacts under ignored `output/playwright/`. Keep the repository's `@playwright/test` suite for explicit automated-test requests. |
+| `gh-fix-ci` | Use only for failing GitHub Actions PR checks. Inspect checks/logs first, summarize and propose a plan, then implement only after explicit approval. External CI providers remain out of scope. |
+| `yeet` | Use only when the owner explicitly requests the complete stage, commit, push, and PR flow. Preserve existing PR draft/review state and update an existing branch PR instead of creating a duplicate. |
+
+`gh-fix-ci` and `yeet` require `gh auth status` to succeed with repository and
+workflow access before use; ordinary Git credential-manager push success does
+not satisfy that prerequisite. The Playwright wrapper requires Node/npm `npx`.
+Python 3.13.15 is installed user-scoped for the skills' helper scripts.
+
 Dependency flow inside the API is strictly:
 
 ```text
@@ -241,6 +259,7 @@ smoke gate passes.
 | 2026-08-19 | Migrated dashboard, editor, reports, and password-reset domain to the Go API | Owner CRUD/settings/slides/reorder/duplicate/results, cookie+CSRF route guards, bounded report/preview pages, one-time hashed reset tokens, and expanded authorization/non-disclosure Compose tests passed. The original auth UI was retained; provider delivery followed in the next parity commit. |
 | 2026-08-19 | Completed remaining Django product parity in Go | Added keyed email OTP, SMTP verification/reset delivery, secure Google token verification, Redis identity limits, atomic slide insertion/movement, owner-only per-question results from durable Go answers, frontend adapters, OpenAPI/migration/tests/docs; Go/web/Compose and both GitHub CI runs passed. |
 | 2026-08-19 | Added the first real-browser E2E smoke and fixed issues it exposed | System Chrome now verifies responsive auth, registration/login/logout, presentation and slide creation, report/history navigation, and invalid join codes. Local analytics is disabled, report fetches abort cleanly, expected invalid codes do not log errors, and Add Slide is keyboard-accessible. |
+| 2026-08-19 | Installed official Codex security, browser, CI-fix, and publish skills | `security-best-practices`, `playwright`, `gh-fix-ci`, and `yeet` are available from the next turn; documented their narrow triggers, artifact path, approval boundary, and `npx`/Python/`gh auth` prerequisites. |
 
 ## References
 
