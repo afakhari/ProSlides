@@ -55,10 +55,10 @@ export const joinLiveSession = (id: string, input: { request_id: string; display
 export const submitLiveAnswer = (id: string, input: { request_id: string; question_slide_id: string; selected_option_indexes: number[] }) => requestJSON<AnswerResult>(`live/sessions/${encodeURIComponent(id)}/answers`, { method: "POST", body: JSON.stringify(input) });
 export const applyLiveAction = (id: string, input: { request_id: string; expected_state_version: number; action: string; slide_id?: string; duration_seconds?: number }) => requestJSON<LiveSessionResult>(`live/sessions/${encodeURIComponent(id)}/actions`, { method: "POST", body: JSON.stringify(input) }, true);
 
-export const getRosterPage = (id: string, order: "joined" | "score", cursor = "", limit = 100) => {
+export const getRosterPage = (id: string, order: "joined" | "score", cursor = "", limit = 100, signal?: AbortSignal) => {
   const query = new URLSearchParams({ order, limit: String(limit) });
   if (cursor) query.set("cursor", cursor);
-  return requestJSON<RosterPage>(`live/sessions/${encodeURIComponent(id)}/roster?${query}`);
+  return requestJSON<RosterPage>(`live/sessions/${encodeURIComponent(id)}/roster?${query}`, { signal });
 };
 
 export const streamLiveEvents = async (id: string, lastEventId: number, options: { signal: AbortSignal; onEvent: (event: LiveEvent) => void }) => {

@@ -25,28 +25,29 @@ export default function SessionDetail() {
   const [nextCursor, setNextCursor] = useState("");
   const [hasMore, setHasMore] = useState(false);
 
-  const fetchQuizTitle = useCallback(async () => {
+  const fetchQuizTitle = useCallback(async (signal) => {
     if (!quizId) return;
     try {
-      const data = await quizService.getQuiz(quizId);
+      const data = await quizService.getQuiz(quizId, { signal });
       if (data?.title) {
         setQuizTitle(data.title);
       }
     } catch (err) {
+      if (signal?.aborted || err?.name === "AbortError") return;
       console.warn("Error fetching quiz title:", err);
     }
   }, [quizId]);
 
   const fetchLeaderboard = useCallback(
-    async (isManualRefresh = false) => {
+    async (isManualRefresh = false, signal) => {
       try {
         if (isManualRefresh) {
           setIsRefreshing(true);
         } else {
           setLoading(true);
         }
-        const locator = await quizService.getLatestSession(quizId);
-        const page = await getRosterPage(locator.session_id, "score", "", 100);
+        const locator = await quizService.getLatestSession(quizId, { signal });
+        const page = await getRosterPage(locator.session_id, "score", "", 100, signal);
         setSessionId(locator.session_id);
         setLeaderboardData(page.items.map((item, index) => ({
           player_id: item.participant_id,
@@ -57,11 +58,11 @@ export default function SessionDetail() {
         })));
         setNextCursor(page.next_cursor || "");
         setHasMore(page.has_more);
-        fetchQuizTitle();
         setError(null);
 
         setLastUpdated(new Date());
       } catch (err) {
+        if (signal?.aborted || err?.name === "AbortError") return;
         if (err?.response?.status === 404 || err?.status === 404) {
           setLeaderboardData([]);
           setHasMore(false);
@@ -71,24 +72,30 @@ export default function SessionDetail() {
           setError(err.message);
         }
       } finally {
-        if (isManualRefresh) {
-          setIsRefreshing(false);
-        } else {
-          setLoading(false);
+        if (!signal?.aborted) {
+          if (isManualRefresh) {
+            setIsRefreshing(false);
+          } else {
+            setLoading(false);
+          }
         }
       }
     },
-    [fetchQuizTitle, quizId]
+    [quizId]
   );
 
   useEffect(() => {
     if (!quizId) return;
-    fetchQuizTitle();
-    fetchLeaderboard();
+    const controller = new AbortController();
+    fetchQuizTitle(controller.signal);
+    fetchLeaderboard(false, controller.signal);
     const intervalId = setInterval(() => {
-      fetchLeaderboard();
+      fetchLeaderboard(false, controller.signal);
     }, 15 * 60 * 1000);
-    return () => clearInterval(intervalId);
+    return () => {
+      controller.abort();
+      clearInterval(intervalId);
+    };
   }, [fetchLeaderboard, fetchQuizTitle, quizId]);
 
   const loadMore = async () => {

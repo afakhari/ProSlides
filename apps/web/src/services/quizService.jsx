@@ -155,9 +155,9 @@ export const quizService = {
   deletePresentation: (id) => request(`/presentations/${id}`, { method: "DELETE" }),
   duplicatePresentation: (id, title) => request(`/presentations/${id}/duplicate`, { method: "POST", json: { title } }),
   resetPresentationResults: (id) => request(`/presentations/${id}/results`, { method: "DELETE" }),
-  getLatestSession: (id) => request(`/presentations/${id}/latest-session`),
+  getLatestSession: (id, options) => request(`/presentations/${id}/latest-session`, options),
 
-  getQuiz: async (quizId) => presentationToEditor(await request(`/presentations/${quizId}`)),
+  getQuiz: async (quizId, options) => presentationToEditor(await request(`/presentations/${quizId}`, options)),
   getEditorQuiz: async (quizId) => presentationToEditor(await request(`/presentations/${quizId}`)),
   updateQuiz: async (quizId, data) => {
     const current = await request(`/presentations/${quizId}`);

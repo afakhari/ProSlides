@@ -492,7 +492,8 @@ export default function SlidesPanel({
         </Droppable>
       </DragDropContext>
 
-      <div
+      <button
+        type="button"
         onClick={handleAddSlide}
         disabled={isReordering}
         className={`mt-4 border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:bg-green-100 
@@ -500,7 +501,7 @@ export default function SlidesPanel({
           ${isReordering ? 'opacity-50 cursor-not-allowed' : 'border-gray-300 text-gray-500 hover:border-green-300'}`}
       >
         + Add Slide
-      </div>
+      </button>
 
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}

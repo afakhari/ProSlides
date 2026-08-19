@@ -50,7 +50,7 @@ a shortcut.
 | PostgreSQL | PostgreSQL 16; migrations `0001`-`0012`; authoritative users/content/settings/OTP and reset hashes/sessions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
 | Redis | Redis 7.4 provides readiness and fixed-window identity rate limits; live fan-out/presence acceleration is not implemented | It may accelerate ephemeral work, never replace the event/answer ledger. |
 | CI | GitHub Actions validates Go tests/race and web lint/typecheck/unit/build | Keep CI passing and add checks with new tooling. |
-| Tests | Web lint/typecheck/23 unit tests/build, Go tests/vet, SMTP/JWKS adapter tests, real Compose identity/presentation/editor/live/result/non-disclosure/SSE matrix, and both GitHub CI runs passed on 2026-08-19; browser visual automation was unavailable and 1k/5k/10k tests do not exist | Never claim visual-browser or 10k proof without evidence. |
+| Tests | Web lint/typecheck/23 unit tests/build, 3 Playwright system-Chrome E2E flows, Go tests/vet, SMTP/JWKS adapter tests, real Compose identity/presentation/editor/live/result/non-disclosure/SSE matrix, and both GitHub CI runs passed on 2026-08-19; 1k/5k/10k tests do not exist | Treat the local browser smoke as functional evidence only; never claim broad visual-browser or 10k proof without evidence. |
 
 The working branch is `feat/go-platform-foundation`. It uses a separate Git
 worktree, so `master` remains available to teammates. Do not merge, force-push,
@@ -240,6 +240,7 @@ smoke gate passes.
 | 2026-08-19 | Replaced the React live WebSocket runtime with typed HTTP + SSE | Snapshot-first recovery, event/version ordering, Go join-code resolution, participant non-disclosure (including correctness metadata), incremental manager paging, exhaustive UI/state navigation tests, web tests/build, Go tests/vet, and the real Compose matrix passed. |
 | 2026-08-19 | Migrated dashboard, editor, reports, and password-reset domain to the Go API | Owner CRUD/settings/slides/reorder/duplicate/results, cookie+CSRF route guards, bounded report/preview pages, one-time hashed reset tokens, and expanded authorization/non-disclosure Compose tests passed. The original auth UI was retained; provider delivery followed in the next parity commit. |
 | 2026-08-19 | Completed remaining Django product parity in Go | Added keyed email OTP, SMTP verification/reset delivery, secure Google token verification, Redis identity limits, atomic slide insertion/movement, owner-only per-question results from durable Go answers, frontend adapters, OpenAPI/migration/tests/docs; Go/web/Compose and both GitHub CI runs passed. |
+| 2026-08-19 | Added the first real-browser E2E smoke and fixed issues it exposed | System Chrome now verifies responsive auth, registration/login/logout, presentation and slide creation, report/history navigation, and invalid join codes. Local analytics is disabled, report fetches abort cleanly, expected invalid codes do not log errors, and Add Slide is keyboard-accessible. |
 
 ## References
 

@@ -56,6 +56,7 @@ not complete. Never describe a design target as benchmark evidence.
 | npm | v11.6.2 | web dependencies/scripts; current `npm ci` reports 20 vulnerabilities (2 low, 4 moderate, 14 high) requiring a separately reviewed update |
 | Go | 1.26.6 installed at `C:\Program Files\Go\bin\go.exe`; its PATH was not visible to the previous shell | invoke via absolute path or refresh PATH before `go` commands |
 | Docker CLI/Desktop | installed and daemon available | API image and real Compose health/readiness checks passed; use Docker Hub base images because `gcr.io` returned 403 in this environment |
+| Chrome | 151 at `C:\Program Files\Google\Chrome\Application\chrome.exe` | Playwright launches this system browser through `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`; the Playwright CDN returned a location-based 403 |
 | GitHub Actions | configured in `.github/workflows/ci.yml` | must run Go and web verification on pushed changes |
 | C compiler | `gcc` is not installed | Go `-race` cannot run locally; CI runs the live-module race detector on Linux instead |
 
@@ -75,8 +76,11 @@ of question correctness metadata from participant snapshots. Web lint,
 TypeScript checking, 23 web unit tests, and the production
 build also passed; the generated sitemap timestamp was restored because it was
 unrelated to this change. Browser automation could not run because no in-app or
-extension browser was connected. `npm ci` still reports the already-known 20
-vulnerabilities. Both GitHub Actions workflows passed for the pushed revision.
+extension browser was connected. The current local change adds three system-Chrome
+Playwright smoke flows and verifies registration/login/logout, presentation and
+slide creation, report/history navigation, responsive auth, and invalid join
+codes. `npm ci` still reports the already-known 20 vulnerabilities. Both GitHub
+Actions workflows passed for the pushed revision.
 
 ## Completed implementation: dependency adapters and readiness
 
@@ -221,8 +225,11 @@ Pop-Location
 Push-Location apps/web
 npm ci
 npm run lint
+npm run typecheck
 npm run test:unit
 npm run build
+$env:PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='C:\Program Files\Google\Chrome\Application\chrome.exe'
+npm run test:e2e
 Pop-Location
 
 # Compose syntax; does not require daemon

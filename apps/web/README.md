@@ -18,7 +18,14 @@ npm run lint
 npm run typecheck
 npm run test:unit
 npm run build
+npm run test:e2e
 ```
+
+Playwright uses its managed Chromium by default. When browser-binary downloads
+are unavailable but Chrome is installed locally, set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to the Chrome executable before running
+`npm run test:e2e`. The smoke suite starts or reuses Vite on port 4173 and
+expects the Go API stack on port 8080.
 
 `VITE_API_BASE_URL` and `VITE_LIVE_API_BASE_URL` configure the Go API. Both
 default to same-origin `/api/v1`; the Vite development server proxies it to the

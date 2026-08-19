@@ -125,7 +125,9 @@ function AccessCodeResolver() {
           setStatus("error");
         }
       } catch (err) {
-        console.error("[AccessCodeResolver] Error:", err);
+        if (err?.status !== 404) {
+          console.error("[AccessCodeResolver] Error:", err);
+        }
         if (mounted) setStatus("error");
       }
     };

@@ -1,5 +1,7 @@
 ﻿import { defineConfig, devices } from "@playwright/test";
 
+const executablePath = globalThis.process?.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: 45000,
@@ -10,6 +12,7 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL: "http://127.0.0.1:4173",
+    launchOptions: executablePath ? { executablePath } : undefined,
     trace: "on-first-retry",
     video: "off",
     screenshot: "only-on-failure",
