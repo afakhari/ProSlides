@@ -58,7 +58,7 @@ not complete. Never describe a design target as benchmark evidence.
 | Tool | Status | Use |
 |---|---|---|
 | Node | v24.11.1 | web lint, tests, build |
-| npm | v11.6.2 | web dependencies/scripts; current Node 22 container `npm ci` reports 1 high-severity vulnerability requiring separately reviewed remediation |
+| npm | v11.6.2 | full development tree reports 1 high-severity advisory; `npm audit --omit=dev` reports zero production vulnerabilities, so remediation belongs to a separately reviewed tooling update |
 | Go | 1.26.6 installed at `C:\Program Files\Go\bin\go.exe`; its PATH was not visible to the previous shell | invoke via absolute path or refresh PATH before `go` commands |
 | Docker CLI/Desktop | installed and daemon available | API image and real Compose health/readiness checks passed; use Docker Hub base images because `gcr.io` returned 403 in this environment |
 | Chrome | 151 at `C:\Program Files\Google\Chrome\Application\chrome.exe` | Playwright launches this system browser through `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`; the Playwright CDN returned a location-based 403 |
@@ -88,7 +88,8 @@ unrelated to this change. Browser automation could not run because no in-app or
 extension browser was connected. Revision `d118d4b` adds three system-Chrome
 Playwright smoke flows and verifies registration/login/logout, presentation and
 slide creation, report/history navigation, responsive auth, and invalid join
-codes. The refreshed lockfile reports one remaining high-severity npm advisory. Both GitHub
+codes. The refreshed lockfile reports one remaining development-only
+high-severity npm advisory and zero production advisories. Both GitHub
 Actions workflows passed for `8ae78d9`; CI status for `d118d4b` was not queried
 because the local `gh` authentication is invalid.
 
@@ -99,7 +100,9 @@ built, Nginx syntax passed, the full four-service stack became healthy on
 loopback, SPA fallback/API proxy/security/cache headers passed, and the complete
 Compose integration matrix passed. Existing PostgreSQL/Redis volumes were
 preserved; no destructive reset was run. The container build reports one
-remaining high-severity npm advisory for a separate compatibility-reviewed fix.
+remaining high-severity development-tool advisory for a separate
+compatibility-reviewed fix; `npm audit --omit=dev` reports zero production
+vulnerabilities.
 
 ## Installed Codex workflow prerequisites
 
