@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -16,9 +17,18 @@ type RateLimiter interface {
 }
 
 type HTTP struct {
-	service *Service
-	secure  bool
-	limiter RateLimiter
+	service           *Service
+	secure            bool
+	limiter           RateLimiter
+	trustedProxyCIDRs []netip.Prefix
+}
+
+// WithTrustedProxyCIDRs allows forwarded client addresses only when the direct
+// peer is a configured proxy. The right-most untrusted address is selected so
+// user-supplied X-Forwarded-For prefixes cannot bypass distributed limits.
+func (h *HTTP) WithTrustedProxyCIDRs(prefixes []netip.Prefix) *HTTP {
+	h.trustedProxyCIDRs = append([]netip.Prefix(nil), prefixes...)
+	return h
 }
 
 func NewHTTP(s *Service, secure bool, limiter ...RateLimiter) *HTTP {
@@ -228,10 +238,7 @@ func (h *HTTP) allow(w http.ResponseWriter, r *http.Request, scope string, limit
 	if h.limiter == nil {
 		return true
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
+	host := h.clientAddress(r)
 	allowed, retry, err := h.limiter.Allow(r.Context(), scope, host, limit, window)
 	if err != nil {
 		// Authentication remains available during a Redis outage; dependency health still reports it.
@@ -246,6 +253,35 @@ func (h *HTTP) allow(w http.ResponseWriter, r *http.Request, scope string, limit
 	}
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
 	writeJSON(w, 429, map[string]any{"error": "rate_limited", "retry_after_seconds": seconds})
+	return false
+}
+
+func (h *HTTP) clientAddress(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	peer, err := netip.ParseAddr(strings.TrimSpace(host))
+	if err != nil || !containsAddress(h.trustedProxyCIDRs, peer) {
+		return host
+	}
+
+	chain := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(chain) - 1; i >= 0; i-- {
+		candidate, parseErr := netip.ParseAddr(strings.TrimSpace(chain[i]))
+		if parseErr == nil && !containsAddress(h.trustedProxyCIDRs, candidate) {
+			return candidate.String()
+		}
+	}
+	return host
+}
+
+func containsAddress(prefixes []netip.Prefix, address netip.Addr) bool {
+	for _, prefix := range prefixes {
+		if prefix.Contains(address) {
+			return true
+		}
+	}
 	return false
 }
 func (h *HTTP) me(w http.ResponseWriter, r *http.Request) {

@@ -24,17 +24,20 @@ Then request:
 
 ## Local development
 
-Install the Go version declared in `go.mod`, copy `.env.example` to `.env`, then:
+Install the Go version declared in `go.mod`. For host execution, start
+PostgreSQL/Redis, copy `.env.local.example` to the ignored `.env.local`, and use
+the repository loader (the Go binary intentionally does not auto-load dotenv):
 
 ```sh
 go test ./...
-go run ./cmd/api
+powershell -ExecutionPolicy Bypass -File ../../scripts/run-api-local.ps1
 ```
 
 `DATABASE_URL` and `REDIS_URL` are required in every environment.
 `DEPENDENCY_CHECK_TIMEOUT` is a positive Go duration (default `2s`) that bounds
 each readiness check. Never place real credentials in `.env.example` or Git.
-All identity, SMTP, Google, and runtime variables are documented in
+`MIGRATION_TIMEOUT` separately bounds the locked, transactional startup
+migration sequence. All identity, SMTP, Google, proxy, and runtime variables are documented in
 [`docs/configuration.md`](../../docs/configuration.md).
 
 API contract changes begin in `openapi/openapi.yaml`. See the repository root

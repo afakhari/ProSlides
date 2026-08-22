@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ type Config struct {
 	DatabaseURL             string
 	RedisURL                string
 	DependencyCheckTimeout  time.Duration
+	MigrationTimeout        time.Duration
 	SessionTTL              time.Duration
 	AuthRequireVerification bool
 	EmailVerificationTTL    time.Duration
@@ -36,6 +38,7 @@ type Config struct {
 	SMTPUseSSL              bool
 	GoogleClientID          string
 	GoogleJWKSURL           string
+	TrustedProxyCIDRs       []netip.Prefix
 }
 
 func Load() (Config, error) {
@@ -96,6 +99,10 @@ func Load() (Config, error) {
 	cfg.EmailVerificationPepper = os.Getenv("EMAIL_VERIFICATION_PEPPER")
 	cfg.GoogleClientID = os.Getenv("GOOGLE_CLIENT_ID")
 	cfg.GoogleJWKSURL = valueOrDefault("GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs")
+	cfg.TrustedProxyCIDRs, err = prefixList("TRUSTED_PROXY_CIDRS")
+	if err != nil {
+		return Config{}, err
+	}
 	if (cfg.SMTPHost == "") != (cfg.SMTPFromAddress == "") {
 		return Config{}, fmt.Errorf("SMTP_HOST and SMTP_FROM_ADDRESS must be configured together")
 	}
@@ -111,6 +118,10 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("DEPENDENCY_CHECK_TIMEOUT must be a positive duration")
 	}
 	cfg.DependencyCheckTimeout = dependencyCheckTimeout
+	cfg.MigrationTimeout, err = positiveDuration("MIGRATION_TIMEOUT", "2m")
+	if err != nil {
+		return Config{}, err
+	}
 
 	level, err := parseLogLevel(valueOrDefault("LOG_LEVEL", "INFO"))
 	if err != nil {
@@ -122,6 +133,23 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("DATABASE_URL and REDIS_URL are required")
 	}
 	return cfg, nil
+}
+
+func prefixList(key string) ([]netip.Prefix, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return nil, nil
+	}
+	parts := strings.Split(raw, ",")
+	prefixes := make([]netip.Prefix, 0, len(parts))
+	for _, part := range parts {
+		prefix, err := netip.ParsePrefix(strings.TrimSpace(part))
+		if err != nil {
+			return nil, fmt.Errorf("%s must contain valid comma-separated CIDRs", key)
+		}
+		prefixes = append(prefixes, prefix.Masked())
+	}
+	return prefixes, nil
 }
 
 func positiveDuration(key, fallback string) (time.Duration, error) {

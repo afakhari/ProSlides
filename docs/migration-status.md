@@ -73,9 +73,10 @@ The latest completed revision (`8ae78d9`, 2026-08-19) passed:
   aggregate-only events, concurrent joins, and SSE replay;
 - both GitHub Actions workflows for the pushed revision.
 
-Browser automation was unavailable because no connected in-app/extension
-browser session existed. This is the only UI verification limitation recorded
-for that revision. Compose is functional evidence, not load evidence.
+The later `d118d4b` revision added three system-Chrome Playwright smoke flows
+covering responsive auth, registration/login/logout, presentation and slide
+creation, reports/history, and invalid join codes. Compose/browser smoke is
+functional evidence, not load evidence.
 
 ## Remaining work, in order
 
@@ -83,8 +84,9 @@ for that revision. Compose is functional evidence, not load evidence.
    through the deployment platform; never commit them.
 2. Add bounded OpenTelemetry-compatible metrics and a reproducible 100-user k6
    smoke scenario. This is the exact next engineering step.
-3. Add public join/answer abuse limits, event retention, reverse-proxy tuning,
-   backup/restore evidence, and graceful-drain verification.
+3. Add public join/answer abuse limits, event retention, production backup/
+   restore evidence, and graceful-drain verification. Portable web/API images,
+   migration serialization, and reference TLS/SSE proxy/runbooks are present.
 4. Pass the documented 1k level twice, then 5k, then 10k on named
    production-like infrastructure, fixing measured bottlenecks between levels.
 5. Exercise feature-flagged cutover and rollback before removing legacy

@@ -40,10 +40,13 @@ func main() {
 		os.Exit(1)
 	}
 	defer postgresClient.Close()
-	if err := migrate.Apply(startupCtx, postgresClient.Pool()); err != nil {
+	migrationCtx, cancelMigration := context.WithTimeout(context.Background(), cfg.MigrationTimeout)
+	if err := migrate.Apply(migrationCtx, postgresClient.Pool()); err != nil {
+		cancelMigration()
 		logger.Error("migration failed", "error", err)
 		os.Exit(1)
 	}
+	cancelMigration()
 
 	redisClient, err := redis.New(cfg.RedisURL)
 	if err != nil {
@@ -89,7 +92,7 @@ func main() {
 			liveStore := live.NewPostgresStore(postgresClient.Pool())
 			liveService := live.NewService(liveStore, live.DeductionPolicy{})
 			liveBroker := live.NewEventBroker(liveStore, 250*time.Millisecond, 256)
-			identity.NewHTTP(identityService, cfg.Environment == "production", redisClient).Register(m)
+			identity.NewHTTP(identityService, cfg.Environment == "production", redisClient).WithTrustedProxyCIDRs(cfg.TrustedProxyCIDRs).Register(m)
 			presentations.NewHTTP(identityService, presentations.NewPostgresStore(postgresClient.Pool())).Register(m)
 			live.NewHTTP(liveService, liveBroker, identityService, cfg.Environment == "production").Register(m)
 		}),

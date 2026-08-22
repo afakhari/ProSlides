@@ -23,6 +23,17 @@ func TestLoadRejectsInvalidDependencyCheckTimeout(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsInvalidMigrationTimeout(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("DATABASE_URL", "postgres://localhost/proslides")
+	t.Setenv("REDIS_URL", "redis://localhost:6379/0")
+	t.Setenv("MIGRATION_TIMEOUT", "0s")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want invalid migration timeout error")
+	}
+}
+
 func TestLoadRequiresSMTPForMandatoryVerification(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://localhost/proslides")
 	t.Setenv("REDIS_URL", "redis://localhost:6379/0")
@@ -53,5 +64,14 @@ func TestLoadRejectsConflictingSMTPEncryption(t *testing.T) {
 	t.Setenv("SMTP_USE_SSL", "true")
 	if _, err := Load(); err == nil {
 		t.Fatal("conflicting SMTP encryption accepted")
+	}
+}
+
+func TestLoadRejectsInvalidTrustedProxyCIDR(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/proslides")
+	t.Setenv("REDIS_URL", "redis://localhost:6379/0")
+	t.Setenv("TRUSTED_PROXY_CIDRS", "not-a-cidr")
+	if _, err := Load(); err == nil {
+		t.Fatal("invalid trusted proxy CIDR accepted")
 	}
 }

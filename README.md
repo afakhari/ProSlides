@@ -26,17 +26,25 @@ fan-out/presence acceleration must remain ephemeral.
 
 ## Local stack
 
-Install Docker Desktop and run:
+Install Docker Desktop with Compose v2 and run:
 
 ```powershell
-docker compose --env-file apps/api/.env.example up --build
+docker compose --env-file apps/api/.env.example up --build -d
 ```
 
-The API health endpoint is `http://localhost:8080/healthz`. Readiness is
+Open the complete application at `http://localhost:5173`. The UI container
+serves the production React build and proxies `/api/v1` to Go. Direct API
+health is `http://localhost:8080/healthz`; readiness is
 `http://localhost:8080/readyz` and requires PostgreSQL and Redis.
 
 For direct Go development, install the version declared in `apps/api/go.mod`,
 then run `go test ./...` from `apps/api`.
+
+Use [the local runbook](docs/local-development.md) for hot reload, verification,
+ports, provider behavior, and troubleshooting. Use [the deployment
+runbook](docs/deployment-runbook.md) and [operations
+runbook](docs/operations-runbook.md) for immutable images, TLS/SSE proxying,
+migrations, backup/restore, and rollback.
 
 ## Development rules
 

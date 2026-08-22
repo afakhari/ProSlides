@@ -3,50 +3,74 @@ services:
     build:
       context: ./apps/api
     environment:
-      APP_ENV: development
+      APP_ENV: ${APP_ENV:-development}
       HTTP_ADDR: :8080
-      LOG_LEVEL: INFO
-      DATABASE_URL: postgres://proslides:proslides@postgres:5432/proslides?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
-      DEPENDENCY_CHECK_TIMEOUT: 2s
-      SESSION_TTL: 168h
-      AUTH_REQUIRE_EMAIL_VERIFICATION: "false"
-      EMAIL_VERIFICATION_TTL: 10m
-      EMAIL_VERIFICATION_RESEND_DELAY: 60s
-      EMAIL_VERIFICATION_MAX_ATTEMPTS: 5
-      EMAIL_VERIFICATION_PEPPER: ""
-      PASSWORD_RESET_TTL: 15m
-      PUBLIC_WEB_URL: http://localhost:5173
-      SMTP_HOST: ""
-      SMTP_PORT: 25
-      SMTP_FROM_ADDRESS: ""
-      SMTP_FROM_NAME: ProSlides
-      SMTP_USE_TLS: "false"
-      SMTP_USE_SSL: "false"
-      GOOGLE_CLIENT_ID: ""
-      GOOGLE_JWKS_URL: https://www.googleapis.com/oauth2/v3/certs
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL:-postgres://proslides:proslides@postgres:5432/proslides?sslmode=disable}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DEPENDENCY_CHECK_TIMEOUT: ${DEPENDENCY_CHECK_TIMEOUT:-2s}
+      MIGRATION_TIMEOUT: ${MIGRATION_TIMEOUT:-2m}
+      SESSION_TTL: ${SESSION_TTL:-168h}
+      AUTH_REQUIRE_EMAIL_VERIFICATION: ${AUTH_REQUIRE_EMAIL_VERIFICATION:-false}
+      EMAIL_VERIFICATION_TTL: ${EMAIL_VERIFICATION_TTL:-10m}
+      EMAIL_VERIFICATION_RESEND_DELAY: ${EMAIL_VERIFICATION_RESEND_DELAY:-60s}
+      EMAIL_VERIFICATION_MAX_ATTEMPTS: ${EMAIL_VERIFICATION_MAX_ATTEMPTS:-5}
+      EMAIL_VERIFICATION_PEPPER: ${EMAIL_VERIFICATION_PEPPER:-}
+      PASSWORD_RESET_TTL: ${PASSWORD_RESET_TTL:-15m}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:5173}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-25}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-ProSlides}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      SMTP_USE_SSL: ${SMTP_USE_SSL:-false}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_JWKS_URL: ${GOOGLE_JWKS_URL:-https://www.googleapis.com/oauth2/v3/certs}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+        VITE_LIVE_API_BASE_URL: ${VITE_LIVE_API_BASE_URL:-/api/v1}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${WEB_PORT:-5173}:8080"
     restart: unless-stopped
 
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: proslides
-      POSTGRES_USER: proslides
-      POSTGRES_PASSWORD: proslides
+      POSTGRES_DB: ${POSTGRES_DB:-proslides}
+      POSTGRES_USER: ${POSTGRES_USER:-proslides}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proslides}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U proslides -d proslides"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-proslides} -d ${POSTGRES_DB:-proslides}"]
       interval: 5s
       timeout: 3s
       retries: 10
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -60,7 +84,7 @@ services:
       timeout: 3s
       retries: 10
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped

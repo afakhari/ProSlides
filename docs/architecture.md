@@ -184,11 +184,18 @@ Deployments require graceful draining: stop accepting new connections, allow
 in-flight HTTP transactions to finish, close SSE so clients reconnect, and keep
 the old version available until schema/event compatibility is confirmed.
 
+Startup migrations acquire one PostgreSQL advisory lock across replicas. Every
+migration and its `schema_migrations` ledger entry commit in one transaction;
+`MIGRATION_TIMEOUT` bounds waiting and execution. The production reference binds
+the web ingress to loopback, keeps API private, and trusts forwarded client
+addresses only from the explicitly configured application subnet.
+
 ## Known capacity gaps (truth, not aspirations)
 
 1. Join/answer rate limiting, ephemeral presence TTLs, and Redis wake-up fan-out
    are not implemented; identity rate limiting is implemented.
-2. Metrics/tracing and a production reverse-proxy configuration are absent.
+2. Metrics/tracing are absent. Reference same-origin and TLS/SSE proxy configs
+   exist, but the real certificate/ingress still requires environment validation.
 3. Event retention/compaction and PostgreSQL operational tuning are undefined.
 4. No k6 1k/5k/10k evidence exists yet; therefore 10k is a target, not a claim.
 

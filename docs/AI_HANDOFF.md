@@ -30,9 +30,14 @@ not complete. Never describe a design target as benchmark evidence.
 - High-load improvements in this stage: one event-ledger poller per active
   session/API process, bounded subscriber buffers, slow-client disconnect and
   replay, presence compaction, snapshot cursor, and indexed participant scores.
+- Deployment foundation: full-stack local Compose, production API/web images,
+  same-origin Nginx with SSE buffering disabled, health checks, a loopback-bound
+  production Compose reference, trusted-proxy-aware limits, serialized
+  transactional startup migrations, and local/deploy/operations runbooks.
 - Not implemented: production SMTP/Google secret provisioning, telemetry, Redis
   wake-up fan-out/presence TTL, join/answer rate limiting, media object storage,
-  k6 proof, production proxy/security hardening, cutover, or rollback exercise.
+  k6 proof, real production certificate/ingress and backup/restore validation,
+  cutover, or rollback exercise.
 - Capacity truth: architecture has a credible horizontal path, but 1k/5k/10k
   has not been measured. Use `docs/capacity-plan.md` as the only proof protocol.
 - Exact next task: bounded telemetry and the documented 100-user k6 smoke run.
@@ -53,13 +58,13 @@ not complete. Never describe a design target as benchmark evidence.
 | Tool | Status | Use |
 |---|---|---|
 | Node | v24.11.1 | web lint, tests, build |
-| npm | v11.6.2 | web dependencies/scripts; current `npm ci` reports 20 vulnerabilities (2 low, 4 moderate, 14 high) requiring a separately reviewed update |
+| npm | v11.6.2 | web dependencies/scripts; current Node 22 container `npm ci` reports 1 high-severity vulnerability requiring separately reviewed remediation |
 | Go | 1.26.6 installed at `C:\Program Files\Go\bin\go.exe`; its PATH was not visible to the previous shell | invoke via absolute path or refresh PATH before `go` commands |
 | Docker CLI/Desktop | installed and daemon available | API image and real Compose health/readiness checks passed; use Docker Hub base images because `gcr.io` returned 403 in this environment |
 | Chrome | 151 at `C:\Program Files\Google\Chrome\Application\chrome.exe` | Playwright launches this system browser through `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`; the Playwright CDN returned a location-based 403 |
 | Python | 3.13.15 installed user-scoped | runs official Codex skill helper scripts; the incomplete `C:\Python314` installation cannot import `encodings` |
 | Codex skills | official `security-best-practices`, `playwright`, `gh-fix-ci`, and `yeet` installed personally | available from the next Codex turn; they are developer tooling, not repository/runtime dependencies |
-| GitHub CLI / Actions | `gh` 2.97.0; Actions configured in `.github/workflows/ci.yml` | `gh auth status` currently reports an invalid default token and must be repaired before `gh-fix-ci` or `yeet`; normal Git credential-manager pushes still work |
+| GitHub CLI / Actions | `gh` 2.97.0; Actions run Go/web checks, both Compose validations, and API/web image builds | `gh auth status` currently reports an invalid default token and must be repaired before `gh-fix-ci` or `yeet`; normal Git credential-manager pushes still work |
 | C compiler | `gcc` is not installed | Go `-race` cannot run locally; CI runs the live-module race detector on Linux instead |
 
 Do not install a second Go version. Use the version declared by `apps/api/go.mod`.
@@ -83,9 +88,18 @@ unrelated to this change. Browser automation could not run because no in-app or
 extension browser was connected. Revision `d118d4b` adds three system-Chrome
 Playwright smoke flows and verifies registration/login/logout, presentation and
 slide creation, report/history navigation, responsive auth, and invalid join
-codes. `npm ci` still reports the already-known 20 vulnerabilities. Both GitHub
+codes. The refreshed lockfile reports one remaining high-severity npm advisory. Both GitHub
 Actions workflows passed for `8ae78d9`; CI status for `d118d4b` was not queried
 because the local `gh` authentication is invalid.
+
+Deployment hardening verification (2026-08-23): Go tests and vet; web lint,
+typecheck, 23 unit tests, production build, and three system-Chrome Playwright
+flows passed. Local and production Compose contracts parsed, both OCI images
+built, Nginx syntax passed, the full four-service stack became healthy on
+loopback, SPA fallback/API proxy/security/cache headers passed, and the complete
+Compose integration matrix passed. Existing PostgreSQL/Redis volumes were
+preserved; no destructive reset was run. The container build reports one
+remaining high-severity npm advisory for a separate compatibility-reviewed fix.
 
 ## Installed Codex workflow prerequisites
 
@@ -192,13 +206,14 @@ authoritative state first and avoids replaying old presence bursts.
 
 Redis wake-up fan-out/presence TTL, join/answer rate limiting, telemetry,
 immutable report exports, media object storage, load tests, event retention, and
-production proxy tuning are not implemented. No database reset or volume
+real production ingress/certificate validation are not implemented. No database reset or volume
 deletion was performed.
 
 ### Definition of done
 
 - OpenAPI names every live route and event envelope/payload.
-- Forward-only migrations apply during normal startup.
+- Forward-only migrations apply during normal startup under one cross-replica
+  PostgreSQL advisory lock; every file and ledger row commit transactionally.
 - Go tests and the real Compose matrix pass.
 - `AGENTS.md`, API README, and this handoff describe the same implementation.
 

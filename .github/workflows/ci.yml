@@ -36,3 +36,25 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:unit
       - run: npm run build
+
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate local Compose
+        run: docker compose --env-file apps/api/.env.example config --quiet
+      - name: Validate production Compose
+        env:
+          API_IMAGE: example.invalid/proslides/api:test
+          WEB_IMAGE: example.invalid/proslides/web:test
+          DATABASE_URL: postgres://user:password@postgres.example/proslides?sslmode=require
+          REDIS_URL: rediss://redis.example:6379/0
+          EMAIL_VERIFICATION_PEPPER: 0123456789abcdef0123456789abcdef
+          PUBLIC_WEB_URL: https://proslides.example.com
+          SMTP_HOST: smtp.example.com
+          SMTP_FROM_ADDRESS: no-reply@example.com
+        run: docker compose --env-file deploy/.env.production.example -f deploy/compose.production.yaml config --quiet
+      - name: Build API image
+        run: docker build apps/api
+      - name: Build web image
+        run: docker build apps/web

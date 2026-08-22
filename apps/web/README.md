@@ -29,8 +29,9 @@ expects the Go API stack on port 8080.
 
 `VITE_API_BASE_URL` and `VITE_LIVE_API_BASE_URL` configure the Go API. Both
 default to same-origin `/api/v1`; the Vite development server proxies it to the
-local Go API. A cross-origin production override requires an explicitly
-restricted CORS policy at the trusted ingress. `VITE_GOOGLE_CLIENT_ID` enables
+local Go API. The supported production reference is also same-origin; a custom
+cross-origin deployment requires separately reviewed cookie, CSRF, and CORS
+behavior. `VITE_GOOGLE_CLIENT_ID` enables
 the existing Google UI and must exactly match the backend `GOOGLE_CLIENT_ID`.
 The Go endpoint verifies the signature, JWKS key, issuer, audience, expiry, and
 verified-email claim before issuing the normal session/CSRF cookies.
@@ -45,3 +46,11 @@ before displaying its join code. Participant retry/reconnect preserves one
 join credential, and final/leaderboard views keep only the participant's own
 row plus the aggregate count. Presenter roster and final score pages remain
 bounded and load additional rows explicitly.
+
+## Production image
+
+`Dockerfile` builds the Vite artifact with Node 22 and serves it from Nginx on
+port 8080. The image provides SPA fallback, bounded cache rules, security
+headers, same-origin API proxying, and an unbuffered long-lived SSE route.
+Build-time `VITE_GOOGLE_CLIENT_ID` must match the API runtime value. See
+[`docs/deployment-runbook.md`](../../docs/deployment-runbook.md).

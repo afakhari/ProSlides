@@ -41,16 +41,16 @@ The historical Django/Rust implementation was intentionally removed from this
 branch. Its history remains in Git and `master`; do not restore legacy code as
 a shortcut.
 
-## Current repository state — 2026-08-19
+## Current repository state — 2026-08-23
 
 | Area | Actual state | Rule for next work |
 |---|---|---|
-| `apps/api` | Go API with Compose-verified cookie identity, optional email OTP, SMTP reset delivery, signed Google login, owner presentation/editor CRUD, content/live flows, role-scoped snapshots, keyset-paginated roster and per-question results, durable replay, and bounded fan-out | Preserve ownership/role boundaries and never accept an external score ledger. Provider secrets belong only in deployment configuration. |
-| `apps/web` | React 19/Vite UI with auth/dashboard/editor/report/live consumers on the Go cookie API; snapshot-first SSE and incremental manager paging replace the legacy WebSocket runtime. The original 1,500-line auth presentation is preserved. | Preserve the established auth UI and the participant non-disclosure boundary. |
+| `apps/api` | Go API with Compose-verified cookie identity, optional email OTP, SMTP reset delivery, signed Google login, owner presentation/editor CRUD, content/live flows, role-scoped snapshots, keyset-paginated results, durable replay, bounded fan-out, transactional advisory-locked migrations, and trusted-proxy-aware identity limits | Preserve ownership/role boundaries and never accept an external score ledger. Provider secrets belong only in deployment configuration. |
+| `apps/web` | React 19/Vite UI on the Go cookie API; snapshot-first SSE and manager paging replace WebSockets. A production Nginx image supplies SPA fallback, same-origin proxying, SSE no-buffer settings, caching, and security headers. The original 1,500-line auth presentation is preserved. | Preserve the established auth UI and participant non-disclosure boundary. Keep web/API provider configuration synchronized. |
 | PostgreSQL | PostgreSQL 16; migrations `0001`-`0012`; authoritative users/content/settings/OTP and reset hashes/sessions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
 | Redis | Redis 7.4 provides readiness and fixed-window identity rate limits; live fan-out/presence acceleration is not implemented | It may accelerate ephemeral work, never replace the event/answer ledger. |
-| CI | GitHub Actions validates Go tests/race and web lint/typecheck/unit/build | Keep CI passing and add checks with new tooling. |
-| Tests | Web lint/typecheck/23 unit tests/build, 3 Playwright system-Chrome E2E flows, Go tests/vet, SMTP/JWKS adapter tests, real Compose identity/presentation/editor/live/result/non-disclosure/SSE matrix, and both GitHub CI runs passed on 2026-08-19; 1k/5k/10k tests do not exist | Treat the local browser smoke as functional evidence only; never claim broad visual-browser or 10k proof without evidence. |
+| CI | GitHub Actions validates Go tests/race, web lint/typecheck/unit/build, both Compose contracts, and API/web image builds | Keep CI passing and add checks with new tooling. |
+| Tests | Web lint/typecheck/23 unit tests/build, 3 Playwright system-Chrome E2E flows, Go tests/vet, SMTP/JWKS/proxy tests, Compose identity/presentation/editor/live/result/non-disclosure/SSE matrix, and full API+web image smoke; 1k/5k/10k tests do not exist | Treat browser/Compose as functional evidence only; never claim 10k proof without the capacity gates. |
 
 The working branch is `feat/go-platform-foundation`. It uses a separate Git
 worktree, so `master` remains available to teammates. Do not merge, force-push,
@@ -72,10 +72,14 @@ docs/
   architecture.md            architecture boundaries
   capacity-plan.md           workload, SLOs, telemetry, and 1k/5k/10k gates
   configuration.md           API/web environment and deployment checklist
+  local-development.md       complete stack, hot reload, verification, troubleshooting
+  deployment-runbook.md      images, dependencies, secrets, TLS/SSE ingress, rollout
+  operations-runbook.md      backup, restore, rollback, rotation, incident checks
   migration-status.md        Django/Rust parity and remaining production work
   decisions/                 Architecture Decision Records
 AGENTS.md                    this mandatory guide
-docker-compose.yaml          local API + PostgreSQL + Redis stack
+docker-compose.yaml          local web + API + PostgreSQL + Redis stack
+deploy/                      production Compose/env/ingress references
 ```
 
 ## Installed Codex workflow skills
@@ -158,7 +162,7 @@ Slow clients are disconnected and recover; server memory must remain bounded.
 - PostgreSQL polling grows with active sessions/API replicas, not SSE clients.
 - Redis failure must not lose answers, scores, command results, or replay events.
 - Known blockers before a serious 10k run: metrics/tracing, join/answer rate limits,
-  proxy/TLS tuning, event retention, database/pool
+  real TLS/ingress validation, event retention, database/pool
   tuning, and k6 evidence.
 
 ## Required workflow for every change
@@ -222,9 +226,8 @@ smoke gate passes.
   SSE, idempotency, timers, scoring, bounded fan-out, replay, and React
   WebSocket-to-SSE migration. Redis wake-up/presence TTL and capacity proof are
   later scale work, not functional parity gaps.
-- [ ] Phase 3: bounded telemetry, browser E2E coverage, and staged k6 scenarios
-  for 100/1k/5k/10k users, reconnects, host disconnects, and answer bursts;
-  document measured SLOs.
+- [ ] Phase 3: bounded telemetry and staged k6 scenarios for 100/1k/5k/10k
+  users, reconnects, host disconnects, and answer bursts; document measured SLOs.
 - [ ] Phase 4: feature-flagged cutover and exercised rollback only after
   production gates pass. Do not merge legacy code into this branch.
 
@@ -260,6 +263,7 @@ smoke gate passes.
 | 2026-08-19 | Completed remaining Django product parity in Go | Added keyed email OTP, SMTP verification/reset delivery, secure Google token verification, Redis identity limits, atomic slide insertion/movement, owner-only per-question results from durable Go answers, frontend adapters, OpenAPI/migration/tests/docs; Go/web/Compose and both GitHub CI runs passed. |
 | 2026-08-19 | Added the first real-browser E2E smoke and fixed issues it exposed | System Chrome now verifies responsive auth, registration/login/logout, presentation and slide creation, report/history navigation, and invalid join codes. Local analytics is disabled, report fetches abort cleanly, expected invalid codes do not log errors, and Add Slide is keyboard-accessible. |
 | 2026-08-19 | Installed official Codex security, browser, CI-fix, and publish skills | `security-best-practices`, `playwright`, `gh-fix-ci`, and `yeet` are available from the next turn; documented their narrow triggers, artifact path, approval boundary, and `npx`/Python/`gh auth` prerequisites. |
+| 2026-08-23 | Added a reproducible local/production deployment path | Full-stack Compose now includes a production React/Nginx image; env interpolation includes SMTP credentials; advisory-locked transactional migrations, trusted-proxy client IPs, API/web health checks, reference production Compose/TLS ingress, and local/deploy/operations runbooks were added and verified with Go, web, image, and stack smoke checks. |
 
 ## References
 
@@ -268,6 +272,9 @@ smoke gate passes.
 - `docs/architecture.md` — boundaries and scale design.
 - `docs/capacity-plan.md` — exact high-load workload, SLOs, metrics, and proof gates.
 - `docs/configuration.md` — complete API/web environment and deployment checklist.
+- `docs/local-development.md` — clean-machine start, hot reload, tests, and troubleshooting.
+- `docs/deployment-runbook.md` — immutable build, dependency, TLS/SSE, and rollout procedure.
+- `docs/operations-runbook.md` — backup/restore, rollback, rotation, and incident procedure.
 - `docs/migration-status.md` — current parity matrix, evidence, and remaining work.
 - `docs/decisions/0001-go-modular-monolith.md` — architecture decision record.
 - `docs/decisions/0002-durable-events-and-bounded-sse-fanout.md` — replay/fan-out and backpressure decision.

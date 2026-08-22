@@ -15,6 +15,7 @@ cookies, participant credentials, or provider tokens.
 | `DATABASE_URL` | required | PostgreSQL connection URL; required in every environment. |
 | `REDIS_URL` | required | Redis connection URL; required for readiness and distributed identity limits. |
 | `DEPENDENCY_CHECK_TIMEOUT` | `2s` | Positive Go duration bounding each readiness ping. |
+| `MIGRATION_TIMEOUT` | `2m` | Positive duration bounding advisory-lock wait and startup migrations. |
 | `SESSION_TTL` | `168h` | Positive Go duration for account sessions. |
 | `AUTH_REQUIRE_EMAIL_VERIFICATION` | `false` | When true, registration requires verified email before login. |
 | `EMAIL_VERIFICATION_TTL` | `10m` | Positive OTP lifetime. |
@@ -33,6 +34,7 @@ cookies, participant credentials, or provider tokens.
 | `SMTP_USE_SSL` | `false` | Implicit TLS mode; mutually exclusive with `SMTP_USE_TLS`. |
 | `GOOGLE_CLIENT_ID` | empty | Enables Google login verification when set. Must match the web client ID. |
 | `GOOGLE_JWKS_URL` | Google certificates URL | Override only for a controlled provider/test endpoint. |
+| `TRUSTED_PROXY_CIDRS` | empty | Comma-separated direct proxy networks allowed to supply forwarded client IPs. |
 
 `AUTH_REQUIRE_EMAIL_VERIFICATION=true` requires configured SMTP and a strong
 `EMAIL_VERIFICATION_PEPPER`. An SMTP username must be used over TLS or SSL; the
@@ -46,6 +48,11 @@ the API can construct the link. When `GOOGLE_CLIENT_ID` is absent, Google login
 is disabled with a safe service-unavailable response. Provider secrets are
 never returned to the browser or health endpoints.
 
+Keep `TRUSTED_PROXY_CIDRS` empty when clients reach Go directly. Behind a
+proxy, use its exact network ranges. The API ignores forwarded addresses from
+untrusted peers and selects the right-most untrusted address from a trusted
+chain so a client-supplied prefix cannot bypass identity rate limits.
+
 ## Web variables
 
 | Variable | Local value | Purpose |
@@ -54,10 +61,30 @@ never returned to the browser or health endpoints.
 | `VITE_LIVE_API_BASE_URL` | `/api/v1` | Live HTTP/SSE API base. |
 | `VITE_GOOGLE_CLIENT_ID` | provider client ID | Enables the existing Google UI; must exactly equal API `GOOGLE_CLIENT_ID`. |
 
-Same-origin `/api/v1` paths are preferred in production. If separate origins
-are unavoidable, configure the trusted ingress for credentials and a narrow
-CORS allowlist. Vite variables are public build inputs and must never contain a
+The supported production reference uses same-origin `/api/v1`. A custom
+cross-origin topology requires separately reviewed cookie, CSRF, and CORS
+behavior. Vite variables are public build inputs and must never contain a
 client secret.
+
+## Compose and release variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `API_PORT` | `8080` | Loopback host port for direct local API diagnostics. |
+| `WEB_PORT` | `5173` | Loopback host port for the complete local application. |
+| `POSTGRES_DB` | `proslides` | Local Compose database name. |
+| `POSTGRES_USER` | `proslides` | Local Compose database user. |
+| `POSTGRES_PASSWORD` | `proslides` | Local-only password; if changed, update `DATABASE_URL` too. |
+| `POSTGRES_PORT` | `5432` | Loopback PostgreSQL port for host-mode API development. |
+| `REDIS_PORT` | `6379` | Loopback Redis port for host-mode API development. |
+| `API_IMAGE` | required in production | Immutable API registry tag/digest. |
+| `WEB_IMAGE` | required in production | Immutable web tag/digest built with the matching public Google client ID. |
+| `APP_HTTP_PORT` | `8080` | Production-reference loopback port consumed by TLS ingress. |
+| `APP_SUBNET` | `172.30.0.0/24` | Isolated reference subnet and trusted web-proxy range. |
+
+The repository-root Compose interpolates these values and passes all SMTP
+credentials through to the API. Its PostgreSQL/Redis defaults are local only
+and must not be reused as production credentials.
 
 ## Dependency and failure behavior
 
@@ -80,11 +107,14 @@ client secret.
 3. Create the Google OAuth web client for the exact production origin and set
    the identical client ID in API and web builds. No client secret is required
    by this ID-token flow.
-4. Set `PUBLIC_WEB_URL`, allowed origins, ingress TLS, and `APP_ENV=production`;
-   confirm cookie, CSRF, and reset-link behavior through the public hostname.
+4. Set `PUBLIC_WEB_URL`, use the documented same-origin ingress, and keep
+   `APP_ENV=production`; confirm cookie, CSRF, and reset-link behavior through
+   the public HTTPS hostname.
 5. Confirm `/healthz` and `/readyz`, migration startup, backups, restore, and
    secret rotation in a non-production environment before cutover.
 
 Canonical local examples live in
 [`apps/api/.env.example`](../apps/api/.env.example) and
-[`apps/web/.env.example`](../apps/web/.env.example).
+[`apps/web/.env.example`](../apps/web/.env.example). Host-mode API values are in
+[`apps/api/.env.local.example`](../apps/api/.env.local.example); production keys
+are inventoried in [`deploy/.env.production.example`](../deploy/.env.production.example).
