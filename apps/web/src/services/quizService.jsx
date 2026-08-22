@@ -150,7 +150,7 @@ const patchSettings = async (quizId, fields) => {
 };
 
 export const quizService = {
-  listPresentations: () => request("/presentations"),
+  listPresentations: (options) => request("/presentations", options),
   createPresentation: (title = "Untitled Presentation") => request("/presentations", { method: "POST", json: { title, settings: {} } }),
   deletePresentation: (id) => request(`/presentations/${id}`, { method: "DELETE" }),
   duplicatePresentation: (id, title) => request(`/presentations/${id}/duplicate`, { method: "POST", json: { title } }),

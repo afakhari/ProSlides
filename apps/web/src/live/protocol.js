@@ -71,8 +71,8 @@ export const normalizeLiveSlide = (activeSlide, session = {}) => {
   return { slide_type: 2, slide_id: id, order: activeSlide.position ?? null, title: content.title || "", content_text: content.text || content.content_text || "", content_image_url: content.image_url || "" };
 };
 
-export const rosterEntryToLegacy = (entry, index = 0) => ({ user_id: entry.participant_id, name: entry.display_name, character: entry.avatar || "", rank: index + 1, total_points: Number(entry.score || 0), new_points: 0 });
-export const participantToLegacy = (p) => ({ user_id: p.id, name: p.display_name, character: p.avatar || "", rank: null, total_points: Number(p.score || 0), new_points: 0 });
+export const rosterEntryToLegacy = (entry, index = 0) => ({ user_id: entry.participant_id, name: entry.display_name, character: entry.avatar || "", rank: index + 1, total_points: Number(entry.score || 0), new_points: null });
+export const participantToLegacy = (p) => ({ user_id: p.id, name: p.display_name, character: p.avatar || "", rank: null, total_points: Number(p.score || 0), new_points: null });
 export const presentationSlideToLegacy = (slide) => {
   if (slide.kind === "question_draft") {
     return {

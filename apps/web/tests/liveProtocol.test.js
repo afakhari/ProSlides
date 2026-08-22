@@ -46,6 +46,7 @@ test("participant projection ignores any supplied roster and exposes only self o
   );
   assert.deepEqual(projection.users, []);
   assert.deepEqual(projection.leaderboardResults.map((row) => row.user_id), ["self"]);
+  assert.equal(projection.leaderboardResults[0].new_points, null);
   assert.equal(projection.participantCount, 10_000);
 });
 
@@ -62,6 +63,7 @@ test("manager projection contains only the roster page supplied by pagination", 
   );
   assert.deepEqual(projection.users.map((row) => row.user_id), ["page-row"]);
   assert.equal(projection.leaderboardResults.length, 1);
+  assert.equal(projection.leaderboardResults[0].new_points, null);
 });
 
 test("manager presentation mapping retains correctness while participant active slides do not", () => {

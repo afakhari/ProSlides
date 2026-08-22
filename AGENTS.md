@@ -50,7 +50,7 @@ a shortcut.
 | PostgreSQL | PostgreSQL 16; migrations `0001`-`0012`; authoritative users/content/settings/OTP and reset hashes/sessions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
 | Redis | Redis 7.4 provides readiness and fixed-window identity rate limits; live fan-out/presence acceleration is not implemented | It may accelerate ephemeral work, never replace the event/answer ledger. |
 | CI | GitHub Actions validates Go tests/race, web lint/typecheck/unit/build, both Compose contracts, and API/web image builds | Keep CI passing and add checks with new tooling. |
-| Tests | Web lint/typecheck/23 unit tests/build, 3 Playwright system-Chrome E2E flows, Go tests/vet, SMTP/JWKS/proxy tests, Compose identity/presentation/editor/live/result/non-disclosure/SSE matrix, and full API+web image smoke; 1k/5k/10k tests do not exist | Treat browser/Compose as functional evidence only; never claim 10k proof without the capacity gates. |
+| Tests | Web lint/typecheck/26 unit tests/build, 3 Playwright system-Chrome E2E flows, Go tests/vet, SMTP/JWKS/proxy tests, Compose identity/presentation/editor/live/result/non-disclosure/SSE matrix, and full API+web image smoke; 1k/5k/10k tests do not exist | Treat browser/Compose as functional evidence only; never claim 10k proof without the capacity gates. |
 
 The working branch is `feat/go-platform-foundation`. It uses a separate Git
 worktree, so `master` remains available to teammates. Do not merge, force-push,
@@ -264,6 +264,7 @@ smoke gate passes.
 | 2026-08-19 | Added the first real-browser E2E smoke and fixed issues it exposed | System Chrome now verifies responsive auth, registration/login/logout, presentation and slide creation, report/history navigation, and invalid join codes. Local analytics is disabled, report fetches abort cleanly, expected invalid codes do not log errors, and Add Slide is keyboard-accessible. |
 | 2026-08-19 | Installed official Codex security, browser, CI-fix, and publish skills | `security-best-practices`, `playwright`, `gh-fix-ci`, and `yeet` are available from the next turn; documented their narrow triggers, artifact path, approval boundary, and `npx`/Python/`gh auth` prerequisites. |
 | 2026-08-23 | Added a reproducible local/production deployment path | Full-stack Compose now includes a production React/Nginx image; env interpolation includes SMTP credentials; advisory-locked transactional migrations, trusted-proxy client IPs, API/web health checks, reference production Compose/TLS ingress, and local/deploy/operations runbooks were added and verified with Go, web, image, and stack smoke checks. |
+| 2026-08-23 | Exercised and corrected the complete quiz editor/live browser flow | Question timing/scoring validation is shared by save/present; option IDs/order and question saves are durable and atomic; type conversion normalizes correctness; empty queues and ended-session reruns are safe; manager/player startup avoids guaranteed 404/401 probes; SSE presence updates the lobby; unavailable score deltas are hidden; and logout aborts stale fetches. Go/web checks, 26 unit tests, Compose integration, system-Chrome E2E, and real manager/player edit/answer/leaderboard flows passed. |
 
 ## References
 

@@ -523,7 +523,7 @@ function ManagerPlayerLeaderBoard({
 
 
 
-  console.log(
+  if (import.meta.env.DEV) console.log(
 
 
 

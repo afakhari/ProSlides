@@ -106,27 +106,32 @@ export const LiveSessionProvider = ({ children, role = "manager" }) => {
     setSessionId(String(identifier));
     try {
       let next;
-      try {
-        next = await getLiveSnapshot(String(identifier));
-      } catch (error) {
-        if (role === "manager" && error instanceof LiveAPIError && error.status === 404) {
-          const key = `proslides_live_create_request:${identifier}`;
-          let requestId = sessionStorage.getItem(key);
-          if (!requestId) {
-            requestId = createRequestId();
-            sessionStorage.setItem(key, requestId);
-          }
-          const created = await createLiveSession(String(identifier), requestId);
+      if (role === "manager") {
+        const key = `proslides_live_create_request:${identifier}`;
+        let requestId = sessionStorage.getItem(key);
+        if (!requestId) {
+          requestId = createRequestId();
+          sessionStorage.setItem(key, requestId);
+        }
+        let created = await createLiveSession(String(identifier), requestId);
+        sessionIdRef.current = created.id;
+        setSessionId(created.id);
+        next = await getLiveSnapshot(created.id);
+        if (next.session.state === "ended") {
+          requestId = createRequestId();
+          sessionStorage.setItem(key, requestId);
+          created = await createLiveSession(String(identifier), requestId);
           sessionIdRef.current = created.id;
           setSessionId(created.id);
           next = await getLiveSnapshot(created.id);
-        } else if (role === "player" && error instanceof LiveAPIError && error.status === 401) {
-          streamEnabledRef.current = false;
-          setIsConnected(true);
-          return true;
-        } else {
-          throw error;
         }
+      } else {
+        // A participant has no snapshot authorization until the idempotent
+        // join command establishes their identity. Mark the transport ready so
+        // PlayerJoinPage can issue that command without a guaranteed 401 probe.
+        streamEnabledRef.current = false;
+        setIsConnected(true);
+        return true;
       }
       if (next.role === "manager" && next.session.state === "draft") {
         const lobbyKey = `proslides_live_lobby_request:${next.session.id}`;
@@ -147,9 +152,9 @@ export const LiveSessionProvider = ({ children, role = "manager" }) => {
         next = await getLiveSnapshot(next.session.id);
         if (next.session.state === "draft") throw new Error("Live session could not enter the lobby");
       }
+      streamEnabledRef.current = true;
       storeSnapshot(next);
       if (next.role === "manager") await loadRoster(["leaderboard", "ended"].includes(next.session.state) ? "score" : "joined", false);
-      streamEnabledRef.current = true;
       setIsConnected(true);
       return true;
     } catch (error) {

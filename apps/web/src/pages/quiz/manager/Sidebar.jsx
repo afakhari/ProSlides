@@ -14,6 +14,7 @@ import {
 
 import { quizService } from "../../../services/quizService"; 
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
+import { getQuestionValidationError } from "./questionValidation";
 
 
 export default function Sidebar({
@@ -90,7 +91,7 @@ export default function Sidebar({
 
 
   const onDragEnd = useCallback(
-    async (result) => {
+    (result) => {
       if (!result.destination || !localSlide || !localSlide.question) return;
       
       const sourceIndex = result.source.index;
@@ -103,54 +104,21 @@ export default function Sidebar({
       const newOptions = Array.from(options);
       const [movedOption] = newOptions.splice(sourceIndex, 1);
       newOptions.splice(destinationIndex, 0, movedOption);
+      const orderedOptions = newOptions.map((option, index) => ({
+        ...option,
+        order: index + 1,
+      }));
       
       // ????? ????? ?????
       setLocalSlide({ 
         ...localSlide,
         question: {
           ...localSlide.question,
-          options: newOptions
+          options: orderedOptions
         }
       });
-      
-      // ?????? order ???? (?????? + 1)
-      const newOrder = destinationIndex + 1;
-      
-      try {
-        // ????? ?? ??????
-        await quizService.updateOption(
-          quizId,
-          localSlide.slide_id,
-          movedOption.option_id,
-          { 
-            order: newOrder,
-            text:  movedOption.text
-          }
-        );
-        
-        // ?? ???? ???? ????????? ??????? ?? ???? ????
-        // refreshSlideData();
-        
-      } catch (error) {
-        console.error('Failed to update option order:', error);
-        
-        // ????????? ?? ???? ???? ?? ???? ???
-        const revertedOptions = Array.from(options);
-        revertedOptions.splice(destinationIndex, 1);
-        revertedOptions.splice(sourceIndex, 0, movedOption);
-        
-        setLocalSlide({ 
-          ...localSlide,
-          question: {
-            ...localSlide.question,
-            options: revertedOptions
-          }
-        });
-        
-        notify("Failed to reorder option.", "error");
-      }
     },
-    [localSlide, quizId, notify]
+    [localSlide]
   );
 
   // ????? ???????
@@ -199,9 +167,11 @@ export default function Sidebar({
           const original = originalOpts[i];
           
           if (!original || 
+              String(current.option_id) !== String(original.option_id) ||
               current.text !== original.text ||
               current.is_correct !== original.is_correct ||
-              current.image_url !== original.image_url) {
+              current.image_url !== original.image_url ||
+              Number(current.order ?? i + 1) !== Number(original.order ?? i + 1)) {
             return true;
           }
         }
@@ -302,16 +272,15 @@ export default function Sidebar({
   };
 
   // ????? ???? ????? ????
-  const handleAddOption = async () => {
-    const newId = options.length > 0
-      ? Math.max(...options.map(o => o.option_id || 0)) + 1
-      : 1;
+  const handleAddOption = () => {
+    const newId = globalThis.crypto.randomUUID();
 
     const newOption = {
       option_id: newId,
-      text: `Option ${newId}`,
+      text: `Option ${options.length + 1}`,
       is_correct: options.length === 0 && questionType === "multiple",
       image_url: "",
+      order: options.length + 1,
       votes: 0
     };
 
@@ -493,110 +462,48 @@ export default function Sidebar({
   const handleSubmit = async () => {
     if (!hasChanges || !slide || !quizId || isSaving) return;
 
+    if (safeSlide.question) {
+      const validationError = getQuestionValidationError(safeSlide.question);
+      if (validationError) {
+        notify(validationError, "error");
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
-      // 1. ??????????? ????
       if (safeSlide.question) {
-        const questionData = {
-          title: "", // ????? ????
-          text: safeSlide.question.question_text || "",
-          question_type: safeSlide.question.question_type,
-          min_point: safeSlide.question.min_point || 0,
-          max_point: safeSlide.question.max_point || 0,
-          time_limit: safeSlide.question.question_time || 10,
-          image_url: safeSlide.question.question_image || "",
-          faster_answers_more_points: safeSlide.question.faster_answers_more_points || false,
-          partial_scoring: safeSlide.question.partial_scoring || false
-        };
-
-        let updatedQuestion;
-        if (originalSlide.question) {
-          // ???? ?? ??? ???? ???? - update
-          updatedQuestion = await quizService.updateQuestion(
-            quizId,
-            slide.slide_id,
-            questionData
-          );
-        } else {
-          // ???? ???? - create
-          updatedQuestion = await quizService.createQuestion(
-            quizId,
-            slide.slide_id,
-            questionData
-          );
-        }
-
-        // 2. ??????????? ????????
         const currentOptions = safeSlide.question.options || [];
-        
-        // ??? ?????????? ?? ?? original ????? ??? ?? current ??????
-        for (const originalOption of originalOptions) {
-          if (!currentOptions.find(opt => opt.option_id === originalOption.option_id)) {
-            await quizService.deleteOption(
-              quizId,
-              slide.slide_id,
-              originalOption.option_id
-            );
-          }
-        }
-
-        // ????? ?? ??????????? ????????
-        for (const option of currentOptions) {
-          const optionData = {
-            text: option.text,
-            is_correct: option.is_correct,
-            image_url: option.image_url || ""
-          };
-
-          // ??? ????? ?? original ???? ????? update ??
-          const originalOption = originalOptions.find(opt => opt.option_id === option.option_id);
-          if (originalOption) {
-            await quizService.updateOption(
-              quizId,
-              slide.slide_id,
-              option.option_id,
-              optionData
-            );
-          } else {
-            // ????? ????
-            await quizService.createOption(
-              quizId,
-              slide.slide_id,
-              optionData
-            );
-          }
-        }
-
-        // 3. ??????????? show_leaderboard_after ?? ??????
-        await quizService.updateSlide(quizId, slide.slide_id, {
-          show_leaderboard_after: safeSlide.show_leaderboard_after || false,
-          slide_type: 1
+        const savedSlide = await quizService.updateSlide(quizId, slide.slide_id, {
+          ...safeSlide,
+          slide_type: 1,
+          show_leaderboard_after: safeSlide.show_leaderboard_after === true,
+          question: {
+            ...safeSlide.question,
+            text: safeSlide.question.question_text,
+            question_text: safeSlide.question.question_text,
+            time_limit: safeSlide.question.question_time,
+            question_time: safeSlide.question.question_time,
+            image_url: safeSlide.question.question_image || "",
+            options: currentOptions.map((option, index) => ({
+              ...option,
+              order: index + 1,
+            })),
+          },
         });
 
-        // ??????????? state ????
-        const updatedSlide = {
-          ...slide,
-          show_leaderboard_after: safeSlide.show_leaderboard_after,
-          question: {
-            ...updatedQuestion,
-            options: currentOptions
-          }
-        };
-
-        setOriginalSlide(safeSlide);
-        setOriginalOptions([...currentOptions]);
+        setOriginalSlide(savedSlide);
+        setOriginalOptions([...(savedSlide.question?.options || [])]);
 
         // ????? ?? parent component
         if (onSlideUpdated) {
-          onSlideUpdated(updatedSlide);
+          onSlideUpdated(savedSlide);
         }
 
 
         if (onSaveAndRefresh) {
           await onSaveAndRefresh();
         }
-
-        console.log("Changes saved successfully");
       }
 
       // ???? ???

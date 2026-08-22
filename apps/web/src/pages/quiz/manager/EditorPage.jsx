@@ -9,6 +9,7 @@ import RightToolbar from "./RightToolbar";
 import DesignPanel from "./DesignPanel";
 import AudioPanel from "./AudioPanel";
 import { quizService } from "../../../services/quizService";
+import { getQuestionValidationError } from "./questionValidation";
 import { UNSAVED_CHANGES_KEY } from "../../../utils/auth";
 import Waiting from "../../loading/LoadingPage";
 import { X } from "lucide-react";
@@ -116,6 +117,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const [nameSelectionNotice, setNameSelectionNotice] = useState(null);
   const [audioSaveNotice, setAudioSaveNotice] = useState(null);
   const [backgroundSaveNotice, setBackgroundSaveNotice] = useState(null);
+  const hasUnsavedChanges = hasSidebarChanges || hasAudioChanges || hasDesignChanges;
 
   const slides = quiz.slides || [];
   const activeSlide = slides[activeSlideIndex] || null;
@@ -123,21 +125,14 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     ? leaderboardPreviewData[activeSlide.slide_id] || []
     : [];
   const presentStatus = (() => {
+    if (hasUnsavedChanges) {
+      return { ready: false, reason: "Save or discard your changes before presenting." };
+    }
     if (!slides.length) {
       return { ready: false, reason: "Add at least one slide to present." };
     }
     const missingQuestion = slides.find(
-      (slide) =>
-        slide.slide_type === 1 &&
-        (!slide.question ||
-          typeof slide.question !== "object" ||
-          Object.keys(slide.question).length === 0 ||
-          !Array.isArray(slide.question.options) ||
-          slide.question.options.length < 2 ||
-          slide.question.options.some((option) => !String(option.text || option.option_text || "").trim()) ||
-          slide.question.options.filter((option) => option.is_correct).length < 1 ||
-          (slide.question.question_type === "single" &&
-            slide.question.options.filter((option) => option.is_correct).length !== 1))
+      (slide) => slide.slide_type === 1 && getQuestionValidationError(slide.question)
     );
     if (missingQuestion) {
       return {
@@ -162,8 +157,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     confirmText: "",
     cancelText: "",
   });
-
-  const hasUnsavedChanges = hasSidebarChanges || hasAudioChanges || hasDesignChanges;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -703,105 +696,56 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
       setIsSelectingType(true);
       setTypeSelectionError(null);
       setTypeSelectionMode(requestedMode);
-      let updatedQuestion;
+      let nextQuestion;
 
       if (!currentQuestion || !currentQuestion.question_id) {
-        // ???? 1: ????? ???? ????
-        const questionData = {
+        nextQuestion = {
+          question_id: String(slideId),
           title: "",
           text: "New Question",
+          question_text: "New Question",
           question_type: questionType,
           min_point: 0,
           max_point: 100,
           time_limit: 10,
+          question_time: 10,
           image_url: "",
+          question_image: "",
           faster_answers_more_points: false,
           partial_scoring: false,
+          options: [],
         };
-
-        updatedQuestion = await quizService.createQuestion(
-          quizId,
-          slideId,
-          questionData
-        );
       } else {
-        // ???? 2: ??????????? ???? ?????
-
-        // ????? type ???? ?? ????? ???????
-        const updateData = {
-          ...currentQuestion,
-          question_type: questionType,
-        };
-
-        // ??? ?? multiple ?? single ????? ??????? ??????? ?? ??????? ????? ???????
-        if (currentQuestion.question_type === "multiple" && questionType === "single") {
-          if (currentQuestion.options && currentQuestion.options.length > 0) {
-            // ???? ???? ????? ???????? ?? ????? correct ????
-            const firstCorrectIndex = currentQuestion.options.findIndex(
-              (option) => option.is_correct
-            );
-
-            // ????? ????? ???????? ?? ???? true ?????
-            const indexToKeepTrue = firstCorrectIndex !== -1 ? firstCorrectIndex : 0;
-
-            // ????? ?? ????? ?? ???? ???????
-            const updatePromises = currentQuestion.options.map((option, index) => {
-              const optionData = {
-                is_correct: index === indexToKeepTrue,
-                text: option.text || "",
-              };
-
-              return quizService.updateOption(
-                quizId,
-                slideId,
-                option.option_id,
-                optionData
-              );
-            });
-
-            // ????? ???????? ?? ??? ???????? ???? ????
-            await Promise.all(updatePromises);
-
-            updatedQuestion = await quizService.updateQuestion(
-              quizId,
-              slideId,
-              { question_type: questionType }
-            );
-
-            // ??????????? ???????? ???? ????????
-            const updatedOptions = currentQuestion.options.map((option, index) => ({
+        const existingOptions = currentQuestion.options || [];
+        const firstCorrectIndex = existingOptions.findIndex(
+          (option) => option.is_correct
+        );
+        const indexToKeepTrue = firstCorrectIndex !== -1 ? firstCorrectIndex : 0;
+        const nextOptions = questionType === "single"
+          ? existingOptions.map((option, index) => ({
               ...option,
               is_correct: index === indexToKeepTrue,
+              order: index + 1,
+            }))
+          : existingOptions.map((option, index) => ({
+              ...option,
+              order: index + 1,
             }));
 
-            // ??????????? question ?? ????????? ????? ???
-            updatedQuestion = {
-              ...updatedQuestion,
-              options: updatedOptions,
-            };
-          }
-          if (!currentQuestion.options || currentQuestion.options.length === 0) {
-            updatedQuestion = await quizService.updateQuestion(
-              quizId,
-              slideId,
-              updateData
-            );
-          }
-        }
-        if (currentQuestion.question_type === "single" && questionType === "multiple") {
-          updatedQuestion = await quizService.updateQuestion(
-            quizId,
-            slideId,
-            updateData
-          );
-        }
+        nextQuestion = {
+          ...currentQuestion,
+          question_type: questionType,
+          partial_scoring:
+            questionType === "multiple" && currentQuestion.partial_scoring === true,
+          options: nextOptions,
+        };
       }
 
-      // ??????????? state
-      const updatedSlide = {
+      const updatedSlide = await quizService.updateSlide(quizId, slideId, {
         ...activeSlide,
-        question: updatedQuestion,
-      };
+        slide_type: 1,
+        question: nextQuestion,
+      });
 
       // ??????????? ?? state ????
       const updatedSlides = slides.map((s) =>

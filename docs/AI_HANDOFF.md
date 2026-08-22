@@ -104,6 +104,20 @@ remaining high-severity development-tool advisory for a separate
 compatibility-reviewed fix; `npm audit --omit=dev` reports zero production
 vulnerabilities.
 
+Quiz editor/live correctness verification (2026-08-23): real Chrome manager
+and participant flows created, reloaded, extended, drag-reordered, converted,
+and presented a scored question. Option UUIDs and order persisted; one atomic
+slide PUT saved question/options/settings; multiple-to-single conversion kept
+exactly one correct option and disabled partial scoring; a participant answer
+returned 201 and produced the durable leaderboard score. Manager/player live
+startup no longer emits guaranteed 404/401 probes, and a second participant
+updated the manager lobby from one to two through SSE. Earlier fixes also cover
+empty answer queues, stale logout fetches, fresh runs after ended idempotent
+sessions, honest omission of unavailable score deltas, and shared save/present
+validation for question text/options/type/time/points. Go tests/vet, web
+lint/typecheck, 26 unit tests/build, the Compose integration matrix, and all
+three system-Chrome E2E flows passed.
+
 ## Installed Codex workflow prerequisites
 
 - `security-best-practices` is explicit-request-only and must load the matching

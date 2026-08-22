@@ -63,7 +63,7 @@ const pruneQueuedAnswersForCurrentQuestion = (roomId, questionId, runId) => {
 const flushQueuedAnswers = async (roomId, sendMessage, questionId, runId) => {
   const current = readQueuedAnswers(roomId);
   if (current.length === 0) {
-    return { sentKeys: [], remaining: 0 };
+    return { sentKeys: [], rejectedKeys: [], remaining: 0 };
   }
 
   const sentKeys = [];

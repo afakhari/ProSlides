@@ -90,7 +90,7 @@ function ManagerLeaderBoard({
             color: getColorForUser(user.user_id),
             rank: user.rank,
             total_points: user.total_points || 0,
-            new_points: user.new_points || 0,
+            new_points: user.new_points ?? null,
           }))
         : [],
     [results]
@@ -350,9 +350,11 @@ function ManagerLeaderBoard({
                             {/* Score */}
                             <div className="relative w-[10%] text-[color:var(--quiz-text)] font-semibold ml-3">
                               {Math.round(p.total_points)}p{" "}
-                              <span className="text-[color:var(--quiz-text-muted)] text-sm">
-                                +{Math.round(p.new_points)}
-                              </span>
+                              {Number.isFinite(p.new_points) && (
+                                <span className="text-[color:var(--quiz-text-muted)] text-sm">
+                                  +{Math.round(p.new_points)}
+                                </span>
+                              )}
                             </div>
                           </Motion.li>
                         );

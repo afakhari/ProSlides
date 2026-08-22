@@ -68,7 +68,7 @@ function PlayerLeaderBoard({ players, quiz }) {
   const currentUserId = snapshot?.role === "participant" ? snapshot.participant.id : null;
   // const navigate = useNavigate();
 
-  console.log(
+  if (import.meta.env.DEV) console.log(
     "[PlayerLeaderBoard] Rendering with",
     validPlayers.length,
     "players"
@@ -293,9 +293,11 @@ function PlayerLeaderBoard({ players, quiz }) {
                       {/* Score */}
                       <div className="relative w-[15%] font-semibold ml-3 text-[color:var(--quiz-text)]">
                         {Math.round(p.total_points)}p{" "}
-                        <span className="text-sm text-[color:var(--quiz-text-muted)]">
-                          +{Math.round(p.new_points)}
-                        </span>
+                        {Number.isFinite(p.new_points) && (
+                          <span className="text-sm text-[color:var(--quiz-text-muted)]">
+                            +{Math.round(p.new_points)}
+                          </span>
+                        )}
                       </div>
                     </Motion.li>
                   );

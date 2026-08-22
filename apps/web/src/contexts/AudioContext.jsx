@@ -305,7 +305,7 @@ export function AudioProvider({ children }) {
       }
     }
 
-    console.log("[Audio] Music URL set:", url);
+    if (import.meta.env.DEV) console.log("[Audio] Music URL set:", url);
   };
 
   // Cleanup on unmount

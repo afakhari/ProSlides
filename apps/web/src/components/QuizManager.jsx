@@ -56,12 +56,12 @@ export default function QuizManager({ onNewPresentation }) {
   // Load quizzes from API on mount
   const [quizzes, setQuizzes] = useState([]);
 
-  const fetchQuizzes = useCallback(async () => {
+  const fetchQuizzes = useCallback(async (signal) => {
     try {
       setLoading(true);
       // Add a small delay for better UX
       await new Promise((resolve) => setTimeout(resolve, 100));
-      const data = await quizService.listPresentations();
+      const data = await quizService.listPresentations({ signal });
 
       // Map API response to local quiz structure
       const mappedQuizzes = data.map((quiz) => {
@@ -85,6 +85,7 @@ export default function QuizManager({ onNewPresentation }) {
       setQuizzes(mappedQuizzes);
       setError(null);
     } catch (err) {
+      if (err.name === "AbortError") return;
       console.error("Error fetching quizzes:", err);
       setError(err.message);
     } finally {
@@ -93,7 +94,9 @@ export default function QuizManager({ onNewPresentation }) {
   }, [loggedInUser]);
 
   useEffect(() => {
-    fetchQuizzes();
+    const controller = new AbortController();
+    void fetchQuizzes(controller.signal);
+    return () => controller.abort();
   }, [fetchQuizzes]);
 
   useEffect(() => {
