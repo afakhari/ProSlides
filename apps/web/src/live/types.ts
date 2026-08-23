@@ -74,6 +74,7 @@ export interface PresentationSlide { id: string; position: number; kind: string;
 export interface Presentation {
   id: string;
   title: string;
+  access_code: string | null;
   settings: Record<string, string>;
   created_at: string;
   updated_at: string;

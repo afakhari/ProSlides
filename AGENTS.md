@@ -45,12 +45,12 @@ a shortcut.
 
 | Area | Actual state | Rule for next work |
 |---|---|---|
-| `apps/api` | Go API with Compose-verified cookie identity, optional email OTP, SMTP reset delivery, signed Google login, owner presentation/editor CRUD with validated slide definitions and revision-aware edits, content/live flows, role-scoped snapshots, keyset-paginated results, durable replay, bounded fan-out, transactional advisory-locked migrations, and trusted-proxy-aware identity limits | Preserve ownership/role boundaries and never accept an external score ledger. Provider secrets belong only in deployment configuration. |
-| `apps/web` | React 19/Vite UI on the Go cookie API; the quiz editor has a typed domain/repository boundary, conditional single-request saves, stable slide/option identities, question/content inspectors, shared present validation, and conflict recovery. Snapshot-first SSE and manager paging replace WebSockets. A production Nginx image supplies SPA fallback, same-origin proxying, SSE no-buffer settings, caching, and security headers. | Preserve the established auth UI and participant non-disclosure boundary. Keep web/API provider configuration synchronized. |
-| PostgreSQL | PostgreSQL 16; migrations `0001`-`0013`; authoritative users/content/settings/editor revisions/OTP and reset hashes/sessions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
+| `apps/api` | Go API with Compose-verified cookie identity, optional email OTP, SMTP reset delivery, signed Google login, owner presentation/editor CRUD with validated slide definitions, revision-aware edits, persistent owner-selected access codes, content/live flows, role-scoped snapshots, keyset-paginated results, durable replay, bounded fan-out, transactional advisory-locked migrations, and trusted-proxy-aware identity limits | Preserve ownership/role boundaries and never accept an external score ledger. Provider secrets belong only in deployment configuration. |
+| `apps/web` | React 19/Vite UI on the Go cookie API; the quiz editor has a typed domain/repository boundary, conditional single-request saves, stable slide/option identities, editable share codes, question/content inspectors, shared present validation, and conflict recovery. Public `/{accessCode}` routes resolve active sessions. Snapshot-first SSE and manager paging replace WebSockets. A production Nginx image supplies SPA fallback, same-origin proxying, SSE no-buffer settings, caching, and security headers. | Preserve the established auth UI and participant non-disclosure boundary. Keep web/API provider configuration synchronized. |
+| PostgreSQL | PostgreSQL 16; migrations `0001`-`0014`; authoritative users/content/settings/editor revisions/access codes/OTP and reset hashes/sessions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
 | Redis | Redis 7.4 provides readiness and fixed-window identity rate limits; live fan-out/presence acceleration is not implemented | It may accelerate ephemeral work, never replace the event/answer ledger. |
 | CI | GitHub Actions validates Go tests/race, web lint/typecheck/unit/build, both Compose contracts, and API/web image builds | Keep CI passing and add checks with new tooling. |
-| Tests | Web lint/typecheck/31 unit tests/build, 3 Playwright system-Chrome E2E flows, Go tests/vet, SMTP/JWKS/proxy tests, Compose identity/presentation/editor revision/conflict/live/result/non-disclosure/SSE matrix, and full API+web image smoke; 1k/5k/10k tests do not exist | Treat browser/Compose as functional evidence only; never claim 10k proof without the capacity gates. |
+| Tests | Web lint/typecheck/32 unit tests/build, 3 Playwright system-Chrome E2E flows, Go tests/vet, SMTP/JWKS/proxy tests, Compose identity/presentation/editor revision/conflict/live/result/non-disclosure/SSE matrix, and full API+web image smoke; 1k/5k/10k tests do not exist | Treat browser/Compose as functional evidence only; never claim 10k proof without the capacity gates. |
 
 The working branch is `feat/go-platform-foundation`. It uses a separate Git
 worktree, so `master` remains available to teammates. Do not merge, force-push,
@@ -76,6 +76,7 @@ docs/
   deployment-runbook.md      images, dependencies, secrets, TLS/SSE ingress, rollout
   operations-runbook.md      backup, restore, rollback, rotation, incident checks
   migration-status.md        Django/Rust parity and remaining production work
+  frontend-professionalization.md Persian-first UX phases and acceptance gates
   decisions/                 Architecture Decision Records
 AGENTS.md                    this mandatory guide
 docker-compose.yaml          local web + API + PostgreSQL + Redis stack
@@ -199,15 +200,15 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 
 ## Single exact next task
 
-Add bounded OpenTelemetry-compatible metrics and the reproducible 100-user k6
-smoke scenario defined in `docs/capacity-plan.md`. Instrument HTTP, PostgreSQL,
-SSE/broker, replay lag, and answer outcomes without participant/session/email
-labels. Record the commit, topology, raw results, and correctness reconciliation.
+Implement Phase F1 in `docs/frontend-professionalization.md`: a Persian-first,
+continuous `New presentation` to editor flow with dashboard pending feedback,
+an editor-shaped skeleton, reduced-motion-safe entry, and first-slide onboarding.
 
-Acceptance: metrics have bounded cardinality; the 100-user connect/join/answer/
-reconnect/close flow meets the initial SLOs; durable answers, aggregate scores,
-request IDs, states, and events reconcile exactly; no 1k run starts before this
-smoke gate passes.
+Acceptance: one click creates exactly one presentation and one navigation; no
+unrelated full-screen loader flashes; failure remains recoverable on the
+dashboard; desktop 1440x900 and mobile 390x844 browser checks pass. Bounded
+telemetry and the 100-user k6 smoke remain the next capacity task after the
+owner-prioritized frontend sequence.
 
 ## Phases and the single next task
 
@@ -266,6 +267,8 @@ smoke gate passes.
 | 2026-08-23 | Added a reproducible local/production deployment path | Full-stack Compose now includes a production React/Nginx image; env interpolation includes SMTP credentials; advisory-locked transactional migrations, trusted-proxy client IPs, API/web health checks, reference production Compose/TLS ingress, and local/deploy/operations runbooks were added and verified with Go, web, image, and stack smoke checks. |
 | 2026-08-23 | Exercised and corrected the complete quiz editor/live browser flow | Question timing/scoring validation is shared by save/present; option IDs/order and question saves are durable and atomic; type conversion normalizes correctness; empty queues and ended-session reruns are safe; manager/player startup avoids guaranteed 404/401 probes; SSE presence updates the lobby; unavailable score deltas are hidden; and logout aborts stale fetches. Go/web checks, 26 unit tests, Compose integration, system-Chrome E2E, and real manager/player edit/answer/leaderboard flows passed. |
 | 2026-08-23 | Reworked quiz creation/editing around a typed canonical boundary and revision-aware writes | Forward-only migration `0013` adds presentation/slide revisions; OpenAPI and Go reject malformed question/content definitions and stale `If-Match` edits; settings merge by key; the editor saves each mutation once, selects by stable ID, supports question/content conversion and editing, isolates derived leaderboard IDs, shares save/present validation, and recovers conflicts. Web lint/typecheck/31 unit tests/build, Go tests/vet, both images, health/readiness, and the preserved-volume Compose integration matrix passed; no browser was opened for this change. |
+| 2026-08-23 | Added persistent owner-selected quiz access codes and direct public join links | Migration `0014`, OpenAPI, Go and React now enforce case-insensitive unique 5-12 character codes, use them for new sessions, atomically replace the current active-session code, and resolve `/{accessCode}` for participants. Go tests/vet, web lint/typecheck/32 unit tests/build, image builds, OpenAPI parsing, and the preserved-volume Compose matrix passed, including old-link invalidation and uniqueness; no browser E2E was run. |
+| 2026-08-23 | Defined the Persian-first frontend professionalization program | `docs/frontend-professionalization.md` records real-Chrome findings, UX rules, ordered F1-F4 phases, responsive/accessibility gates, and makes creation-to-editor continuity the owner-prioritized next task without changing the independent capacity gates. |
 
 ## References
 
@@ -278,6 +281,7 @@ smoke gate passes.
 - `docs/deployment-runbook.md` — immutable build, dependency, TLS/SSE, and rollout procedure.
 - `docs/operations-runbook.md` — backup/restore, rollback, rotation, and incident procedure.
 - `docs/migration-status.md` — current parity matrix, evidence, and remaining work.
+- `docs/frontend-professionalization.md` — Persian-first UX direction, phases, and acceptance gates.
 - `docs/decisions/0001-go-modular-monolith.md` — architecture decision record.
 - `docs/decisions/0002-durable-events-and-bounded-sse-fanout.md` — replay/fan-out and backpressure decision.
 - `apps/api/openapi/openapi.yaml` — contract source of truth.

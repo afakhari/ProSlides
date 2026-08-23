@@ -13,6 +13,7 @@ export default function QuizHeader({
   onBack,
   onQuizUpdated,
   onConflict,
+  onAccessCodeSaved,
 }) {
 
   const navigate = useNavigate();
@@ -193,8 +194,7 @@ export default function QuizHeader({
           {/* --------------- Share Button --------------- */}
           <button
             onClick={() => setShowShareModal(true)}
-            disabled={!accessCode}
-            title={accessCode ? "Share" : "The join code is generated when the presentation starts"}
+            title="Set or share the audience access code"
             className="flex items-center gap-2 px-5 py-2.5 
                     bg-gradient-to-r from-pink-600 to-purple-700 
                     hover:from-pink-650 hover:to-purple-800
@@ -213,6 +213,7 @@ export default function QuizHeader({
         isOpen={showShareModal}
         onClose={() => setShowShareModal(false)}
         accessCode={accessCode}
+        onAccessCodeSaved={onAccessCodeSaved}
       />
     </>
   );

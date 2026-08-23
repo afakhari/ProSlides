@@ -12,6 +12,7 @@ var (
 	ErrInvalidPosition = errors.New("invalid slide position")
 	ErrSlideHasResults = errors.New("slide has live results")
 	ErrEditConflict    = errors.New("resource changed since it was loaded")
+	ErrAccessCodeTaken = errors.New("access code is already in use")
 )
 
 type Slide struct {
@@ -22,18 +23,20 @@ type Slide struct {
 	Content  json.RawMessage `json:"content"`
 }
 type Presentation struct {
-	ID        string          `json:"id"`
-	Revision  int64           `json:"revision"`
-	Title     string          `json:"title"`
-	Settings  json.RawMessage `json:"settings"`
-	CreatedAt time.Time       `json:"created_at"`
-	UpdatedAt time.Time       `json:"updated_at"`
-	Slides    []Slide         `json:"slides"`
+	ID         string          `json:"id"`
+	Revision   int64           `json:"revision"`
+	Title      string          `json:"title"`
+	AccessCode *string         `json:"access_code"`
+	Settings   json.RawMessage `json:"settings"`
+	CreatedAt  time.Time       `json:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at"`
+	Slides     []Slide         `json:"slides"`
 }
 type PresentationSummary struct {
 	ID               string          `json:"id"`
 	Revision         int64           `json:"revision"`
 	Title            string          `json:"title"`
+	AccessCode       *string         `json:"access_code"`
 	Settings         json.RawMessage `json:"settings"`
 	SlideCount       int             `json:"slide_count"`
 	ParticipantCount int             `json:"participant_count"`
@@ -48,6 +51,9 @@ type PresentationPatch struct {
 type SessionLocator struct {
 	SessionID      string `json:"session_id"`
 	PresentationID string `json:"presentation_id"`
+}
+type AccessCodeResult struct {
+	AccessCode string `json:"access_code"`
 }
 type QuestionResultCursor struct {
 	Score       int       `json:"s"`
@@ -90,6 +96,7 @@ type Store interface {
 	FindOwned(context.Context, string, string) (Presentation, error)
 	Create(context.Context, string, string, json.RawMessage) (Presentation, error)
 	Update(context.Context, string, string, PresentationPatch) (Presentation, error)
+	SetAccessCode(context.Context, string, string, string) (AccessCodeResult, error)
 	Delete(context.Context, string, string) error
 	Duplicate(context.Context, string, string, string) (Presentation, error)
 	LatestSession(context.Context, string, string) (SessionLocator, error)

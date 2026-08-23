@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import { X, Check, Loader2 } from "lucide-react";
+import { quizService } from "../services/quizService.ts";
 
 
 export default function ShareMenu({
@@ -8,6 +9,7 @@ export default function ShareMenu({
   onClose,
   accessCode,
   onAccessCodeSaved,
+  quizId,
 }) {
 
   const [section, setSection] = useState("invite");
@@ -47,8 +49,8 @@ export default function ShareMenu({
   const saveAccessCode = async () => {
     if (!code || inputError || code.length < 5) return false;
 
-    if (code !== initialCode) {
-      setSaveError("Join codes are generated securely when a live session starts and cannot be edited.");
+    if (!quizId) {
+      setSaveError("Quiz is unavailable.");
       return false;
     }
     setIsSaving(true);
@@ -56,9 +58,11 @@ export default function ShareMenu({
     setSaveSuccess(false);
 
     try {
-      setSaveSuccess(true);
-      const updatedCode = code;
+      const result = await quizService.setAccessCode(quizId, code);
+      const updatedCode = result.access_code;
+      setCode(updatedCode);
       setInitialCode(updatedCode);
+      setSaveSuccess(true);
       if (onAccessCodeSaved) {
         onAccessCodeSaved(updatedCode);
       }
@@ -70,8 +74,11 @@ export default function ShareMenu({
 
       return true;
     } catch (error) {
-      console.error('Error saving access code:', error);
-      setSaveError(error.message || 'Failed to save access code');
+      if (error?.response?.status === 409) {
+        setSaveError("This access code is already in use.");
+      } else {
+        setSaveError(error.message || 'Failed to save access code');
+      }
       return false;
     } finally {
       setIsSaving(false);

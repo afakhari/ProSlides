@@ -27,9 +27,10 @@ func (f fakeSessions) Authorize(context.Context, string, string) (identity.User,
 }
 
 type fakeStore struct {
-	p     Presentation
-	err   error
-	owner string
+	p                Presentation
+	err              error
+	owner            string
+	accessCode       string
 	expectedRevision *int64
 }
 
@@ -53,6 +54,11 @@ func (f *fakeStore) Update(_ context.Context, _, owner string, patch Presentatio
 		title = *patch.Title
 	}
 	return Presentation{ID: "p", Title: title, Settings: patch.Settings, Slides: []Slide{}}, f.err
+}
+func (f *fakeStore) SetAccessCode(_ context.Context, _, owner, code string) (AccessCodeResult, error) {
+	f.owner = owner
+	f.accessCode = code
+	return AccessCodeResult{AccessCode: code}, f.err
 }
 func (f *fakeStore) Delete(_ context.Context, _, owner string) error { f.owner = owner; return f.err }
 func (f *fakeStore) Duplicate(_ context.Context, _, owner, title string) (Presentation, error) {
@@ -121,6 +127,40 @@ func TestGetPresentationHidesMissingAndUnauthorized(t *testing.T) {
 		t.Fatalf("status=%d", r.Code)
 	}
 	_ = errors.New
+}
+
+func TestSetAccessCodeNormalizesAndValidates(t *testing.T) {
+	store := &fakeStore{}
+	mux := http.NewServeMux()
+	NewHTTP(fakeSessions{}, store).Register(mux)
+
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/presentations/p/access-code", strings.NewReader(`{"access_code":" quiz42 "}`))
+	request.AddCookie(&http.Cookie{Name: "proslides_session", Value: "token"})
+	request.Header.Set("X-CSRF-Token", "csrf")
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || store.owner != "owner" || store.accessCode != "QUIZ42" || !strings.Contains(response.Body.String(), `"access_code":"QUIZ42"`) {
+		t.Fatalf("response=%d %s owner=%s code=%s", response.Code, response.Body.String(), store.owner, store.accessCode)
+	}
+
+	invalid := httptest.NewRequest(http.MethodPut, "/api/v1/presentations/p/access-code", strings.NewReader(`{"access_code":"bad-code"}`))
+	invalid.AddCookie(&http.Cookie{Name: "proslides_session", Value: "token"})
+	invalid.Header.Set("X-CSRF-Token", "csrf")
+	invalidResponse := httptest.NewRecorder()
+	mux.ServeHTTP(invalidResponse, invalid)
+	if invalidResponse.Code != http.StatusBadRequest {
+		t.Fatalf("invalid status=%d body=%s", invalidResponse.Code, invalidResponse.Body.String())
+	}
+
+	store.err = ErrAccessCodeTaken
+	conflict := httptest.NewRequest(http.MethodPut, "/api/v1/presentations/p/access-code", strings.NewReader(`{"access_code":"TAKEN1"}`))
+	conflict.AddCookie(&http.Cookie{Name: "proslides_session", Value: "token"})
+	conflict.Header.Set("X-CSRF-Token", "csrf")
+	conflictResponse := httptest.NewRecorder()
+	mux.ServeHTTP(conflictResponse, conflict)
+	if conflictResponse.Code != http.StatusConflict || !strings.Contains(conflictResponse.Body.String(), "access_code_taken") {
+		t.Fatalf("conflict=%d %s", conflictResponse.Code, conflictResponse.Body.String())
+	}
 }
 
 func TestCreateSlideRequiresCSRFAndCreatesForOwner(t *testing.T) {

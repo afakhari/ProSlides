@@ -228,6 +228,24 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/presentations/{presentationId}/access-code:
+    put:
+      operationId: setPresentationAccessCode
+      summary: Set the public access code for an owned presentation.
+      description: Normalizes the code to uppercase and updates any non-ended live session for this presentation atomically, immediately invalidating its previous public link. Codes are globally unique without regard to case.
+      parameters:
+        - $ref: '#/components/parameters/PresentationId'
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SetAccessCodeRequest' } } }
+      responses:
+        '200': { description: Access code saved., content: { application/json: { schema: { $ref: '#/components/schemas/AccessCodeResult' } } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CSRFError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: The access code is already assigned to another presentation. }
   /api/v1/presentations:
     get:
       operationId: listPresentations
@@ -683,11 +701,12 @@ components:
         is_active: { type: boolean }
     Presentation:
       type: object
-      required: [id, revision, title, settings, created_at, updated_at, slides]
+      required: [id, revision, title, access_code, settings, created_at, updated_at, slides]
       properties:
         id: { type: string, format: uuid }
         revision: { type: integer, format: int64, minimum: 1 }
         title: { type: string, minLength: 1, maxLength: 500 }
+        access_code: { type: string, pattern: '^[A-Z0-9]{5,12}$', nullable: true }
         settings: { type: object, additionalProperties: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -696,11 +715,12 @@ components:
           items: { $ref: '#/components/schemas/Slide' }
     PresentationSummary:
       type: object
-      required: [id, revision, title, settings, slide_count, participant_count, created_at, updated_at]
+      required: [id, revision, title, access_code, settings, slide_count, participant_count, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         revision: { type: integer, format: int64, minimum: 1 }
         title: { type: string }
+        access_code: { type: string, pattern: '^[A-Z0-9]{5,12}$', nullable: true }
         settings: { type: object, additionalProperties: true }
         slide_count: { type: integer, minimum: 0 }
         participant_count: { type: integer, minimum: 0 }
@@ -718,6 +738,18 @@ components:
       properties:
         title: { type: string, minLength: 1, maxLength: 500 }
         settings: { type: object, additionalProperties: true }
+    SetAccessCodeRequest:
+      type: object
+      required: [access_code]
+      additionalProperties: false
+      properties:
+        access_code: { type: string, pattern: '^[A-Za-z0-9]{5,12}$' }
+    AccessCodeResult:
+      type: object
+      required: [access_code]
+      additionalProperties: false
+      properties:
+        access_code: { type: string, pattern: '^[A-Z0-9]{5,12}$' }
     CreateSlideRequest:
       type: object
       required: [position, kind, content]
@@ -852,7 +884,7 @@ components:
         id: { type: string, format: uuid }
         presentation_id: { type: string, format: uuid }
         host_id: { type: string, format: uuid }
-        join_code: { type: string }
+        join_code: { type: string, pattern: '^[A-Z0-9]{5,12}$' }
         state: { type: string, enum: [draft, lobby, content, question_open, question_closed, leaderboard, ended] }
         state_version: { type: integer }
         active_slide_id: { type: string, format: uuid, nullable: true }

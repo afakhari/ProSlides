@@ -11,6 +11,7 @@ const presentationDTO = {
   id: "presentation-1",
   revision: 7,
   title: "Demo",
+  access_code: "DEMO42",
   settings: { background_color: "#fff", music_url: "old.mp3" },
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -39,6 +40,7 @@ const presentationDTO = {
 test("presentation adapter keeps revisions and stable option identities", () => {
   const editor = presentationToEditor(presentationDTO);
   assert.equal(editor.revision, 7);
+  assert.equal(editor.access_code, "DEMO42");
   assert.equal(editor.slides[0].revision, 3);
   assert.deepEqual(editor.slides[0].question.options.map((option) => option.option_id), ["a", "b"]);
 
@@ -46,6 +48,23 @@ test("presentation adapter keeps revisions and stable option identities", () => 
   assert.equal(definition.kind, "question");
   assert.deepEqual(definition.content.options.map((option) => option.id), ["a", "b"]);
   assert.equal(definition.content.show_leaderboard_after, true);
+});
+
+test("access code update uses its dedicated CSRF-protected endpoint", async (t) => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init });
+    return new Response(JSON.stringify({ access_code: "QUIZ42" }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const result = await quizService.setAccessCode("presentation-1", "quiz42");
+  assert.equal(result.access_code, "QUIZ42");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].init.method, "PUT");
+  assert.match(String(calls[0].url), /presentations\/presentation-1\/access-code$/);
+  assert.deepEqual(JSON.parse(calls[0].init.body), { access_code: "quiz42" });
 });
 
 test("presentation setting update is one conditional PATCH and does not resend stale fields", async (t) => {

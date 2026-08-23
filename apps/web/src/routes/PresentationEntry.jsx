@@ -267,7 +267,7 @@ function AppPresentation({ roomId, role, initialQuizData }) {
           const quizData = {
             quiz_id: data.id,
             title: data.title,
-            access_code: "",
+            access_code: data.access_code || "",
             background: {
               color: data.settings?.background_color || "#1e1e2e",
               image: data.settings?.background_image_url || "",

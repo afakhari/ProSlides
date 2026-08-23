@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -16,7 +17,7 @@ type PostgresStore struct{ pool *pgxpool.Pool }
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore { return &PostgresStore{pool: pool} }
 
 func (s *PostgresStore) ListOwned(c context.Context, owner string) ([]PresentationSummary, error) {
-	rows, err := s.pool.Query(c, `SELECT p.id::text,p.revision,p.title,p.settings::text,
+	rows, err := s.pool.Query(c, `SELECT p.id::text,p.revision,p.title,p.access_code,p.settings::text,
 		(SELECT count(*) FROM slides sl WHERE sl.presentation_id=p.id),
 		(SELECT count(*) FROM participants pa JOIN live_sessions ls ON ls.id=pa.session_id WHERE ls.presentation_id=p.id),
 		p.created_at,p.updated_at FROM presentations p WHERE p.owner_id=$1
@@ -28,7 +29,7 @@ func (s *PostgresStore) ListOwned(c context.Context, owner string) ([]Presentati
 	items := make([]PresentationSummary, 0)
 	for rows.Next() {
 		var item PresentationSummary
-		if err = rows.Scan(&item.ID, &item.Revision, &item.Title, &item.Settings, &item.SlideCount, &item.ParticipantCount, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err = rows.Scan(&item.ID, &item.Revision, &item.Title, &item.AccessCode, &item.Settings, &item.SlideCount, &item.ParticipantCount, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -41,8 +42,8 @@ func (s *PostgresStore) Create(c context.Context, owner, title string, settings 
 		settings = json.RawMessage(`{}`)
 	}
 	var p Presentation
-	err := s.pool.QueryRow(c, `INSERT INTO presentations(owner_id,title,settings) VALUES($1,$2,$3) RETURNING id::text,revision,title,settings::text,created_at,updated_at`, owner, title, settings).
-		Scan(&p.ID, &p.Revision, &p.Title, &p.Settings, &p.CreatedAt, &p.UpdatedAt)
+	err := s.pool.QueryRow(c, `INSERT INTO presentations(owner_id,title,settings) VALUES($1,$2,$3) RETURNING id::text,revision,title,access_code,settings::text,created_at,updated_at`, owner, title, settings).
+		Scan(&p.ID, &p.Revision, &p.Title, &p.AccessCode, &p.Settings, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		return Presentation{}, err
 	}
@@ -67,6 +68,49 @@ func nullableJSON(raw json.RawMessage) any {
 		return nil
 	}
 	return raw
+}
+
+func (s *PostgresStore) SetAccessCode(c context.Context, id, owner, code string) (AccessCodeResult, error) {
+	tx, err := s.pool.Begin(c)
+	if err != nil {
+		return AccessCodeResult{}, err
+	}
+	defer tx.Rollback(c) //nolint:errcheck
+	var lockedID string
+	if err = tx.QueryRow(c, `SELECT id::text FROM presentations WHERE id=$1 AND owner_id=$2 FOR UPDATE`, id, owner).Scan(&lockedID); errors.Is(err, pgx.ErrNoRows) {
+		return AccessCodeResult{}, ErrNotFound
+	} else if err != nil {
+		return AccessCodeResult{}, err
+	}
+	if _, err = tx.Exec(c, `SELECT pg_advisory_xact_lock(hashtextextended('access-code:' || $1, 0))`, code); err != nil {
+		return AccessCodeResult{}, err
+	}
+	var usedByOtherActiveSession bool
+	if err = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM live_sessions WHERE state<>'ended' AND upper(join_code)=upper($2) AND presentation_id<>$1)`, id, code).Scan(&usedByOtherActiveSession); err != nil {
+		return AccessCodeResult{}, err
+	}
+	if usedByOtherActiveSession {
+		return AccessCodeResult{}, ErrAccessCodeTaken
+	}
+	if _, err = tx.Exec(c, `UPDATE presentations SET access_code=$2,updated_at=now() WHERE id=$1`, id, code); err != nil {
+		return AccessCodeResult{}, mapAccessCodeError(err)
+	}
+	if _, err = tx.Exec(c, `UPDATE live_sessions SET join_code=$2,updated_at=now()
+		WHERE id=(SELECT id FROM live_sessions WHERE presentation_id=$1 AND state<>'ended' ORDER BY created_at DESC,id DESC LIMIT 1)`, id, code); err != nil {
+		return AccessCodeResult{}, mapAccessCodeError(err)
+	}
+	if err = tx.Commit(c); err != nil {
+		return AccessCodeResult{}, mapAccessCodeError(err)
+	}
+	return AccessCodeResult{AccessCode: code}, nil
+}
+
+func mapAccessCodeError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return ErrAccessCodeTaken
+	}
+	return err
 }
 
 func (s *PostgresStore) Delete(c context.Context, id, owner string) error {
@@ -441,7 +485,7 @@ func (s *PostgresStore) ReorderSlides(c context.Context, presentationID, owner s
 
 func (s *PostgresStore) FindOwned(c context.Context, id, owner string) (Presentation, error) {
 	var p Presentation
-	if err := s.pool.QueryRow(c, `SELECT id::text,revision,title,settings::text,created_at,updated_at FROM presentations WHERE id=$1 AND owner_id=$2`, id, owner).Scan(&p.ID, &p.Revision, &p.Title, &p.Settings, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := s.pool.QueryRow(c, `SELECT id::text,revision,title,access_code,settings::text,created_at,updated_at FROM presentations WHERE id=$1 AND owner_id=$2`, id, owner).Scan(&p.ID, &p.Revision, &p.Title, &p.AccessCode, &p.Settings, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Presentation{}, ErrNotFound
 		}

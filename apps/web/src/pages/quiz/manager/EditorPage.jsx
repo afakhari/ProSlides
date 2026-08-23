@@ -920,6 +920,7 @@ function QuestionEditor({ quiz, updateQuiz, refreshQuiz }) {
         setNameSelectionNotice={setNameSelectionNotice}
         onBack={handleExitPanel}
         onQuizUpdated={updateQuiz}
+        onAccessCodeSaved={(accessCode) => updateQuiz({ ...quiz, access_code: accessCode })}
         onConflict={refreshQuiz}
       />
 

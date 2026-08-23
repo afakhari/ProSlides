@@ -13,6 +13,7 @@ interface PresentationDTO {
   id: string;
   revision: number;
   title: string;
+  access_code: string | null;
   settings: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -115,6 +116,7 @@ export const presentationToEditor = (presentation: PresentationDTO): EditorPrese
   return {
     quiz_id: presentation.id,
     revision: numberValue(presentation.revision, 1),
+    access_code: stringValue(presentation.access_code),
     title: presentation.title,
     quiz_name: presentation.title,
     background_color: backgroundColor,
@@ -218,6 +220,10 @@ export const quizService = {
   updateQuiz: updatePresentation,
   updateQuizMusic: (quizID: string, musicURL: string, revision?: number) => updatePresentation(quizID, { music_url: musicURL || "", revision }),
   updateQuizBackground: (quizID: string, data: PresentationUpdate, revision?: number) => updatePresentation(quizID, { ...data, revision: revision ?? data.revision }),
+  setAccessCode: (quizID: string, accessCode: string) => request<{ access_code: string }>(`/presentations/${quizID}/access-code`, {
+    method: "PUT",
+    json: { access_code: accessCode },
+  }),
 
   createSlide: async (quizID: string, slide: EditorSlide, presentationRevision?: number) => slideToEditor(await request<SlideDTO>(`/presentations/${quizID}/slides`, {
     method: "POST",

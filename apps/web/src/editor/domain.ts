@@ -39,8 +39,9 @@ export interface EditorSlide {
 }
 
 export interface EditorPresentation {
-  quiz_id: string;
-  revision: number;
+	quiz_id: string;
+	revision: number;
+	access_code: string;
   title: string;
   quiz_name: string;
   background_color: string;

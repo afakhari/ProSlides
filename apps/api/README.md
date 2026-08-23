@@ -62,6 +62,10 @@ participant/score, aggregate participant count, and `last_event_id`; they never
 include the complete roster, score map, or question correctness metadata.
 `GET /api/v1/live/sessions/resolve?join_code=...` maps the public presenter code
 to the current non-ended Go live session without exposing manager fields.
+Owners set a persistent, case-insensitive unique code with
+`PUT /api/v1/presentations/{presentationId}/access-code`. The API normalizes it
+to uppercase and atomically replaces the code on the current non-ended session,
+so the old `/{accessCode}` link stops resolving immediately.
 Manager snapshots are also bounded.
 Managers use `GET /api/v1/live/sessions/{sessionId}/roster` with a maximum
 `limit` of 100, opaque keyset cursors, and stable `joined` or `score` ordering.

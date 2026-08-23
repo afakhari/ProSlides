@@ -32,6 +32,7 @@ func (h *HTTP) Register(m *http.ServeMux) {
 	m.HandleFunc("POST /api/v1/presentations", h.create)
 	m.HandleFunc("GET /api/v1/presentations/{presentationId}", h.get)
 	m.HandleFunc("PATCH /api/v1/presentations/{presentationId}", h.update)
+	m.HandleFunc("PUT /api/v1/presentations/{presentationId}/access-code", h.setAccessCode)
 	m.HandleFunc("DELETE /api/v1/presentations/{presentationId}", h.delete)
 	m.HandleFunc("POST /api/v1/presentations/{presentationId}/duplicate", h.duplicate)
 	m.HandleFunc("GET /api/v1/presentations/{presentationId}/latest-session", h.latestSession)
@@ -164,6 +165,31 @@ func (h *HTTP) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, p)
+}
+
+func (h *HTTP) setAccessCode(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.mutating(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		AccessCode string `json:"access_code"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
+	if json.NewDecoder(r.Body).Decode(&body) != nil {
+		errJSON(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	code := strings.ToUpper(strings.TrimSpace(body.AccessCode))
+	if len(code) < 5 || len(code) > 12 || !isASCIIAlphanumeric(code) {
+		errJSON(w, http.StatusBadRequest, "invalid_access_code")
+		return
+	}
+	result, err := h.store.SetAccessCode(r.Context(), r.PathValue("presentationId"), user.ID, code)
+	if handleStoreError(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *HTTP) delete(w http.ResponseWriter, r *http.Request) {
@@ -431,6 +457,14 @@ func hasEmptyOrDuplicate(ids []string) bool {
 	}
 	return false
 }
+func isASCIIAlphanumeric(value string) bool {
+	for _, char := range value {
+		if (char < 'A' || char > 'Z') && (char < '0' || char > '9') {
+			return false
+		}
+	}
+	return true
+}
 func handleStoreError(w http.ResponseWriter, err error) bool {
 	if err == nil {
 		return false
@@ -443,6 +477,8 @@ func handleStoreError(w http.ResponseWriter, err error) bool {
 		errJSON(w, 409, "slide_has_results")
 	} else if errors.Is(err, ErrEditConflict) {
 		errJSON(w, 409, "edit_conflict")
+	} else if errors.Is(err, ErrAccessCodeTaken) {
+		errJSON(w, 409, "access_code_taken")
 	} else {
 		errJSON(w, 500, "internal_error")
 	}

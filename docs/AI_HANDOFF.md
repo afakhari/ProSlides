@@ -19,7 +19,8 @@ not complete. Never describe a design target as benchmark evidence.
   code-coverage calculation.
 - Implemented: Go/Compose foundation, cookie identity, owner-scoped dashboard
   and presentation/editor CRUD, validated question/content definitions,
-  revision-aware conditional edits, typed editor mapping, settings, duplication/results management,
+  revision-aware conditional edits, typed editor mapping, persistent owner-selected
+  access codes with direct public join links, settings, duplication/results management,
   hashed one-time password-reset tokens with SMTP delivery, optional hashed
   email OTP verification, signed Google ID-token verification, Redis-backed
   auth rate limits, content/question creation, live state
@@ -41,7 +42,8 @@ not complete. Never describe a design target as benchmark evidence.
   cutover, or rollback exercise.
 - Capacity truth: architecture has a credible horizontal path, but 1k/5k/10k
   has not been measured. Use `docs/capacity-plan.md` as the only proof protocol.
-- Exact next task: bounded telemetry and the documented 100-user k6 smoke run.
+- Exact next task: Phase F1 of `frontend-professionalization.md`; bounded
+  telemetry and the documented 100-user k6 smoke remain the next capacity task.
 - Canonical parity and deployment references: `docs/migration-status.md` and
   `docs/configuration.md`.
 
@@ -136,6 +138,18 @@ tests/vet, both images, health/readiness, and the preserved-volume Compose
 integration matrix passed, including a recorded stale-write rejection. No
 browser was opened for this change.
 
+Access-code verification (2026-08-23): migration `0014` adds a nullable,
+case-insensitive unique presentation access code and permits reuse of ended
+session codes while keeping active codes unique. Owners can set a 5-12
+character ASCII alphanumeric code before or during a live run; it is normalized
+to uppercase, used for new sessions, and atomically replaces the current
+non-ended session code so the prior public link stops resolving. The React
+dashboard/editor Share UI persists the value and generates the direct
+`/{accessCode}` URL/QR. Go tests/vet, web lint/typecheck/32 unit tests/build,
+OpenAPI parsing, both image builds, and the preserved-volume Compose integration
+matrix passed, including active-code replacement and uniqueness. Browser E2E
+was not run for this change.
+
 ## Installed Codex workflow prerequisites
 
 - `security-best-practices` is explicit-request-only and must load the matching
@@ -148,6 +162,17 @@ browser was opened for this change.
 - `yeet` is reserved for explicit stage+commit+push+PR requests, reuses an
   existing PR, and preserves that PR's draft/review state. It also requires
   authenticated `gh` access.
+
+## Active Persian-first frontend program
+
+`docs/frontend-professionalization.md` is the UX source of truth. The product
+target is Persian and RTL; technical identifiers and APIs remain English. The
+owner-prioritized Phase F1 replaces the abrupt dashboard-to-generic-loader-to-
+empty-editor sequence with dashboard mutation feedback, an editor-shaped
+skeleton, reduced-motion-safe entry, and Persian first-slide onboarding. Do not
+expand F1 into the full design-system or translation migration; those are
+ordered as F2-F4 with explicit acceptance gates. The capacity plan remains
+valid and resumes after the prioritized frontend sequence.
 
 ## Completed implementation: dependency adapters and readiness
 
@@ -262,7 +287,7 @@ replaced at the architecture boundary:
 | JWT login/refresh/logout | opaque PostgreSQL session + CSRF cookies; no browser token storage |
 | email verification/reset | hashed one-time OTP/reset records, expiry/attempt controls, SMTP TLS/SSL adapter |
 | Google login | RS256/JWKS signature, issuer, audience, expiry, and verified-email validation |
-| persistent quiz access code | generated code for the current non-ended live session |
+| persistent quiz access code | owner-selected presentation code, reused by new sessions and atomically synchronized to the current non-ended session |
 | Rust result ingestion and duplicate score ledger | durable Go answers are the single source for option counts and per-question results |
 | Django slide insertion/order side effects | atomic zero-based insert/move/compact operations |
 | full quiz export used by the old runtime | bounded presentation definition plus role-scoped live snapshot and paginated result queries |

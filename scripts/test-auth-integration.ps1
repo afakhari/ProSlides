@@ -149,12 +149,19 @@ try {
   $ownedIDs = @(($ownedList.Content | ConvertFrom-Json) | ForEach-Object { $_.id })
   if ($ownedIDs -notcontains $createdID -or $ownedIDs -notcontains $duplicateID) { throw "Owned presentation list omitted created content" }
   $createdRead = Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200
+  $customAccessCode = ("Q" + [guid]::NewGuid().ToString("N").Substring(0, 11)).ToUpperInvariant()
+  $accessCodeResponse = Invoke-API -Method PUT -Path "/api/v1/presentations/$createdID/access-code" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ access_code = $customAccessCode.ToLowerInvariant() } | ConvertTo-Json -Compress) -ExpectedStatus 200
+  $accessCodePayload = $accessCodeResponse.Content | ConvertFrom-Json
+  if ($accessCodePayload.access_code -ne $customAccessCode) { throw "Access code was not normalized and persisted" }
+  $presentationWithCode = (Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  if ($presentationWithCode.access_code -ne $customAccessCode) { throw "Presentation response omitted its access code" }
   $createdPayload = $createdRead.Content | ConvertFrom-Json
   if ($createdPayload.slides.Count -ne 2 -or $createdPayload.slides[0].id -ne $contentID -or $createdPayload.slides[0].content.text -ne "Updated content") { throw "Presentation editor round trip was incomplete or out of order" }
 
   $createSessionRequest = [guid]::NewGuid().ToString()
   $liveCreated = Invoke-API -Method POST -Path "/api/v1/live/sessions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = $createSessionRequest; presentation_id = $createdID } | ConvertTo-Json -Compress) -ExpectedStatus 201
   $liveSession = $liveCreated.Content | ConvertFrom-Json
+  if ($liveSession.join_code -ne $customAccessCode) { throw "Live session did not use the presentation access code" }
   Invoke-API -Method POST -Path "/api/v1/live/sessions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = $createSessionRequest; presentation_id = $createdID } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
 
   $startRequest = [guid]::NewGuid().ToString()
@@ -221,6 +228,13 @@ try {
   $resolvedSession = Invoke-API -Method GET -Path "/api/v1/live/sessions/resolve?join_code=$($liveSession.join_code)" -Client $participantClient -ExpectedStatus 200
   $resolvedSessionPayload = $resolvedSession.Content | ConvertFrom-Json
   if ($resolvedSessionPayload.session_id -ne $liveSession.id -or $resolvedSessionPayload.presentation_id -ne $createdID) { throw "Join-code resolution did not return the active live session" }
+  $previousAccessCode = $liveSession.join_code
+  $replacementAccessCode = ("R" + [guid]::NewGuid().ToString("N").Substring(0, 11)).ToUpperInvariant()
+  Invoke-API -Method PUT -Path "/api/v1/presentations/$createdID/access-code" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ access_code = $replacementAccessCode } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
+  Invoke-API -Method GET -Path "/api/v1/live/sessions/resolve?join_code=$previousAccessCode" -Client $participantClient -ExpectedStatus 404 | Out-Null
+  $replacementResolution = (Invoke-API -Method GET -Path "/api/v1/live/sessions/resolve?join_code=$replacementAccessCode" -Client $participantClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  if ($replacementResolution.session_id -ne $liveSession.id) { throw "Replacement access code did not resolve the active session" }
+  $liveSession.join_code = $replacementAccessCode
   Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/roster" -Client $participantClient -ExpectedStatus 401 | Out-Null
 
   $rosterIDs = @()
@@ -332,6 +346,7 @@ try {
   Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides/reorder" -Client $otherClient -Headers @{ "X-CSRF-Token" = $otherCSRF } -Body (@{ slide_ids = @() } | ConvertTo-Json -Compress) -ExpectedStatus 404 | Out-Null
   Invoke-API -Method DELETE -Path "/api/v1/presentations/$createdID/results" -Client $otherClient -Headers @{ "X-CSRF-Token" = $otherCSRF } -ExpectedStatus 404 | Out-Null
   Invoke-API -Method GET -Path "/api/v1/presentations/$createdID/sessions/$($liveSession.id)/questions/$questionID/results" -Client $otherClient -ExpectedStatus 404 | Out-Null
+  Invoke-API -Method PUT -Path "/api/v1/presentations/$duplicateID/access-code" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ access_code = $liveSession.join_code } | ConvertTo-Json -Compress) -ExpectedStatus 409 | Out-Null
 
   Invoke-API -Method DELETE -Path "/api/v1/presentations/$duplicateID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -ExpectedStatus 204 | Out-Null
   Invoke-API -Method GET -Path "/api/v1/presentations/$duplicateID" -Client $loginClient -ExpectedStatus 404 | Out-Null
