@@ -16,14 +16,22 @@ type snapshotStore struct {
 	lastRosterQuery RosterQuery
 }
 
+const (
+	testSessionID        = "11111111-1111-4111-8111-111111111111"
+	testPresentationID   = "22222222-2222-4222-8222-222222222222"
+	testParticipantToken = "33333333-3333-4333-8333-333333333333"
+	testManagerID        = "44444444-4444-4444-8444-444444444444"
+	testOtherManagerID   = "55555555-5555-4555-8555-555555555555"
+)
+
 func (s *snapshotStore) CreateSession(context.Context, string, string, string, string) (Session, bool, error) {
 	return Session{}, false, errors.New("unexpected CreateSession")
 }
 func (s *snapshotStore) ResolveSession(_ context.Context, code string) (SessionLocator, error) {
-	if code != "JOIN" {
+	if code != "JOIN1" {
 		return SessionLocator{}, ErrNotFound
 	}
-	return SessionLocator{SessionID: "session", PresentationID: "presentation"}, nil
+	return SessionLocator{SessionID: testSessionID, PresentationID: testPresentationID}, nil
 }
 func (s *snapshotStore) Join(context.Context, string, string, string, string, []byte) (Participant, bool, error) {
 	return Participant{}, false, errors.New("unexpected Join")
@@ -35,30 +43,30 @@ func (s *snapshotStore) SubmitAnswer(context.Context, string, []byte, string, st
 	return AnswerResult{}, errors.New("unexpected SubmitAnswer")
 }
 func (s *snapshotStore) ParticipantSnapshot(_ context.Context, session string, hash []byte) (ParticipantSnapshot, error) {
-	if session != "session" || string(hash) != string(tokenHash("participant-token")) {
+	if session != testSessionID || string(hash) != string(tokenHash(testParticipantToken)) {
 		return ParticipantSnapshot{}, ErrUnauthorized
 	}
 	return ParticipantSnapshot{
 		Role:             "participant",
-		Session:          PublicSession{ID: session, PresentationID: "presentation", State: Lobby, StateVersion: 2},
+		Session:          PublicSession{ID: session, PresentationID: testPresentationID, State: Lobby, StateVersion: 2},
 		Participant:      ParticipantWithScore{Participant: Participant{ID: "participant-1", DisplayName: "Current Player", Avatar: "P"}, Score: 70},
 		ParticipantCount: 10_000,
 		LastEventID:      42,
 	}, nil
 }
 func (s *snapshotStore) ManagerSnapshot(_ context.Context, session, manager string) (ManagerSnapshot, error) {
-	if session != "session" || manager != "manager" {
+	if session != testSessionID || manager != testManagerID {
 		return ManagerSnapshot{}, ErrNotFound
 	}
 	return ManagerSnapshot{
 		Role:             "manager",
-		Session:          Session{ID: session, PresentationID: "presentation", HostID: manager, JoinCode: "JOIN", State: Lobby, StateVersion: 2},
+		Session:          Session{ID: session, PresentationID: testPresentationID, HostID: manager, JoinCode: "JOIN1", State: Lobby, StateVersion: 2},
 		ParticipantCount: 10_000,
 		LastEventID:      42,
 	}, nil
 }
 func (s *snapshotStore) Roster(_ context.Context, session, manager string, query RosterQuery) (RosterPage, error) {
-	if session != "session" || manager != "manager" {
+	if session != testSessionID || manager != testManagerID {
 		return RosterPage{}, ErrNotFound
 	}
 	s.lastRosterQuery = query
@@ -74,6 +82,9 @@ func (s *snapshotStore) Events(context.Context, string, int64, int) ([]Event, er
 	return nil, nil
 }
 func (s *snapshotStore) LatestEventID(context.Context, string) (int64, error) { return 0, nil }
+func (s *snapshotStore) ReconcileDeadline(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (s *snapshotStore) AuthorizeViewer(context.Context, string, string, []byte) error {
 	return nil
 }
@@ -83,9 +94,9 @@ type snapshotAuth struct{}
 func (snapshotAuth) Current(_ context.Context, token string) (identity.StoredSession, error) {
 	switch token {
 	case "manager-token":
-		return identity.StoredSession{User: identity.User{ID: "manager"}}, nil
+		return identity.StoredSession{User: identity.User{ID: testManagerID}}, nil
 	case "other-manager-token":
-		return identity.StoredSession{User: identity.User{ID: "other-manager"}}, nil
+		return identity.StoredSession{User: identity.User{ID: testOtherManagerID}}, nil
 	default:
 		return identity.StoredSession{}, identity.ErrInvalidCredentials
 	}
@@ -103,8 +114,8 @@ func snapshotHandler(store *snapshotStore) http.Handler {
 
 func TestParticipantSnapshotDoesNotDiscloseRosterScoresOrManagerFields(t *testing.T) {
 	store := &snapshotStore{}
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/session/snapshot", nil)
-	request.AddCookie(&http.Cookie{Name: "proslides_participant", Value: "participant-token"})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/"+testSessionID+"/snapshot", nil)
+	request.AddCookie(&http.Cookie{Name: "proslides_participant", Value: testParticipantToken})
 	response := httptest.NewRecorder()
 
 	snapshotHandler(store).ServeHTTP(response, request)
@@ -135,9 +146,9 @@ func TestParticipantSnapshotDoesNotDiscloseRosterScoresOrManagerFields(t *testin
 
 func TestResolveSessionUsesPublicJoinCode(t *testing.T) {
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/resolve?join_code=join", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/resolve?join_code=join1", nil)
 	snapshotHandler(&snapshotStore{}).ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !jsonFieldEquals(response.Body.Bytes(), "session_id", "session") {
+	if response.Code != http.StatusOK || !jsonFieldEquals(response.Body.Bytes(), "session_id", testSessionID) {
 		t.Fatalf("resolve response = %d %s", response.Code, response.Body.String())
 	}
 
@@ -152,7 +163,7 @@ func TestSnapshotUsesManagerRoleAndFallsBackToParticipantRole(t *testing.T) {
 	store := &snapshotStore{}
 	handler := snapshotHandler(store)
 
-	managerRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/session/snapshot", nil)
+	managerRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/"+testSessionID+"/snapshot", nil)
 	managerRequest.AddCookie(&http.Cookie{Name: "proslides_session", Value: "manager-token"})
 	managerResponse := httptest.NewRecorder()
 	handler.ServeHTTP(managerResponse, managerRequest)
@@ -160,9 +171,9 @@ func TestSnapshotUsesManagerRoleAndFallsBackToParticipantRole(t *testing.T) {
 		t.Fatalf("manager snapshot = %d %s", managerResponse.Code, managerResponse.Body.String())
 	}
 
-	participantRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/session/snapshot", nil)
+	participantRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/"+testSessionID+"/snapshot", nil)
 	participantRequest.AddCookie(&http.Cookie{Name: "proslides_session", Value: "other-manager-token"})
-	participantRequest.AddCookie(&http.Cookie{Name: "proslides_participant", Value: "participant-token"})
+	participantRequest.AddCookie(&http.Cookie{Name: "proslides_participant", Value: testParticipantToken})
 	participantResponse := httptest.NewRecorder()
 	handler.ServeHTTP(participantResponse, participantRequest)
 	if participantResponse.Code != http.StatusOK || !jsonFieldEquals(participantResponse.Body.Bytes(), "role", "participant") {
@@ -174,14 +185,14 @@ func TestRosterIsManagerOnlyBoundedAndCursorBased(t *testing.T) {
 	store := &snapshotStore{}
 	handler := snapshotHandler(store)
 
-	participantRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/session/roster", nil)
-	participantRequest.AddCookie(&http.Cookie{Name: "proslides_participant", Value: "participant-token"})
+	participantRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/"+testSessionID+"/roster", nil)
+	participantRequest.AddCookie(&http.Cookie{Name: "proslides_participant", Value: testParticipantToken})
 	participantResponse := httptest.NewRecorder()
 	handler.ServeHTTP(participantResponse, participantRequest)
 	if participantResponse.Code != http.StatusUnauthorized {
 		t.Fatalf("participant roster status = %d", participantResponse.Code)
 	}
-	nonOwnerRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/session/roster", nil)
+	nonOwnerRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/"+testSessionID+"/roster", nil)
 	nonOwnerRequest.AddCookie(&http.Cookie{Name: "proslides_session", Value: "other-manager-token"})
 	nonOwnerResponse := httptest.NewRecorder()
 	handler.ServeHTTP(nonOwnerResponse, nonOwnerRequest)
@@ -189,7 +200,7 @@ func TestRosterIsManagerOnlyBoundedAndCursorBased(t *testing.T) {
 		t.Fatalf("non-owner roster status = %d", nonOwnerResponse.Code)
 	}
 
-	managerRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/session/roster?order=score&limit=1", nil)
+	managerRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/"+testSessionID+"/roster?order=score&limit=1", nil)
 	managerRequest.AddCookie(&http.Cookie{Name: "proslides_session", Value: "manager-token"})
 	managerResponse := httptest.NewRecorder()
 	handler.ServeHTTP(managerResponse, managerRequest)
@@ -204,7 +215,7 @@ func TestRosterIsManagerOnlyBoundedAndCursorBased(t *testing.T) {
 		t.Fatalf("unexpected first roster page: %#v, query: %#v", first, store.lastRosterQuery)
 	}
 
-	secondRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/session/roster?order=score&limit=1&cursor="+*first.NextCursor, nil)
+	secondRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/"+testSessionID+"/roster?order=score&limit=1&cursor="+*first.NextCursor, nil)
 	secondRequest.AddCookie(&http.Cookie{Name: "proslides_session", Value: "manager-token"})
 	secondResponse := httptest.NewRecorder()
 	handler.ServeHTTP(secondResponse, secondRequest)
@@ -212,14 +223,14 @@ func TestRosterIsManagerOnlyBoundedAndCursorBased(t *testing.T) {
 		t.Fatalf("cursor page = %d %s, query: %#v", secondResponse.Code, secondResponse.Body.String(), store.lastRosterQuery)
 	}
 
-	invalidRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/session/roster?limit=101", nil)
+	invalidRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/"+testSessionID+"/roster?limit=101", nil)
 	invalidRequest.AddCookie(&http.Cookie{Name: "proslides_session", Value: "manager-token"})
 	invalidResponse := httptest.NewRecorder()
 	handler.ServeHTTP(invalidResponse, invalidRequest)
 	if invalidResponse.Code != http.StatusBadRequest {
 		t.Fatalf("invalid limit status = %d", invalidResponse.Code)
 	}
-	invalidCursorRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/session/roster?cursor=not-a-cursor", nil)
+	invalidCursorRequest := httptest.NewRequest(http.MethodGet, "/api/v1/live/sessions/"+testSessionID+"/roster?cursor=not-a-cursor", nil)
 	invalidCursorRequest.AddCookie(&http.Cookie{Name: "proslides_session", Value: "manager-token"})
 	invalidCursorResponse := httptest.NewRecorder()
 	handler.ServeHTTP(invalidCursorResponse, invalidCursorRequest)

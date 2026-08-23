@@ -228,6 +228,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: The presentation has a non-ended live session and cannot be deleted. }
   /api/v1/presentations/{presentationId}/access-code:
     put:
       operationId: setPresentationAccessCode
@@ -330,6 +331,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Results cannot be reset while the presentation has a non-ended live session. }
   /api/v1/presentations/{presentationId}/slides:
     post:
       operationId: createSlide
@@ -452,6 +454,7 @@ paths:
               schema:
                 type: string
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { description: Viewer reconnect rate exceeded; Retry-After is returned. }
   /api/v1/live/sessions/{sessionId}/answers:
     post:
       operationId: submitLiveAnswer
@@ -473,6 +476,7 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { description: Question is not open, has expired, or was already answered. }
+        '429': { description: Participant or session answer rate exceeded; Retry-After is returned. }
   /api/v1/live/sessions:
     post:
       operationId: createLiveSession
@@ -483,7 +487,7 @@ paths:
         content: { application/json: { schema: { $ref: '#/components/schemas/CreateLiveSessionRequest' } } }
       responses:
         '201': { description: Session created, content: { application/json: { schema: { $ref: '#/components/schemas/LiveSession' } } } }
-        '200': { description: Duplicate request; returns the original session. }
+        '200': { description: Duplicate request or an already-active run for this presentation; returns the resumable session without creating another run. }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
@@ -515,7 +519,8 @@ paths:
         '201': { description: Participant joined, content: { application/json: { schema: { $ref: '#/components/schemas/Participant' } } } }
         '200': { description: Duplicate request; returns the original participant. }
         '400': { $ref: '#/components/responses/ValidationError' }
-        '409': { description: Session is not joinable. }
+        '409': { description: Session is not joinable or the display name is already in use. Error code display_name_taken distinguishes the latter. }
+        '429': { description: Session join rate exceeded; Retry-After is returned. }
   /api/v1/live/sessions/{sessionId}/actions:
     post:
       operationId: applyLiveAction
@@ -534,6 +539,7 @@ paths:
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: State version or transition conflict. }
+        '429': { description: Manager action rate exceeded; Retry-After is returned. }
   /api/v1/live/sessions/{sessionId}/snapshot:
     get:
       operationId: getLiveSnapshot
@@ -922,6 +928,7 @@ components:
         display_name: { type: string }
         avatar: { type: string }
         score: { type: integer, minimum: 0 }
+        rank: { type: integer, minimum: 1, description: Present for participant snapshots in leaderboard or ended state. }
     LiveSessionLocator:
       type: object
       required: [session_id, presentation_id]
@@ -943,6 +950,7 @@ components:
         participant: { $ref: '#/components/schemas/ParticipantWithScore' }
         participant_count: { type: integer, minimum: 0 }
         last_event_id: { type: integer, format: int64, minimum: 0 }
+        question_stats: { $ref: '#/components/schemas/AnswerStatsPayload' }
     ManagerLiveSnapshot:
       type: object
       required: [role, session, participant_count, last_event_id]
@@ -953,6 +961,7 @@ components:
         active_slide: { type: object, additionalProperties: true }
         participant_count: { type: integer, minimum: 0 }
         last_event_id: { type: integer, format: int64, minimum: 0 }
+        question_stats: { $ref: '#/components/schemas/AnswerStatsPayload' }
     RosterEntry:
       type: object
       required: [participant_id, display_name, score, joined_at]
@@ -1043,6 +1052,7 @@ components:
         state: { type: string, enum: [draft, lobby, content, question_open, question_closed, leaderboard, ended] }
         active_slide_id: { type: string, format: uuid, nullable: true }
         ends_at: { type: string, format: date-time, nullable: true }
+        reason: { type: string, enum: [deadline_elapsed], description: Present only for an automatic server-deadline transition. }
     PresenceUpdatedPayload:
       type: object
       required: [participant_delta]

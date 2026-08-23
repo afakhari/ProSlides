@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,15 +18,30 @@ type ManagerAuth interface {
 	Current(context.Context, string) (identity.StoredSession, error)
 	Authorize(context.Context, string, string) (identity.User, error)
 }
+type RateLimiter interface {
+	Allow(context.Context, string, string, int, time.Duration) (bool, time.Duration, error)
+}
 type HTTP struct {
 	service *Service
 	broker  *EventBroker
 	auth    ManagerAuth
 	secure  bool
+	timeout time.Duration
+	limiter RateLimiter
 }
 
-func NewHTTP(service *Service, broker *EventBroker, auth ManagerAuth, secure bool) *HTTP {
-	return &HTTP{service: service, broker: broker, auth: auth, secure: secure}
+func NewHTTP(service *Service, broker *EventBroker, auth ManagerAuth, secure bool, limiter ...RateLimiter) *HTTP {
+	h := &HTTP{service: service, broker: broker, auth: auth, secure: secure, timeout: 10 * time.Second}
+	if len(limiter) > 0 {
+		h.limiter = limiter[0]
+	}
+	return h
+}
+func (h *HTTP) WithRequestTimeout(timeout time.Duration) *HTTP {
+	if timeout > 0 {
+		h.timeout = timeout
+	}
+	return h
 }
 func (h *HTTP) Register(m *http.ServeMux) {
 	m.HandleFunc("POST /api/v1/live/sessions", h.createSession)
@@ -37,6 +54,8 @@ func (h *HTTP) Register(m *http.ServeMux) {
 	m.HandleFunc("GET /api/v1/live/sessions/{sessionId}/events", h.events)
 }
 func (h *HTTP) resolveSession(w http.ResponseWriter, r *http.Request) {
+	r, cancel := h.bounded(r)
+	defer cancel()
 	x, e := h.service.ResolveSession(r.Context(), r.URL.Query().Get("join_code"))
 	if e != nil {
 		returnError(w, e)
@@ -45,6 +64,8 @@ func (h *HTTP) resolveSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, x)
 }
 func (h *HTTP) createSession(w http.ResponseWriter, r *http.Request) {
+	r, cancel := h.bounded(r)
+	defer cancel()
 	u, e := h.manager(r, true)
 	if e != nil {
 		returnError(w, e)
@@ -54,7 +75,7 @@ func (h *HTTP) createSession(w http.ResponseWriter, r *http.Request) {
 		RequestID      string `json:"request_id"`
 		PresentationID string `json:"presentation_id"`
 	}
-	if json.NewDecoder(r.Body).Decode(&b) != nil {
+	if decodeJSON(w, r, &b) != nil {
 		returnError(w, ErrInvalid)
 		return
 	}
@@ -66,13 +87,18 @@ func (h *HTTP) createSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[bool]int{true: 200, false: 201}[dup], x)
 }
 func (h *HTTP) join(w http.ResponseWriter, r *http.Request) {
+	r, cancel := h.bounded(r)
+	defer cancel()
 	var b struct {
 		RequestID   string `json:"request_id"`
 		DisplayName string `json:"display_name"`
 		Avatar      string `json:"avatar"`
 	}
-	if json.NewDecoder(r.Body).Decode(&b) != nil {
+	if decodeJSON(w, r, &b) != nil {
 		returnError(w, ErrInvalid)
+		return
+	}
+	if !h.allow(w, r, "live_join_session", r.PathValue("sessionId"), 20_000, time.Minute) {
 		return
 	}
 	p, dup, e := h.service.Join(r.Context(), r.PathValue("sessionId"), b.RequestID, b.DisplayName, b.Avatar)
@@ -84,9 +110,14 @@ func (h *HTTP) join(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[bool]int{true: 200, false: 201}[dup], p)
 }
 func (h *HTTP) action(w http.ResponseWriter, r *http.Request) {
+	r, cancel := h.bounded(r)
+	defer cancel()
 	u, e := h.manager(r, true)
 	if e != nil {
 		returnError(w, e)
+		return
+	}
+	if !h.allow(w, r, "live_manager_action", u.ID, 120, time.Minute) {
 		return
 	}
 	var b struct {
@@ -96,7 +127,7 @@ func (h *HTTP) action(w http.ResponseWriter, r *http.Request) {
 		SlideID              string `json:"slide_id"`
 		DurationSeconds      int    `json:"duration_seconds"`
 	}
-	if json.NewDecoder(r.Body).Decode(&b) != nil {
+	if decodeJSON(w, r, &b) != nil {
 		returnError(w, ErrInvalid)
 		return
 	}
@@ -108,9 +139,14 @@ func (h *HTTP) action(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[bool]int{true: 200, false: 201}[dup], x)
 }
 func (h *HTTP) answer(w http.ResponseWriter, r *http.Request) {
+	r, cancel := h.bounded(r)
+	defer cancel()
 	token, e := r.Cookie("proslides_participant")
 	if e != nil {
 		returnError(w, ErrUnauthorized)
+		return
+	}
+	if !h.allow(w, r, "live_answer_participant", r.PathValue("sessionId")+":"+token.Value, 10, time.Second) || !h.allow(w, r, "live_answer_session", r.PathValue("sessionId"), 20_000, time.Second) {
 		return
 	}
 	var b struct {
@@ -118,12 +154,15 @@ func (h *HTTP) answer(w http.ResponseWriter, r *http.Request) {
 		QuestionSlideID string `json:"question_slide_id"`
 		Selected        []int  `json:"selected_option_indexes"`
 	}
-	if json.NewDecoder(r.Body).Decode(&b) != nil {
+	if decodeJSON(w, r, &b) != nil {
 		returnError(w, ErrInvalid)
 		return
 	}
 	x, e := h.service.Submit(r.Context(), r.PathValue("sessionId"), token.Value, b.RequestID, b.QuestionSlideID, b.Selected)
 	if e != nil {
+		if !errors.Is(e, ErrInvalid) && !errors.Is(e, ErrUnauthorized) && !errors.Is(e, ErrConflict) && !errors.Is(e, ErrInvalidTransition) {
+			slog.Error("live answer command failed", "session_id", r.PathValue("sessionId"), "request_id", b.RequestID, "error", e)
+		}
 		returnError(w, e)
 		return
 	}
@@ -134,6 +173,8 @@ func (h *HTTP) answer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, status, x)
 }
 func (h *HTTP) snapshot(w http.ResponseWriter, r *http.Request) {
+	r, cancel := h.bounded(r)
+	defer cancel()
 	sessionID := r.PathValue("sessionId")
 	managerAuthenticated := false
 	if u, e := h.manager(r, false); e == nil {
@@ -165,6 +206,8 @@ func (h *HTTP) snapshot(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, x)
 }
 func (h *HTTP) roster(w http.ResponseWriter, r *http.Request) {
+	r, cancel := h.bounded(r)
+	defer cancel()
 	u, e := h.manager(r, false)
 	if e != nil {
 		returnError(w, ErrUnauthorized)
@@ -192,6 +235,15 @@ func (h *HTTP) roster(w http.ResponseWriter, r *http.Request) {
 func (h *HTTP) events(w http.ResponseWriter, r *http.Request) {
 	if e := h.viewer(r); e != nil {
 		returnError(w, e)
+		return
+	}
+	viewerCredential := "manager"
+	if cookie, err := r.Cookie("proslides_participant"); err == nil {
+		viewerCredential = cookie.Value
+	} else if cookie, err = r.Cookie("proslides_session"); err == nil {
+		viewerCredential = cookie.Value
+	}
+	if !h.allow(w, r, "live_sse_reconnect", r.PathValue("sessionId")+":"+viewerCredential, 60, time.Minute) {
 		return
 	}
 	f, ok := w.(http.Flusher)
@@ -285,6 +337,42 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
+func (h *HTTP) bounded(r *http.Request) (*http.Request, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(r.Context(), h.timeout)
+	return r.WithContext(ctx), cancel
+}
+func (h *HTTP) allow(w http.ResponseWriter, r *http.Request, scope, identity string, limit int, window time.Duration) bool {
+	if h.limiter == nil {
+		return true
+	}
+	allowed, retry, err := h.limiter.Allow(r.Context(), scope, identity, limit, window)
+	if err != nil {
+		// Durable live commands remain available during Redis degradation.
+		return true
+	}
+	if allowed {
+		return true
+	}
+	seconds := int((retry + time.Second - 1) / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+	writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "rate_limited", "retry_after_seconds": seconds})
+	return false
+}
+func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return ErrInvalid
+	}
+	return nil
+}
 func returnError(w http.ResponseWriter, e error) {
 	status, code := 500, "internal_error"
 	switch {
@@ -296,8 +384,12 @@ func returnError(w http.ResponseWriter, e error) {
 		status, code = 400, "invalid_request"
 	case errors.Is(e, ErrNotFound):
 		status, code = 404, "not_found"
+	case errors.Is(e, ErrNameTaken):
+		status, code = 409, "display_name_taken"
 	case errors.Is(e, ErrConflict), errors.Is(e, ErrInvalidTransition):
 		status, code = 409, "conflict"
+	case errors.Is(e, context.DeadlineExceeded), errors.Is(e, context.Canceled):
+		status, code = 503, "temporarily_unavailable"
 	}
 	writeJSON(w, status, map[string]string{"error": code})
 }

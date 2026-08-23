@@ -61,18 +61,29 @@ functional gate; it is not capacity evidence.
 ## Current evidence
 
 Role-scoped snapshots, manager keyset pagination, aggregate-only leaderboard
-events, bounded subscriber buffers, presence compaction, and one ledger poller
-per active session/API process are implemented and functionally verified. No
-k6 capacity run has been accepted yet. The next admissible run is the 100-user
-smoke in step 2; do not skip directly to 1k.
+events, bounded subscriber buffers, presence compaction, one ledger poller per
+active session/API process, Redis live limits, configurable pools, raised
+Nginx/FD ceilings, and bounded HTTP/runtime Prometheus metrics are implemented
+and functionally verified. Bounded PostgreSQL pool/query, SSE/broker, live-
+answer, and event-lag metrics are also present. The real protocol scenario and
+hard SQL reconciliation passed locally at 100 users and twice at 1k with 500
+joins/second, both directly and in two consecutive follow-up runs through the
+same-origin Nginx ingress. These Docker Desktop runs are recorded in
+`docs/load-test-results.md`; they do not include TLS or remote hosts and are not
+the production-like 1k gate. Continuous lock sampling and sampled
+cross-component traces remain.
 
 ## Ordered execution
 
 1. **Completed 2026-08-19:** add role-scoped/paginated snapshots so players
    never download the 10k roster; full leaderboard rows are also removed from
    audience SSE.
-2. Add OpenTelemetry-compatible metrics and a k6 smoke scenario (100 users).
-3. Run 1k on a production-like single API instance; profile CPU/heap/locks.
+2. **Completed locally 2026-08-24:** bounded HTTP/runtime/pool/query/SSE/broker/
+   answer/event-lag metrics, the 100-user protocol run, raw summaries, and hard
+   SQL reconciliation passed, followed by two consecutive 1k passes through
+   Nginx and a forced API-address recovery check.
+3. **In progress:** repeat the two-run 1k result on a named production-like
+   single API through TLS ingress, including cold readiness and CPU/heap/locks.
 4. Fix measured bottlenecks; rerun twice.
 5. Repeat at 5k with multiple API instances and no sticky sessions.
 6. Add Redis outbox wake-up only if event polling/latency measurements require it.

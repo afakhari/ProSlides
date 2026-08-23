@@ -9,6 +9,11 @@ services:
       REDIS_URL: ${REDIS_URL:?set REDIS_URL through the deployment secret store}
       DEPENDENCY_CHECK_TIMEOUT: ${DEPENDENCY_CHECK_TIMEOUT:-2s}
       MIGRATION_TIMEOUT: ${MIGRATION_TIMEOUT:-2m}
+      LIVE_REQUEST_TIMEOUT: ${LIVE_REQUEST_TIMEOUT:-10s}
+      DATABASE_POOL_MAX_CONNS: ${DATABASE_POOL_MAX_CONNS:-50}
+      DATABASE_POOL_MIN_CONNS: ${DATABASE_POOL_MIN_CONNS:-5}
+      DATABASE_CONN_MAX_LIFETIME: ${DATABASE_CONN_MAX_LIFETIME:-30m}
+      DATABASE_CONN_MAX_IDLE_TIME: ${DATABASE_CONN_MAX_IDLE_TIME:-5m}
       SESSION_TTL: ${SESSION_TTL:-168h}
       AUTH_REQUIRE_EMAIL_VERIFICATION: ${AUTH_REQUIRE_EMAIL_VERIFICATION:-true}
       EMAIL_VERIFICATION_TTL: ${EMAIL_VERIFICATION_TTL:-10m}
@@ -43,6 +48,10 @@ services:
       - no-new-privileges:true
     networks:
       - app
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
 
   web:
     image: ${WEB_IMAGE:?set WEB_IMAGE to an immutable web image tag}
@@ -63,6 +72,10 @@ services:
       - no-new-privileges:true
     networks:
       - app
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
 
 networks:
   app:

@@ -2,7 +2,8 @@
 param(
   [switch]$StopAfter,
   [switch]$SkipBuild,
-  [switch]$SkipComposeStartup
+  [switch]$SkipComposeStartup,
+  [string]$ApiBaseUrl = "http://localhost:8080"
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,7 +11,7 @@ Add-Type -AssemblyName System.Net.Http
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $composeArgs = @("compose", "--env-file", "apps/api/.env.example")
-$apiBaseUrl = "http://localhost:8080"
+$apiBaseUrl = $ApiBaseUrl.TrimEnd('/')
 $email = "auth-integration-$([guid]::NewGuid().ToString('N').Substring(0, 16))@example.test"
 $password = "integration-password-2026"
 $registerPayload = @{ email = $email; display_name = "Integration User"; password = $password } | ConvertTo-Json -Compress
@@ -167,6 +168,12 @@ try {
   $startRequest = [guid]::NewGuid().ToString()
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = $startRequest; expected_state_version = 1; action = "start" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = $startRequest; expected_state_version = 1; action = "start" } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
+  Invoke-API -Method DELETE -Path "/api/v1/presentations/$createdID/results" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -ExpectedStatus 409 | Out-Null
+  Invoke-API -Method DELETE -Path "/api/v1/presentations/$createdID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -ExpectedStatus 409 | Out-Null
+
+  $afterSessionCreated = (Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  $editableContent = @($afterSessionCreated.slides | Where-Object { $_.id -eq $contentID })[0]
+  Invoke-API -Method PUT -Path "/api/v1/presentations/$createdID/slides/$contentID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF; "If-Match" = [string]$editableContent.revision } -Body (@{ position = 0; kind = "content"; content = @{ text = "Changed after live snapshot"; image_url = "" } } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
 
   $participantHandler = [System.Net.Http.HttpClientHandler]::new()
   $participantHandler.UseProxy = $false
@@ -253,7 +260,11 @@ try {
   $leaderboardPage = Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/roster?order=score&limit=5" -Client $loginClient -ExpectedStatus 200
   $leaderboardPayload = $leaderboardPage.Content | ConvertFrom-Json
   if ($leaderboardPayload.items[0].participant_id -ne $snapshotPayload.participant.id -or $leaderboardPayload.items[0].score -ne 100) { throw "Leaderboard ordering was not score-descending and stable" }
-  Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 3; action = "close_question" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  $expireSQL = "UPDATE live_sessions SET ends_at=clock_timestamp()-interval '1 second' WHERE id='$($liveSession.id)';"
+  & docker @composeArgs exec -T postgres psql -U proslides -d proslides -v ON_ERROR_STOP=1 -c $expireSQL | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "Could not expire the live question integration fixture" }
+  $expiredSnapshot = (Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/snapshot" -Client $participantClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  if ($expiredSnapshot.session.state -ne "question_closed" -or $expiredSnapshot.session.ends_at -ne $null -or $expiredSnapshot.question_stats.response_count -ne 1) { throw "Server deadline did not durably close the question with recoverable stats" }
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 4; action = "show_leaderboard" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
 
   $eventRequest = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, "$apiBaseUrl/api/v1/live/sessions/$($liveSession.id)/events")
@@ -308,6 +319,8 @@ try {
   $resumeRequest.Dispose()
 
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 5; action = "open_content"; slide_id = $contentID } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
+  $frozenContentSnapshot = (Invoke-API -Method GET -Path "/api/v1/live/sessions/$($liveSession.id)/snapshot" -Client $loginClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  if ($frozenContentSnapshot.active_slide.content.text -ne "Updated content") { throw "Live run observed an editor mutation made after its immutable snapshot" }
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 6; action = "open_question"; slide_id = $questionID } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 7; action = "end" } | ConvertTo-Json -Compress) -ExpectedStatus 409 | Out-Null
   Invoke-API -Method POST -Path "/api/v1/live/sessions/$($liveSession.id)/actions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ request_id = [guid]::NewGuid().ToString(); expected_state_version = 7; action = "close_question" } | ConvertTo-Json -Compress) -ExpectedStatus 201 | Out-Null

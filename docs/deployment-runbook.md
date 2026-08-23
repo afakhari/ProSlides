@@ -113,6 +113,11 @@ answer, snapshot/SSE recovery, and presenter results. Do not expose API port
 - Keep the previous API and web image tags available.
 - Roll API instances gradually; the server allows 15 seconds for in-flight
   HTTP shutdown and SSE clients recover through snapshot/replay.
+- The bundled web Nginx re-resolves the Compose `api` service through Docker
+  DNS every 10 seconds, so an API container address change does not require a
+  Web restart. A single-API replacement can still return transient 502s during
+  the dependency gap; use overlapping healthy API instances at the external
+  ingress when zero-downtime command acceptance is required.
 - Never mix a web build with a different Google client ID or incompatible API
   contract.
 - Do not declare success until readiness, error rate, SSE reconnects, and the

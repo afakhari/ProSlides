@@ -119,6 +119,8 @@ export default function PlayerPickAnswerQuestion({
   const [submitMessage, setSubmitMessage] = useState("");
   const [timeLeft, setTimeLeft] = useState(questionTime);
   const startTime = useRef(Date.now());
+  const questionRef = useRef(question);
+  questionRef.current = question;
 
   const matchQuestionResult = (candidate) => {
     if (!candidate || questionId == null || candidate.question_id == null) {
@@ -145,9 +147,10 @@ export default function PlayerPickAnswerQuestion({
   }, [roomId, questionId, runId]);
 
   useEffect(() => {
-    if (!question) return;
+    const currentQuestion = questionRef.current;
+    if (!currentQuestion) return;
     const resolvedTimer = resolveQuestionTimer({
-      question,
+      question: currentQuestion,
       roomId,
       role: "player",
     });
@@ -157,10 +160,10 @@ export default function PlayerPickAnswerQuestion({
     setSubmitted(false);
     setSubmitState("idle");
     setSubmitMessage("");
-  }, [question, roomId, questionId, questionTime]);
+  }, [roomId, questionId, runId]);
 
   useEffect(() => {
-    if (!question) return;
+    if (!questionRef.current) return;
     let frameId;
     let stopped = false;
 
@@ -179,7 +182,7 @@ export default function PlayerPickAnswerQuestion({
       stopped = true;
       cancelAnimationFrame(frameId);
     };
-  }, [question, questionId, questionTime]);
+  }, [roomId, questionId, runId, questionTime]);
 
   useEffect(() => {
     if (!isConnected) return;

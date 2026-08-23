@@ -1,4 +1,5 @@
 import type { AnswerResult, LiveEvent, LiveSessionLocator, LiveSessionResult, LiveSnapshot, ParticipantResult, Presentation, RosterPage } from "./types";
+import { createSecureUUID } from "./secureUuid.js";
 
 const normalizeBase = (value: string) => value.trim().replace(/\/+$/, "");
 
@@ -42,10 +43,7 @@ const requestJSON = async <T>(path: string, init: RequestInit = {}, csrf = false
   return payload as T;
 };
 
-export const createRequestId = () => {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  throw new Error("Secure random UUID generation is unavailable");
-};
+export const createRequestId = createSecureUUID;
 
 export const getPresentation = (id: string) => requestJSON<Presentation>(`presentations/${encodeURIComponent(id)}`);
 export const createLiveSession = (presentationId: string, requestId: string) => requestJSON<LiveSessionResult>("live/sessions", { method: "POST", body: JSON.stringify({ request_id: requestId, presentation_id: presentationId }) }, true);

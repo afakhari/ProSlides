@@ -10,18 +10,31 @@ import (
 )
 
 type brokerStore struct {
-	mu         sync.Mutex
-	events     []Event
-	eventCalls int
+	mu            sync.Mutex
+	events        []Event
+	eventCalls    int
+	latestCalls   int
+	latestStarted chan struct{}
+	latestRelease chan struct{}
+	latestOnce    sync.Once
 }
 
 func (s *brokerStore) LatestEventID(context.Context, string) (int64, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if len(s.events) == 0 {
+	s.latestCalls++
+	started, release := s.latestStarted, s.latestRelease
+	events := append([]Event(nil), s.events...)
+	s.mu.Unlock()
+	if started != nil {
+		s.latestOnce.Do(func() { close(started) })
+	}
+	if release != nil {
+		<-release
+	}
+	if len(events) == 0 {
 		return 0, nil
 	}
-	return s.events[len(s.events)-1].EventID, nil
+	return events[len(events)-1].EventID, nil
 }
 
 func (s *brokerStore) Events(_ context.Context, _ string, after int64, limit int) ([]Event, error) {
@@ -77,6 +90,48 @@ func TestEventBrokerSharesOneSessionPoller(t *testing.T) {
 	store.mu.Unlock()
 	if calls > 3 {
 		t.Fatalf("expected shared polling, got %d store calls", calls)
+	}
+}
+
+func TestEventBrokerSingleFlightsConcurrentSessionInitialization(t *testing.T) {
+	store := &brokerStore{latestStarted: make(chan struct{}), latestRelease: make(chan struct{})}
+	broker := NewEventBroker(store, time.Hour, 4)
+	defer broker.Close()
+
+	const subscribers = 64
+	var wait sync.WaitGroup
+	wait.Add(subscribers)
+	errors := make(chan error, subscribers)
+	cancels := make(chan func(), subscribers)
+	for range subscribers {
+		go func() {
+			defer wait.Done()
+			_, cancel, err := broker.Subscribe(context.Background(), "session")
+			if err == nil {
+				cancels <- cancel
+			}
+			errors <- err
+		}()
+	}
+	<-store.latestStarted
+	time.Sleep(10 * time.Millisecond)
+	close(store.latestRelease)
+	wait.Wait()
+	close(errors)
+	close(cancels)
+	for err := range errors {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for cancel := range cancels {
+		cancel()
+	}
+	store.mu.Lock()
+	latestCalls := store.latestCalls
+	store.mu.Unlock()
+	if latestCalls != 1 {
+		t.Fatalf("LatestEventID calls=%d, want 1", latestCalls)
 	}
 }
 

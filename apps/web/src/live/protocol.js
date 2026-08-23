@@ -72,7 +72,7 @@ export const normalizeLiveSlide = (activeSlide, session = {}) => {
 };
 
 export const rosterEntryToLegacy = (entry, index = 0) => ({ user_id: entry.participant_id, name: entry.display_name, character: entry.avatar || "", rank: index + 1, total_points: Number(entry.score || 0), new_points: null });
-export const participantToLegacy = (p) => ({ user_id: p.id, name: p.display_name, character: p.avatar || "", rank: null, total_points: Number(p.score || 0), new_points: null });
+export const participantToLegacy = (p) => ({ user_id: p.id, name: p.display_name, character: p.avatar || "", rank: Number.isFinite(Number(p.rank)) ? Number(p.rank) : null, total_points: Number(p.score || 0), new_points: null });
 export const presentationSlideToLegacy = (slide) => {
   if (slide.kind === "question_draft") {
     return {
@@ -111,11 +111,20 @@ export const projectLiveSnapshot = (snapshot, roster = []) => {
   const leaderboard = ["leaderboard", "ended"].includes(snapshot.session.state)
     ? snapshot.role === "manager" ? managerRows : participantRows
     : null;
+  const stats = snapshot.question_stats;
+  const questionResults = stats ? {
+    question_id: stats.question_slide_id,
+    optionsResult: Object.entries(stats.option_counts || {}).map(([optionId, count]) => ({
+      option_id: Number(optionId),
+      number_of_submits: Number(count),
+    })),
+  } : null;
   return {
     users: managerRows,
     currentQuestion: active?.slide_type === 1 && !["leaderboard", "ended"].includes(snapshot.session.state) ? active : null,
     currentContent: active?.slide_type === 2 && snapshot.session.state === "content" ? active : null,
     leaderboardResults: leaderboard,
     participantCount: Number(snapshot.participant_count || 0),
+    questionResults,
   };
 };

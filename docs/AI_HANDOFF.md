@@ -31,20 +31,28 @@ not complete. Never describe a design target as benchmark evidence.
   owner-only keyset-paginated per-question results derived from Go answers.
 - High-load improvements in this stage: one event-ledger poller per active
   session/API process, bounded subscriber buffers, slow-client disconnect and
-  replay, presence compaction, snapshot cursor, and indexed participant scores.
+  replay, presence compaction, snapshot cursor, indexed participant scores,
+  immutable per-run definitions, database-clock deadline closure, actor-scoped
+  idempotency, Redis live limits, reduced live SQL/acquire paths, single-flight
+  SSE initialization, synchronously warmed pool minimums, bounded HTTP/runtime/
+  pool/query/live metrics, and raised Nginx/file-descriptor ceilings.
 - Deployment foundation: full-stack local Compose with a LAN-accessible web-only
   ingress for mobile testing, production API/web images, same-origin Nginx with
   SSE buffering disabled, health checks, a loopback-bound production Compose
   reference, trusted-proxy-aware limits, serialized
   transactional startup migrations, and local/deploy/operations runbooks.
-- Not implemented: production SMTP/Google secret provisioning, telemetry, Redis
-  wake-up fan-out/presence TTL, join/answer rate limiting, media object storage,
-  k6 proof, real production certificate/ingress and backup/restore validation,
-  cutover, or rollback exercise.
-- Capacity truth: architecture has a credible horizontal path, but 1k/5k/10k
-  has not been measured. Use `docs/capacity-plan.md` as the only proof protocol.
-- Exact next task: Phase F1 of `frontend-professionalization.md`; bounded
-  telemetry and the documented 100-user k6 smoke remain the next capacity task.
+- Not implemented: production SMTP/Google secret provisioning, continuous lock
+  sampling and sampled cross-component traces, Redis wake-up fan-out/presence
+  TTL, event retention, media object storage, production-like load proof, real
+  production certificate/ingress and backup/restore validation, cutover, or
+  rollback exercise.
+- Capacity truth: the protocol passed locally at 100 users and twice at 1k
+  directly, then at 100 users and twice consecutively at 1k through Nginx. A
+  preceding Nginx 1k sample missed answer p95 (581.88 ms), so 1k
+  production-like and all 5k/10k gates remain unmeasured. Use
+  `docs/capacity-plan.md` and `docs/load-test-results.md` as the proof record.
+- Exact next task: execute the 1k protocol twice on a named production-like
+  single-API topology through TLS, including cold readiness and full metrics.
 - Canonical parity and deployment references: `docs/migration-status.md` and
   `docs/configuration.md`.
 
@@ -162,6 +170,36 @@ advertised the host LAN addresses and returned HTTP 200. A real four-service
 Compose run then reported every service healthy; web returned HTTP 200 through
 both loopback and `192.168.100.10:5173`, and API readiness passed. Ordinary
 `docker compose down` preserved the existing data volumes afterward.
+
+Live lifecycle hardening verification (2026-08-23): migration `0015` applied
+transactionally to the preserved database and backfilled 64 frozen run slides.
+The Compose matrix verified immutable run content after editor mutation,
+automatic PostgreSQL-clock deadline closure with recoverable answer stats,
+active-run delete/reset rejection, idempotent answers/actions, SSE replay, and
+the existing authorization/non-disclosure flows. Go tests/vet and web
+lint/typecheck/32 unit tests/build passed. Real Chrome at a 360x808 mobile
+viewport opened `http://192.168.100.10:5173/{accessCode}` and completed join
+with HTTP 201, snapshot 200, and SSE 200; LAN analytics was then restricted to
+the production hostname allowlist. Base bounded Prometheus HTTP/runtime metrics,
+live Redis limits, configurable DB pools, request deadlines, graceful broker
+drain/failure behavior, pool/query/SSE/broker/answer/event-lag metrics, and
+Nginx 32,768 worker connections/65,535 nofile limits are implemented. The pinned
+k6+xk6-sse build succeeded with proxy-to-direct fallback. The load flow was
+corrected to lobby → snapshot/SSE → question-open event → HTTP answer → close;
+the local 100-user run and two local 1k runs met all thresholds and hard SQL
+reconciliation. SQL/acquire hot paths and SSE initialization were optimized
+from failed exploratory runs. `docs/load-test-results.md` records exact results
+and why they are not production-like capacity proof.
+
+Public-ingress load and recovery verification (2026-08-24): the final
+HTTP/SSE protocol passed through the same-origin Nginx endpoint at 100 users
+and in two consecutive 1k runs. The 1k answer p95 values were 456.86 and
+417.41 ms; all 6,002 checks passed, all 2,000 answers reconciled durably, and
+event p95 remained below 200 ms. A prior 1k ingress run committed every answer
+but missed the 500 ms p95 SLO at 581.88 ms and remains recorded. A concurrent
+question close now returns 409 rather than 500 when `ends_at` is cleared. Nginx
+uses dynamic Docker DNS; with Web unchanged, a forced API IP move recovered on
+the eighth one-second probe. This is local, non-TLS evidence only.
 
 ## Installed Codex workflow prerequisites
 
@@ -309,8 +347,10 @@ Django admin is an operational framework UI, not a product API, and is not
 recreated. Actual provider values (`SMTP_*`, `PUBLIC_WEB_URL`,
 `EMAIL_VERIFICATION_PEPPER`,
 `GOOGLE_CLIENT_ID`) must be supplied through deployment secret/config storage;
-none belong in Git. Next, implement bounded telemetry and run the 100-user k6
-smoke gate before the documented 1k/5k/10k sequence.
+none belong in Git. The bounded telemetry baseline, protocol-correct scenario,
+local 100-user gate, and repeatable local 1k observations now exist. Next,
+repeat 1k twice on a named production-like TLS topology with cold readiness and
+pool/query/lock/CPU/heap capture before proceeding to 5k/10k.
 
 ## Commands and verification matrix
 

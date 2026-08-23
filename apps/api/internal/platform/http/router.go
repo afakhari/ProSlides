@@ -3,6 +3,7 @@ package platformhttp
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -10,25 +11,34 @@ import (
 	"github.com/proslides/proslides/internal/platform/dependency"
 )
 
+type MetricSource interface {
+	WritePrometheus(io.Writer)
+}
+
+type RouteRegistrar func(*http.ServeMux) []MetricSource
+
 func NewRouter(cfg config.Config, dependencies ...dependency.Dependency) http.Handler {
 	return newRouter(cfg, dependencies, nil)
 }
 
 // NewRouterWithRoutes composes optional domain routes without coupling the
 // platform HTTP package to any domain module.
-func NewRouterWithRoutes(cfg config.Config, dependencies []dependency.Dependency, registrars ...func(*http.ServeMux)) http.Handler {
+func NewRouterWithRoutes(cfg config.Config, dependencies []dependency.Dependency, registrars ...RouteRegistrar) http.Handler {
 	return newRouter(cfg, dependencies, registrars)
 }
 
-func newRouter(cfg config.Config, dependencies []dependency.Dependency, registrars []func(*http.ServeMux)) http.Handler {
+func newRouter(cfg config.Config, dependencies []dependency.Dependency, registrars []RouteRegistrar) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", health)
 	mux.HandleFunc("GET /readyz", readiness(cfg, dependencies))
 	mux.HandleFunc("GET /api/v1/version", version(cfg))
+	sources := make([]MetricSource, 0)
 	for _, register := range registrars {
-		register(mux)
+		sources = append(sources, register(mux)...)
 	}
-	return requestID(recoverer(mux))
+	metrics := newMetrics(mux, sources)
+	mux.HandleFunc("GET /metrics", metrics.serve)
+	return metrics.handler(requestID(recoverer(mux)))
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {

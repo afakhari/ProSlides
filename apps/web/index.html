@@ -93,8 +93,8 @@
         gtag('config', 'G-QYHXQNJ0SB');
       }
 
-      var localHosts = ['localhost', '127.0.0.1', '::1'];
-      if (!localHosts.includes(window.location.hostname)) {
+      var analyticsHosts = ['proslides.ir', 'www.proslides.ir'];
+      if (analyticsHosts.includes(window.location.hostname)) {
         if ('requestIdleCallback' in window) {
           requestIdleCallback(loadGtag, { timeout: 2000 });
         } else {

@@ -18,6 +18,30 @@ type fakeDependency struct {
 	ping func(context.Context) error
 }
 
+type flushCountingWriter struct {
+	header      http.Header
+	headerCalls int
+}
+
+func (w *flushCountingWriter) Header() http.Header { return w.header }
+func (w *flushCountingWriter) Write(body []byte) (int, error) {
+	return len(body), nil
+}
+func (w *flushCountingWriter) WriteHeader(int) { w.headerCalls++ }
+func (w *flushCountingWriter) Flush()          {}
+
+func TestMetricsWriterFlushCommitsHeaderOnce(t *testing.T) {
+	underlying := &flushCountingWriter{header: make(http.Header)}
+	writer := &metricsWriter{ResponseWriter: underlying, status: http.StatusOK}
+
+	writer.Flush()
+	writer.WriteHeader(http.StatusOK)
+
+	if underlying.headerCalls != 1 {
+		t.Fatalf("header writes = %d, want 1", underlying.headerCalls)
+	}
+}
+
 func (d fakeDependency) Name() string { return d.name }
 
 func (d fakeDependency) Ping(ctx context.Context) error { return d.ping(ctx) }

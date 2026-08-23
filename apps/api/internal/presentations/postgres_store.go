@@ -126,6 +126,16 @@ func (s *PostgresStore) Delete(c context.Context, id, owner string) error {
 	if !exists {
 		return ErrNotFound
 	}
+	if _, err = tx.Exec(c, `SELECT pg_advisory_xact_lock(hashtextextended('live-session:' || $1::text || ':' || $2::text, 0))`, owner, id); err != nil {
+		return err
+	}
+	var active bool
+	if err = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM live_sessions WHERE presentation_id=$1 AND state<>'ended')`, id).Scan(&active); err != nil {
+		return err
+	}
+	if active {
+		return ErrSessionActive
+	}
 	if _, err = tx.Exec(c, `DELETE FROM live_sessions WHERE presentation_id=$1`, id); err != nil {
 		return err
 	}
@@ -180,6 +190,16 @@ func (s *PostgresStore) DeleteResults(c context.Context, id, owner string) error
 	if !exists {
 		return ErrNotFound
 	}
+	if _, err = tx.Exec(c, `SELECT pg_advisory_xact_lock(hashtextextended('live-session:' || $1::text || ':' || $2::text, 0))`, owner, id); err != nil {
+		return err
+	}
+	var active bool
+	if err = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM live_sessions WHERE presentation_id=$1 AND state<>'ended')`, id).Scan(&active); err != nil {
+		return err
+	}
+	if active {
+		return ErrSessionActive
+	}
 	if _, err = tx.Exec(c, `DELETE FROM live_sessions WHERE presentation_id=$1`, id); err != nil {
 		return err
 	}
@@ -192,8 +212,8 @@ func (s *PostgresStore) QuestionResults(c context.Context, presentationID, sessi
 	err := s.pool.QueryRow(c, `SELECT sl.content::text
 		FROM live_sessions ls
 		JOIN presentations p ON p.id=ls.presentation_id
-		JOIN slides sl ON sl.presentation_id=p.id
-		WHERE p.id=$1 AND ls.id=$2 AND sl.id=$3 AND p.owner_id=$4`, presentationID, sessionID, slideID, owner).Scan(&content)
+		JOIN live_session_slides sl ON sl.session_id=ls.id
+		WHERE p.id=$1 AND ls.id=$2 AND sl.slide_id=$3 AND p.owner_id=$4`, presentationID, sessionID, slideID, owner).Scan(&content)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return QuestionResultsPage{}, ErrNotFound
 	}

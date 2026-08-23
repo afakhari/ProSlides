@@ -91,12 +91,14 @@ a stale metadata overwrite with 409. No browser run was used for this change.
 
 1. Provision production SMTP, Google, database, Redis, origin, and TLS secrets
    through the deployment platform; never commit them.
-2. Add bounded OpenTelemetry-compatible metrics and a reproducible 100-user k6
-   smoke scenario. This is the exact next engineering step.
-3. Add public join/answer abuse limits, event retention, production backup/
-   restore evidence, and graceful-drain verification. Portable web/API images,
+2. Repeat the locally successful two-run 1k HTTP/SSE protocol on named
+   production-like infrastructure through TLS, including cold readiness and
+   continuous pool/query/lock/CPU/heap capture. This is the exact next
+   engineering step.
+3. Add event retention, production backup/restore evidence, and full rollout
+   drain verification. Public join/answer limits, portable web/API images,
    migration serialization, and reference TLS/SSE proxy/runbooks are present.
-4. Pass the documented 1k level twice, then 5k, then 10k on named
+4. After production-like 1k acceptance, pass 5k and then 10k on named
    production-like infrastructure, fixing measured bottlenecks between levels.
 5. Exercise feature-flagged cutover and rollback before removing legacy
    operational dependencies.

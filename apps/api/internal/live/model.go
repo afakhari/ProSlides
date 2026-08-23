@@ -12,6 +12,7 @@ var (
 	ErrConflict     = errors.New("live state conflict")
 	ErrUnauthorized = errors.New("participant unauthorized")
 	ErrInvalid      = errors.New("invalid live request")
+	ErrNameTaken    = errors.New("participant display name is already in use")
 	ErrCSRF         = errors.New("csrf validation failed")
 )
 
@@ -40,7 +41,8 @@ type PublicSession struct {
 }
 type ParticipantWithScore struct {
 	Participant
-	Score int `json:"score"`
+	Score int  `json:"score"`
+	Rank  *int `json:"rank,omitempty"`
 }
 type SessionLocator struct {
 	SessionID      string `json:"session_id"`
@@ -67,6 +69,7 @@ type ParticipantSnapshot struct {
 	Participant      ParticipantWithScore `json:"participant"`
 	ParticipantCount int                  `json:"participant_count"`
 	LastEventID      int64                `json:"last_event_id"`
+	QuestionStats    *QuestionStats       `json:"question_stats,omitempty"`
 }
 type ManagerSnapshot struct {
 	Role             string          `json:"role"`
@@ -74,6 +77,12 @@ type ManagerSnapshot struct {
 	ActiveSlide      json.RawMessage `json:"active_slide,omitempty"`
 	ParticipantCount int             `json:"participant_count"`
 	LastEventID      int64           `json:"last_event_id"`
+	QuestionStats    *QuestionStats  `json:"question_stats,omitempty"`
+}
+type QuestionStats struct {
+	QuestionSlideID string         `json:"question_slide_id"`
+	ResponseCount   int            `json:"response_count"`
+	OptionCounts    map[string]int `json:"option_counts"`
 }
 type RosterEntry struct {
 	ParticipantID string    `json:"participant_id"`
@@ -113,6 +122,7 @@ type Store interface {
 	Events(context.Context, string, int64, int) ([]Event, error)
 	LatestEventID(context.Context, string) (int64, error)
 	AuthorizeViewer(context.Context, string, string, []byte) error
+	ReconcileDeadline(context.Context, string) (bool, error)
 }
 
 type EventStore interface {

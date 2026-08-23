@@ -479,6 +479,8 @@ func handleStoreError(w http.ResponseWriter, err error) bool {
 		errJSON(w, 409, "edit_conflict")
 	} else if errors.Is(err, ErrAccessCodeTaken) {
 		errJSON(w, 409, "access_code_taken")
+	} else if errors.Is(err, ErrSessionActive) {
+		errJSON(w, 409, "live_session_active")
 	} else {
 		errJSON(w, 500, "internal_error")
 	}

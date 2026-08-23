@@ -41,16 +41,16 @@ The historical Django/Rust implementation was intentionally removed from this
 branch. Its history remains in Git and `master`; do not restore legacy code as
 a shortcut.
 
-## Current repository state — 2026-08-23
+## Current repository state — 2026-08-24
 
 | Area | Actual state | Rule for next work |
 |---|---|---|
-| `apps/api` | Go API with Compose-verified cookie identity, optional email OTP, SMTP reset delivery, signed Google login, owner presentation/editor CRUD with validated slide definitions, revision-aware edits, persistent owner-selected access codes, content/live flows, role-scoped snapshots, keyset-paginated results, durable replay, bounded fan-out, transactional advisory-locked migrations, and trusted-proxy-aware identity limits | Preserve ownership/role boundaries and never accept an external score ledger. Provider secrets belong only in deployment configuration. |
-| `apps/web` | React 19/Vite UI on the Go cookie API; the quiz editor has a typed domain/repository boundary, conditional single-request saves, stable slide/option identities, editable share codes, question/content inspectors, shared present validation, and conflict recovery. Public `/{accessCode}` routes resolve active sessions. Snapshot-first SSE and manager paging replace WebSockets. A production Nginx image supplies SPA fallback, same-origin proxying, SSE no-buffer settings, caching, and security headers. Local Compose and Vite expose only the web ingress to trusted LAN/hotspot devices by default; API and dependency host ports remain loopback-only. | Preserve the established auth UI and participant non-disclosure boundary. Keep web/API provider configuration synchronized. |
-| PostgreSQL | PostgreSQL 16; migrations `0001`-`0014`; authoritative users/content/settings/editor revisions/access codes/OTP and reset hashes/sessions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
-| Redis | Redis 7.4 provides readiness and fixed-window identity rate limits; live fan-out/presence acceleration is not implemented | It may accelerate ephemeral work, never replace the event/answer ledger. |
+| `apps/api` | Go API with immutable per-run slide definitions, database-clock deadlines and automatic closure, actor-scoped idempotency, recoverable question stats, bounded live requests/rate limits, reduced live SQL/acquire paths, single-flight SSE stream creation, synchronously warmed minimum PostgreSQL pools, bounded HTTP/pool/query/live metrics, graceful SSE drain, plus the previously verified identity/content/report flows | Preserve ownership/role boundaries and never accept an external score ledger. Provider secrets belong only in deployment configuration. |
+| `apps/web` | React 19/Vite UI with secure UUID generation on plain-HTTP LAN origins, monotonic snapshot/event recovery, delta presence updates, recoverable question stats, stable command retries, ranked participant leaderboard projection, and the existing typed editor/public join flow. Nginx has raised connection/FD ceilings, no-buffer SSE, upstream keepalive, and dynamic Docker-DNS recovery across API address changes. | Preserve the established auth UI and participant non-disclosure boundary. Keep web/API provider configuration synchronized. |
+| PostgreSQL | PostgreSQL 16; migrations `0001`-`0015`; authoritative users/content/settings/editor revisions/access codes/OTP and reset hashes/sessions/frozen run definitions/answers/scores/events | Durable data belongs here. Add forward-only migrations only. |
+| Redis | Redis 7.4 provides readiness and fixed-window identity plus live join/answer/action/reconnect limits; live fan-out/presence acceleration is not implemented | It may accelerate ephemeral work, never replace the event/answer ledger. |
 | CI | GitHub Actions validates Go tests/race, web lint/typecheck/unit/build, both Compose contracts, and API/web image builds | Keep CI passing and add checks with new tooling. |
-| Tests | Web lint/typecheck/32 unit tests/build, 3 Playwright system-Chrome E2E flows, Go tests/vet, SMTP/JWKS/proxy tests, Compose identity/presentation/editor revision/conflict/live/result/non-disclosure/SSE matrix, and full API+web image smoke; 1k/5k/10k tests do not exist | Treat browser/Compose as functional evidence only; never claim 10k proof without the capacity gates. |
+| Tests | Web lint/typecheck/32 unit tests/build, 3 Playwright system-Chrome E2E flows, Go tests/vet, SMTP/JWKS/proxy tests, Compose identity/presentation/editor revision/conflict/live/result/non-disclosure/SSE matrix, full API+web image smoke, accepted local direct and Nginx 100-user runs, two direct 1k passes, two consecutive Nginx 1k passes, and forced API-address recovery; production-like 1k/5k/10k gates do not exist | Treat browser/local Compose load as bounded evidence only; never claim production or 10k proof without the named capacity gates. |
 
 The working branch is `feat/go-platform-foundation`. It uses a separate Git
 worktree, so `master` remains available to teammates. Do not merge, force-push,
@@ -67,10 +67,12 @@ apps/
     internal/platform/migrate/sql/ ordered, embedded, forward-only SQL migrations
     openapi/                 REST and SSE contract source
   web/                       React client, progressive JS -> TypeScript migration
+load/k6/                     pinned live HTTP/SSE load scenario and SQL audit
 docs/
   AI_HANDOFF.md              precise execution plan and handoff template
   architecture.md            architecture boundaries
   capacity-plan.md           workload, SLOs, telemetry, and 1k/5k/10k gates
+  load-test-results.md       measured local runs, fingerprints, and limitations
   configuration.md           API/web environment and deployment checklist
   local-development.md       complete stack, hot reload, verification, troubleshooting
   deployment-runbook.md      images, dependencies, secrets, TLS/SSE ingress, rollout
@@ -162,9 +164,12 @@ Slow clients are disconnected and recover; server memory must remain bounded.
 - Score reads use `participants.score`, not repeated full-history aggregation.
 - PostgreSQL polling grows with active sessions/API replicas, not SSE clients.
 - Redis failure must not lose answers, scores, command results, or replay events.
-- Known blockers before a serious 10k run: metrics/tracing, join/answer rate limits,
-  real TLS/ingress validation, event retention, database/pool
-  tuning, and k6 evidence.
+- Known blockers before a serious 10k run: production-like cold/warm 1k proof,
+  continuous PostgreSQL lock sampling, real TLS/ingress validation, event
+  retention, measured multi-replica database tuning, and staged 5k/10k evidence.
+  Bounded HTTP/runtime/pool/query/SSE/broker/answer metrics, pool controls, live
+  admission limits, and local 100/two-run 1k evidence now exist but are not
+  production capacity proof.
 
 ## Required workflow for every change
 
@@ -200,15 +205,14 @@ load tests. Long-lived JWTs in an SSE query string are prohibited.
 
 ## Single exact next task
 
-Implement Phase F1 in `docs/frontend-professionalization.md`: a Persian-first,
-continuous `New presentation` to editor flow with dashboard pending feedback,
-an editor-shaped skeleton, reduced-motion-safe entry, and first-slide onboarding.
+Execute the checked-in 1k HTTP/SSE protocol twice on a named production-like
+single-API topology through real TLS ingress, including a cold deployment run.
 
-Acceptance: one click creates exactly one presentation and one navigation; no
-unrelated full-screen loader flashes; failure remains recoverable on the
-dashboard; desktop 1440x900 and mobile 390x844 browser checks pass. Bounded
-telemetry and the 100-user k6 smoke remain the next capacity task after the
-owner-prioritized frontend sequence.
+Acceptance: both runs meet the documented HTTP/event SLOs; raw summaries,
+topology/commit/image identity, pool/query/lock/CPU/heap/ingress metrics are
+retained; correctness reconciliation reports zero lost answers, double scores,
+invalid transitions, and post-close writes; cold readiness reaches its declared
+minimum before traffic. Only then promote 1k and consider the 5k gate.
 
 ## Phases and the single next task
 
@@ -270,6 +274,9 @@ owner-prioritized frontend sequence.
 | 2026-08-23 | Added persistent owner-selected quiz access codes and direct public join links | Migration `0014`, OpenAPI, Go and React now enforce case-insensitive unique 5-12 character codes, use them for new sessions, atomically replace the current active-session code, and resolve `/{accessCode}` for participants. Go tests/vet, web lint/typecheck/32 unit tests/build, image builds, OpenAPI parsing, and the preserved-volume Compose matrix passed, including old-link invalidation and uniqueness; no browser E2E was run. |
 | 2026-08-23 | Defined the Persian-first frontend professionalization program | `docs/frontend-professionalization.md` records real-Chrome findings, UX rules, ordered F1-F4 phases, responsive/accessibility gates, and makes creation-to-editor continuity the owner-prioritized next task without changing the independent capacity gates. |
 | 2026-08-23 | Enabled local mobile-device browser testing | A real Compose stack published web on `0.0.0.0:5173` while API, PostgreSQL, and Redis stayed loopback-only; both loopback and `192.168.100.10:5173` returned HTTP 200, API readiness passed, the web build passed, and Vite advertised LAN addresses. The local runbook documents IPv4, firewall, reset-link, and opt-out settings. |
+| 2026-08-23 | Hardened the complete live-quiz lifecycle and LAN participant flow | Migration `0015` freezes run definitions and enforces one active run; PostgreSQL-clock deadlines close durably; idempotency is actor-scoped; snapshots recover stats/rank; active runs resist destructive reset/delete; React recovery is monotonic and LAN-safe; Redis limits, request bounds/timeouts, pool controls, bounded metrics, graceful SSE failure/drain, and raised Nginx/FD limits were added. Go tests/vet, web lint/typecheck/32 tests/build, preserved-volume Compose integration, Nginx config, migration, and a real Chrome mobile join over `192.168.100.10` passed. A 100-user scenario was added, but its pinned `xk6-sse` build did not resolve locally, so no 100/1k/5k/10k capacity claim was made. |
+| 2026-08-23 | Measured and optimized the live protocol through local 1k | The pinned k6 build was recovered with proxy-to-direct fallback. Query metrics exposed pool pressure; snapshot/answer/deadline/join round trips were reduced; SSE initialization became single-flight; configured minimum pool readiness became synchronous; and the load model now follows lobby → snapshot/SSE → question-open event → HTTP answer → close. The 100-user run and two local 1k runs met SLOs with zero HTTP/check/correctness failures. `docs/load-test-results.md` records fingerprints and limitations; production-like 1k, 5k, and 10k remain unproven. |
+| 2026-08-24 | Verified and hardened the public Nginx live path | A nullable closed-question deadline now maps late/concurrent answers to 409 instead of 500; SSE metric flushing no longer emits duplicate-header warnings; load settings fail fast; and Nginx dynamically re-resolves API addresses with upstream keepalive. Nginx passed 100 users and two consecutive local 1k runs with durable reconciliation; a forced API IP change recovered without restarting Web. One preceding 1k sample missed answer p95 and remains documented. TLS/remote production-like 1k is still the exact next gate. |
 
 ## References
 

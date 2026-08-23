@@ -13,6 +13,7 @@ var (
 	ErrSlideHasResults = errors.New("slide has live results")
 	ErrEditConflict    = errors.New("resource changed since it was loaded")
 	ErrAccessCodeTaken = errors.New("access code is already in use")
+	ErrSessionActive   = errors.New("presentation has an active live session")
 )
 
 type Slide struct {

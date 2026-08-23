@@ -19,17 +19,17 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore { return &PostgresStore
 
 func (s *PostgresStore) CreateSession(c context.Context, host, presentation, request, code string) (Session, bool, error) {
 	var out Session
-	if e := scanSession(s.pool.QueryRow(c, `SELECT id::text,presentation_id::text,host_id::text,join_code,state,state_version,active_slide_id::text,ends_at FROM live_sessions WHERE host_id=$1 AND request_id=$2`, host, request), &out); e == nil {
-		return out, true, nil
-	} else if !errors.Is(e, pgx.ErrNoRows) {
-		return out, false, e
-	}
 	tx, e := s.pool.Begin(c)
 	if e != nil {
 		return out, false, e
 	}
 	defer tx.Rollback(c)
-	if _, e = tx.Exec(c, `SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':' || $2::text, 0))`, host, request); e != nil {
+	if _, e = tx.Exec(c, `SELECT pg_advisory_xact_lock(hashtextextended('live-session:' || $1::text || ':' || $2::text, 0))`, host, presentation); e != nil {
+		return out, false, e
+	}
+	if e = scanSession(tx.QueryRow(c, `SELECT id::text,presentation_id::text,host_id::text,join_code,state,state_version,active_slide_id::text,ends_at FROM live_sessions WHERE host_id=$1 AND presentation_id=$2 AND state<>'ended'`, host, presentation), &out); e == nil {
+		return out, true, nil
+	} else if !errors.Is(e, pgx.ErrNoRows) {
 		return out, false, e
 	}
 	if e = scanSession(tx.QueryRow(c, `SELECT id::text,presentation_id::text,host_id::text,join_code,state,state_version,active_slide_id::text,ends_at FROM live_sessions WHERE host_id=$1 AND request_id=$2`, host, request), &out); e == nil {
@@ -43,6 +43,10 @@ func (s *PostgresStore) CreateSession(c context.Context, host, presentation, req
 	}
 	if e != nil {
 		return out, false, mapPG(e)
+	}
+	if _, e = tx.Exec(c, `INSERT INTO live_session_slides(session_id,slide_id,revision,position,kind,content)
+		SELECT $1,id,revision,position,kind,content FROM slides WHERE presentation_id=$2`, out.ID, out.PresentationID); e != nil {
+		return out, false, e
 	}
 	if e = insertEvent(c, tx, out.ID, out.StateVersion, "session.created", map[string]any{"state": out.State}); e != nil {
 		return out, false, e
@@ -62,16 +66,19 @@ func (s *PostgresStore) ResolveSession(c context.Context, code string) (SessionL
 }
 func (s *PostgresStore) Join(c context.Context, session, request, name, avatar string, hash []byte) (Participant, bool, error) {
 	var p Participant
-	if e := s.pool.QueryRow(c, `SELECT id::text,display_name,COALESCE(avatar,'') FROM participants WHERE session_id=$1 AND request_id=$2`, session, request).Scan(&p.ID, &p.DisplayName, &p.Avatar); e == nil {
-		return p, true, nil
-	} else if !errors.Is(e, pgx.ErrNoRows) {
-		return p, false, e
-	}
 	tx, e := s.pool.Begin(c)
 	if e != nil {
 		return p, false, e
 	}
 	defer tx.Rollback(c)
+	// Check idempotency before session state so a retry always returns the
+	// original committed result, including after the session has ended. Keeping
+	// the lookup in this transaction avoids a second pool acquisition normally.
+	if e = tx.QueryRow(c, `SELECT id::text,display_name,COALESCE(avatar,'') FROM participants WHERE session_id=$1 AND request_id=$2`, session, request).Scan(&p.ID, &p.DisplayName, &p.Avatar); e == nil {
+		return p, true, nil
+	} else if !errors.Is(e, pgx.ErrNoRows) {
+		return p, false, e
+	}
 	var version int64
 	e = tx.QueryRow(c, `SELECT state_version FROM live_sessions WHERE id=$1 AND state NOT IN ('draft','ended') FOR SHARE`, session).Scan(&version)
 	if errors.Is(e, pgx.ErrNoRows) {
@@ -101,7 +108,7 @@ func (s *PostgresStore) Join(c context.Context, session, request, name, avatar s
 func (s *PostgresStore) ApplyAction(c context.Context, session, host, request string, expected int64, action, slide string, duration int) (Session, bool, error) {
 	var out Session
 	var prior []byte
-	if e := s.pool.QueryRow(c, `SELECT result FROM live_commands WHERE session_id=$1 AND request_id=$2`, session, request).Scan(&prior); e == nil {
+	if e := s.pool.QueryRow(c, `SELECT c.result FROM live_commands c JOIN live_sessions l ON l.id=c.session_id WHERE c.session_id=$1 AND c.request_id=$2 AND l.host_id=$3`, session, request, host).Scan(&prior); e == nil {
 		if e = json.Unmarshal(prior, &out); e != nil {
 			return out, true, e
 		}
@@ -121,7 +128,7 @@ func (s *PostgresStore) ApplyAction(c context.Context, session, host, request st
 	if e != nil {
 		return out, false, e
 	}
-	if e = tx.QueryRow(c, `SELECT result FROM live_commands WHERE session_id=$1 AND request_id=$2`, session, request).Scan(&prior); e == nil {
+	if e = tx.QueryRow(c, `SELECT c.result FROM live_commands c JOIN live_sessions l ON l.id=c.session_id WHERE c.session_id=$1 AND c.request_id=$2 AND l.host_id=$3`, session, request, host).Scan(&prior); e == nil {
 		if e = json.Unmarshal(prior, &out); e != nil {
 			return out, true, e
 		}
@@ -137,11 +144,11 @@ func (s *PostgresStore) ApplyAction(c context.Context, session, host, request st
 		return out, false, ErrInvalidTransition
 	}
 	var active any = out.ActiveSlideID
-	var ends any = out.EndsAt
+	var ends any
 	if action == "open_content" || action == "open_question" {
 		var kind string
 		var content []byte
-		e = tx.QueryRow(c, `SELECT kind,content FROM slides WHERE id=$1 AND presentation_id=$2`, slide, out.PresentationID).Scan(&kind, &content)
+		e = tx.QueryRow(c, `SELECT kind,content FROM live_session_slides WHERE session_id=$1 AND slide_id=$2`, session, slide).Scan(&kind, &content)
 		if errors.Is(e, pgx.ErrNoRows) {
 			return out, false, ErrNotFound
 		}
@@ -149,6 +156,9 @@ func (s *PostgresStore) ApplyAction(c context.Context, session, host, request st
 			return out, false, e
 		}
 		if action == "open_question" && kind != "question" {
+			return out, false, ErrInvalid
+		}
+		if action == "open_content" && kind != "content" {
 			return out, false, ErrInvalid
 		}
 		active = slide
@@ -163,9 +173,11 @@ func (s *PostgresStore) ApplyAction(c context.Context, session, host, request st
 			if duration < 1 || duration > 86400 {
 				return out, false, ErrInvalid
 			}
-			ends = time.Now().UTC().Add(time.Duration(duration) * time.Second)
-		} else {
-			ends = nil
+			var deadline time.Time
+			if e = tx.QueryRow(c, `SELECT clock_timestamp()+make_interval(secs=>$1)`, duration).Scan(&deadline); e != nil {
+				return out, false, e
+			}
+			ends = deadline
 		}
 	}
 	if action == "end" {
@@ -207,30 +219,108 @@ func (s *PostgresStore) ApplyAction(c context.Context, session, host, request st
 	}
 	return out, false, nil
 }
+
+// ReconcileDeadline makes expiry a durable state transition. The UPDATE takes
+// an exclusive row lock, so it waits for answers already admitted under the
+// shared session lock and prevents answers admitted after the database clock
+// deadline from slipping through.
+func (s *PostgresStore) ReconcileDeadline(c context.Context, session string) (bool, error) {
+	// Expiry is rare compared with snapshots and broker ticks. Avoid opening and
+	// rolling back a write transaction for the overwhelmingly common no-op path.
+	// The conditional UPDATE below remains the authoritative race winner.
+	var expired bool
+	if e := s.pool.QueryRow(c, `SELECT state='question_open' AND ends_at<=clock_timestamp() FROM live_sessions WHERE id=$1`, session).Scan(&expired); errors.Is(e, pgx.ErrNoRows) {
+		return false, nil
+	} else if e != nil {
+		return false, e
+	} else if !expired {
+		return false, nil
+	}
+	tx, e := s.pool.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if e != nil {
+		return false, e
+	}
+	defer tx.Rollback(c)
+	changed, e := reconcileDeadlineTx(c, tx, session)
+	if e != nil {
+		return false, e
+	}
+	if !changed {
+		return false, nil
+	}
+	if e = tx.Commit(c); e != nil {
+		return false, e
+	}
+	return true, nil
+}
+
+func reconcileDeadlineTx(c context.Context, tx pgx.Tx, session string) (bool, error) {
+	var out Session
+	e := scanSession(tx.QueryRow(c, `UPDATE live_sessions
+		SET state='question_closed',state_version=state_version+1,ends_at=NULL,updated_at=clock_timestamp()
+		WHERE id=$1 AND state='question_open' AND ends_at<=clock_timestamp()
+		RETURNING id::text,presentation_id::text,host_id::text,join_code,state,state_version,active_slide_id::text,ends_at`, session), &out)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if e != nil {
+		return false, mapPG(e)
+	}
+	if e = insertEvent(c, tx, session, out.StateVersion, "session.state_changed", map[string]any{"state": out.State, "active_slide_id": out.ActiveSlideID, "ends_at": nil, "reason": "deadline_elapsed"}); e != nil {
+		return false, e
+	}
+	if out.ActiveSlideID != nil {
+		stats, statsErr := answerStats(c, tx, session, *out.ActiveSlideID)
+		if statsErr != nil {
+			return false, statsErr
+		}
+		if e = insertEvent(c, tx, session, out.StateVersion, "answer.stats", stats); e != nil {
+			return false, e
+		}
+	}
+	return true, nil
+}
+
 func (s *PostgresStore) SubmitAnswer(c context.Context, session string, hash []byte, request, slide string, selected []int, policy ScoringPolicy) (AnswerResult, error) {
 	var result AnswerResult
-	if e := s.pool.QueryRow(c, `SELECT id::text,score_delta FROM answers WHERE session_id=$1 AND request_id=$2`, session, request).Scan(&result.AnswerID, &result.ScoreDelta); e == nil {
-		result.Duplicate = true
-		return result, nil
-	} else if !errors.Is(e, pgx.ErrNoRows) {
-		return result, e
-	}
 	tx, e := s.pool.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if e != nil {
 		return result, e
 	}
 	defer tx.Rollback(c)
-	var participant, active, state string
-	var ends time.Time
-	var content []byte
-	e = tx.QueryRow(c, `SELECT p.id::text,l.active_slide_id::text,l.state,l.ends_at,sl.content FROM participants p JOIN live_sessions l ON l.id=p.session_id JOIN slides sl ON sl.id=l.active_slide_id WHERE p.session_id=$1 AND p.token_hash=$2 FOR SHARE OF l`, session, hash).Scan(&participant, &active, &state, &ends, &content)
+	var participant string
+	var duplicateID *string
+	var duplicateScore *int
+	e = tx.QueryRow(c, `SELECT p.id::text,a.id::text,a.score_delta
+		FROM participants p
+		LEFT JOIN answers a ON a.session_id=p.session_id AND a.participant_id=p.id AND a.request_id=$3
+		WHERE p.session_id=$1 AND p.token_hash=$2`, session, hash, request).Scan(&participant, &duplicateID, &duplicateScore)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return result, ErrUnauthorized
 	}
 	if e != nil {
 		return result, e
 	}
-	if state != string(QuestionOpen) || active != slide || !time.Now().UTC().Before(ends) {
+	if duplicateID != nil && duplicateScore != nil {
+		result.AnswerID = *duplicateID
+		result.ScoreDelta = *duplicateScore
+		result.Duplicate = true
+		return result, nil
+	}
+	var active, state string
+	var remainingSeconds float64
+	var content []byte
+	e = tx.QueryRow(c, `SELECT l.active_slide_id::text,l.state,sl.content,
+		COALESCE(GREATEST(0,EXTRACT(EPOCH FROM l.ends_at-clock_timestamp())),0)::float8
+		FROM live_sessions l JOIN live_session_slides sl ON sl.session_id=l.id AND sl.slide_id=l.active_slide_id
+		WHERE l.id=$1 FOR SHARE OF l`, session).Scan(&active, &state, &content, &remainingSeconds)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return result, ErrConflict
+	}
+	if e != nil {
+		return result, e
+	}
+	if state != string(QuestionOpen) || active != slide || remainingSeconds <= 0 {
 		return result, ErrConflict
 	}
 	var q struct {
@@ -266,21 +356,26 @@ func (s *PostgresStore) SubmitAnswer(c context.Context, session string, hash []b
 			correct = append(correct, i)
 		}
 	}
-	score := policy.Score(Question{Type: q.QuestionType, Correct: correct, MaxPoints: q.MaxPoints, MinPoints: q.MinPoints, PartialScoring: q.PartialScoring, FasterAnswers: q.FasterAnswers, Duration: time.Duration(q.QuestionTime) * time.Second, Remaining: time.Until(ends)}, selected)
+	score := policy.Score(Question{Type: q.QuestionType, Correct: correct, MaxPoints: q.MaxPoints, MinPoints: q.MinPoints, PartialScoring: q.PartialScoring, FasterAnswers: q.FasterAnswers, Duration: time.Duration(q.QuestionTime) * time.Second, Remaining: time.Duration(remainingSeconds * float64(time.Second))}, selected)
 	answer, _ := json.Marshal(map[string]any{"selected_option_indexes": selected})
-	e = tx.QueryRow(c, `INSERT INTO answers(session_id,participant_id,question_slide_id,request_id,answer,score_delta) VALUES($1,$2,$3,$4,$5,$6) RETURNING id::text,score_delta`, session, participant, slide, request, answer, score).Scan(&result.AnswerID, &result.ScoreDelta)
+	e = tx.QueryRow(c, `WITH inserted AS (
+			INSERT INTO answers(session_id,participant_id,question_slide_id,request_id,answer,score_delta)
+			VALUES($1,$2,$3,$4,$5,$6)
+			RETURNING id,score_delta
+		), updated AS (
+			UPDATE participants p SET score=p.score+inserted.score_delta
+			FROM inserted WHERE p.id=$2 RETURNING p.id
+		)
+		SELECT inserted.id::text,inserted.score_delta FROM inserted JOIN updated ON true`, session, participant, slide, request, answer, score).Scan(&result.AnswerID, &result.ScoreDelta)
 	if e != nil {
 		if isUniqueViolation(e) {
 			_ = tx.Rollback(c)
-			if duplicateErr := s.pool.QueryRow(c, `SELECT id::text,score_delta FROM answers WHERE session_id=$1 AND request_id=$2`, session, request).Scan(&result.AnswerID, &result.ScoreDelta); duplicateErr == nil {
+			if duplicateErr := s.pool.QueryRow(c, `SELECT id::text,score_delta FROM answers WHERE session_id=$1 AND participant_id=$2 AND request_id=$3`, session, participant, request).Scan(&result.AnswerID, &result.ScoreDelta); duplicateErr == nil {
 				result.Duplicate = true
 				return result, nil
 			}
 		}
 		return result, mapPG(e)
-	}
-	if _, e = tx.Exec(c, `UPDATE participants SET score=score+$2 WHERE id=$1`, participant, score); e != nil {
-		return result, e
 	}
 	if e = tx.Commit(c); e != nil {
 		return result, e
@@ -289,17 +384,25 @@ func (s *PostgresStore) SubmitAnswer(c context.Context, session string, hash []b
 }
 func (s *PostgresStore) ParticipantSnapshot(c context.Context, session string, hash []byte) (ParticipantSnapshot, error) {
 	var x ParticipantSnapshot
-	tx, e := s.pool.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	tx, e := s.pool.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if e != nil {
 		return x, e
 	}
 	defer tx.Rollback(c)
+	if _, e = reconcileDeadlineTx(c, tx, session); e != nil {
+		return x, e
+	}
 	var full Session
-	e = tx.QueryRow(c, `SELECT l.id::text,l.presentation_id::text,l.host_id::text,l.join_code,l.state,l.state_version,l.active_slide_id::text,l.ends_at,p.id::text,p.display_name,COALESCE(p.avatar,''),p.score
+	e = tx.QueryRow(c, `SELECT l.id::text,l.presentation_id::text,l.host_id::text,l.join_code,l.state,l.state_version,l.active_slide_id::text,l.ends_at,p.id::text,p.display_name,COALESCE(p.avatar,''),p.score,
+		CASE WHEN l.state IN ('leaderboard','ended') THEN (SELECT count(*)::int+1 FROM participants ranked WHERE ranked.session_id=p.session_id AND (ranked.score>p.score OR (ranked.score=p.score AND (ranked.joined_at,ranked.id)<(p.joined_at,p.id)))) END,
+		(SELECT count(*)::int FROM participants counted WHERE counted.session_id=l.id),
+		COALESCE((SELECT max(event_id) FROM live_events WHERE session_id=l.id),0),
+		(SELECT jsonb_build_object('id',slide_id,'position',position,'kind',kind,'content',content) FROM live_session_slides WHERE session_id=l.id AND slide_id=l.active_slide_id)
 		FROM live_sessions l JOIN participants p ON p.session_id=l.id
 		WHERE l.id=$1 AND p.token_hash=$2`, session, hash).Scan(
 		&full.ID, &full.PresentationID, &full.HostID, &full.JoinCode, &full.State, &full.StateVersion, &full.ActiveSlideID, &full.EndsAt,
-		&x.Participant.ID, &x.Participant.DisplayName, &x.Participant.Avatar, &x.Participant.Score,
+		&x.Participant.ID, &x.Participant.DisplayName, &x.Participant.Avatar, &x.Participant.Score, &x.Participant.Rank,
+		&x.ParticipantCount, &x.LastEventID, &x.ActiveSlide,
 	)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return x, ErrUnauthorized
@@ -309,7 +412,7 @@ func (s *PostgresStore) ParticipantSnapshot(c context.Context, session string, h
 	}
 	x.Role = "participant"
 	x.Session = publicSession(full)
-	if e = snapshotMeta(c, tx, session, &x.ParticipantCount, &x.LastEventID, full.ActiveSlideID, &x.ActiveSlide); e != nil {
+	if e = snapshotQuestionStats(c, tx, session, full.State, full.ActiveSlideID, &x.QuestionStats); e != nil {
 		return x, e
 	}
 	if x.ActiveSlide, e = sanitizeParticipantActiveSlide(x.ActiveSlide); e != nil {
@@ -322,12 +425,22 @@ func (s *PostgresStore) ParticipantSnapshot(c context.Context, session string, h
 }
 func (s *PostgresStore) ManagerSnapshot(c context.Context, session, manager string) (ManagerSnapshot, error) {
 	var x ManagerSnapshot
-	tx, e := s.pool.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	tx, e := s.pool.BeginTx(c, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if e != nil {
 		return x, e
 	}
 	defer tx.Rollback(c)
-	e = scanSession(tx.QueryRow(c, `SELECT id::text,presentation_id::text,host_id::text,join_code,state,state_version,active_slide_id::text,ends_at FROM live_sessions WHERE id=$1 AND host_id=$2`, session, manager), &x.Session)
+	if _, e = reconcileDeadlineTx(c, tx, session); e != nil {
+		return x, e
+	}
+	e = tx.QueryRow(c, `SELECT id::text,presentation_id::text,host_id::text,join_code,state,state_version,active_slide_id::text,ends_at,
+		(SELECT count(*)::int FROM participants WHERE session_id=live_sessions.id),
+		COALESCE((SELECT max(event_id) FROM live_events WHERE session_id=live_sessions.id),0),
+		(SELECT jsonb_build_object('id',slide_id,'position',position,'kind',kind,'content',content) FROM live_session_slides WHERE session_id=live_sessions.id AND slide_id=live_sessions.active_slide_id)
+		FROM live_sessions WHERE id=$1 AND host_id=$2`, session, manager).Scan(
+		&x.Session.ID, &x.Session.PresentationID, &x.Session.HostID, &x.Session.JoinCode, &x.Session.State, &x.Session.StateVersion, &x.Session.ActiveSlideID, &x.Session.EndsAt,
+		&x.ParticipantCount, &x.LastEventID, &x.ActiveSlide,
+	)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return x, ErrNotFound
 	}
@@ -335,7 +448,7 @@ func (s *PostgresStore) ManagerSnapshot(c context.Context, session, manager stri
 		return x, e
 	}
 	x.Role = "manager"
-	if e = snapshotMeta(c, tx, session, &x.ParticipantCount, &x.LastEventID, x.Session.ActiveSlideID, &x.ActiveSlide); e != nil {
+	if e = snapshotQuestionStats(c, tx, session, x.Session.State, x.Session.ActiveSlideID, &x.QuestionStats); e != nil {
 		return x, e
 	}
 	if e = tx.Commit(c); e != nil {
@@ -386,15 +499,15 @@ func (s *PostgresStore) Roster(c context.Context, session, manager string, query
 	return page, nil
 }
 
-func snapshotMeta(c context.Context, tx pgx.Tx, session string, participantCount *int, lastEventID *int64, activeSlideID *string, activeSlide *json.RawMessage) error {
-	if e := tx.QueryRow(c, `SELECT count(*)::int,COALESCE((SELECT max(event_id) FROM live_events WHERE session_id=$1),0) FROM participants WHERE session_id=$1`, session).Scan(participantCount, lastEventID); e != nil {
-		return e
+func snapshotQuestionStats(c context.Context, tx pgx.Tx, session string, state State, activeSlideID *string, target **QuestionStats) error {
+	if activeSlideID == nil || (state != QuestionClosed && state != Leaderboard) {
+		return nil
 	}
-	if activeSlideID != nil {
-		if e := tx.QueryRow(c, `SELECT jsonb_build_object('id',id,'position',position,'kind',kind,'content',content) FROM slides WHERE id=$1`, *activeSlideID).Scan(activeSlide); e != nil {
-			return e
-		}
+	stats, err := answerStats(c, tx, session, *activeSlideID)
+	if err != nil {
+		return err
 	}
+	*target = &stats
 	return nil
 }
 
@@ -493,7 +606,7 @@ func sanitizeReplayedEvent(event *Event) error {
 	return nil
 }
 
-func answerStats(c context.Context, tx pgx.Tx, session, slide string) (map[string]any, error) {
+func answerStats(c context.Context, tx pgx.Tx, session, slide string) (QuestionStats, error) {
 	counts := map[string]int{}
 	rows, e := tx.Query(c, `SELECT selected.value, count(*)::int
 		FROM answers a
@@ -501,25 +614,25 @@ func answerStats(c context.Context, tx pgx.Tx, session, slide string) (map[strin
 		WHERE a.session_id=$1 AND a.question_slide_id=$2
 		GROUP BY selected.value`, session, slide)
 	if e != nil {
-		return nil, e
+		return QuestionStats{}, e
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var option string
 		var count int
 		if e = rows.Scan(&option, &count); e != nil {
-			return nil, e
+			return QuestionStats{}, e
 		}
 		counts[option] = count
 	}
 	if e = rows.Err(); e != nil {
-		return nil, e
+		return QuestionStats{}, e
 	}
 	var responseCount int
 	if e = tx.QueryRow(c, `SELECT count(*)::int FROM answers WHERE session_id=$1 AND question_slide_id=$2`, session, slide).Scan(&responseCount); e != nil {
-		return nil, e
+		return QuestionStats{}, e
 	}
-	return map[string]any{"question_slide_id": slide, "response_count": responseCount, "option_counts": counts}, nil
+	return QuestionStats{QuestionSlideID: slide, ResponseCount: responseCount, OptionCounts: counts}, nil
 }
 
 func leaderboardSummary(c context.Context, tx pgx.Tx, session string) (map[string]any, error) {
@@ -549,6 +662,9 @@ func actionTarget(from State, action string) (State, error) {
 func mapPG(e error) error {
 	var p *pgconn.PgError
 	if errors.As(e, &p) {
+		if p.ConstraintName == "participants_session_id_display_name_key" {
+			return ErrNameTaken
+		}
 		if p.Code == "23505" || p.Code == "40001" {
 			return ErrConflict
 		}

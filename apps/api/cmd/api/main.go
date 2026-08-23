@@ -31,10 +31,14 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: cfg.LogLevel,
 	}))
+	slog.SetDefault(logger)
 	startupCtx, cancelStartup := context.WithTimeout(context.Background(), cfg.DependencyCheckTimeout)
 	defer cancelStartup()
 
-	postgresClient, err := postgres.New(startupCtx, cfg.DatabaseURL)
+	postgresClient, err := postgres.New(startupCtx, cfg.DatabaseURL, postgres.Options{
+		MaxConns: int32(cfg.DatabasePoolMaxConns), MinConns: int32(cfg.DatabasePoolMinConns),
+		MaxLifetime: cfg.DatabaseConnMaxLifetime, MaxIdleTime: cfg.DatabaseConnMaxIdleTime,
+	})
 	if err != nil {
 		logger.Error("postgres initialization failed", "error", err)
 		os.Exit(1)
@@ -70,9 +74,10 @@ func main() {
 		verificationMailer = configuredMailer
 	}
 
+	var liveBroker *live.EventBroker
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
-		Handler: platformhttp.NewRouterWithRoutes(cfg, []dependency.Dependency{postgresClient, redisClient}, func(m *http.ServeMux) {
+		Handler: platformhttp.NewRouterWithRoutes(cfg, []dependency.Dependency{postgresClient, redisClient}, func(m *http.ServeMux) []platformhttp.MetricSource {
 			var googleVerifier identity.GoogleVerifier
 			if cfg.GoogleClientID != "" {
 				googleVerifier = identity.NewGoogleTokenVerifier(cfg.GoogleClientID, cfg.GoogleJWKSURL, nil)
@@ -91,14 +96,21 @@ func main() {
 			})
 			liveStore := live.NewPostgresStore(postgresClient.Pool())
 			liveService := live.NewService(liveStore, live.DeductionPolicy{})
-			liveBroker := live.NewEventBroker(liveStore, 250*time.Millisecond, 256)
+			liveBroker = live.NewEventBroker(liveStore, 250*time.Millisecond, 256)
 			identity.NewHTTP(identityService, cfg.Environment == "production", redisClient).WithTrustedProxyCIDRs(cfg.TrustedProxyCIDRs).Register(m)
 			presentations.NewHTTP(identityService, presentations.NewPostgresStore(postgresClient.Pool())).Register(m)
-			live.NewHTTP(liveService, liveBroker, identityService, cfg.Environment == "production").Register(m)
+			live.NewHTTP(liveService, liveBroker, identityService, cfg.Environment == "production", redisClient).WithRequestTimeout(cfg.LiveRequestTimeout).Register(m)
+			return []platformhttp.MetricSource{postgresClient, liveBroker, liveService}
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       75 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
+	server.RegisterOnShutdown(func() {
+		if liveBroker != nil {
+			liveBroker.Close()
+		}
+	})
 
 	serverErrors := make(chan error, 1)
 	go func() {

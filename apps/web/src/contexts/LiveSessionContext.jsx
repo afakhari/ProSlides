@@ -44,13 +44,19 @@ export const LiveSessionProvider = ({ children, role = "manager" }) => {
   const rosterRef = useRef([]);
   const streamEnabledRef = useRef(false);
   const refreshPromiseRef = useRef(null);
+  const refreshDirtyRef = useRef(false);
   const commandInFlightRef = useRef(false);
+  const pendingActionIdsRef = useRef(new Map());
 
   const storeSnapshot = useCallback((next) => {
+    const incoming = liveCursorFromSnapshot(next);
+    const current = cursorRef.current;
+    if (incoming.eventId < current.eventId || incoming.stateVersion < current.stateVersion) return false;
     snapshotRef.current = next;
-    cursorRef.current = liveCursorFromSnapshot(next);
+    cursorRef.current = incoming;
     setSnapshot(next);
     setLastMessage(next);
+    return true;
   }, []);
 
   const loadRoster = useCallback(async (order = rosterOrderRef.current, append = false) => {
@@ -79,10 +85,17 @@ export const LiveSessionProvider = ({ children, role = "manager" }) => {
   const refreshAuthoritative = useCallback(async () => {
     const id = sessionIdRef.current;
     if (!id) throw new Error("Live session is not selected");
-    if (refreshPromiseRef.current) return refreshPromiseRef.current;
+    if (refreshPromiseRef.current) {
+      refreshDirtyRef.current = true;
+      return refreshPromiseRef.current;
+    }
     refreshPromiseRef.current = (async () => {
-      const next = await getLiveSnapshot(id);
-      storeSnapshot(next);
+      let next;
+      do {
+        refreshDirtyRef.current = false;
+        next = await getLiveSnapshot(id);
+        if (!storeSnapshot(next)) refreshDirtyRef.current = true;
+      } while (refreshDirtyRef.current && sessionIdRef.current === id);
       if (next.role === "manager") {
         await loadRoster(["leaderboard", "ended"].includes(next.session.state) ? "score" : "joined", false);
       } else {
@@ -191,7 +204,24 @@ export const LiveSessionProvider = ({ children, role = "manager" }) => {
               setLastEvent(event);
               setLastMessage(event);
               retry = 500;
-              if (["session.created", "presence.updated", "session.state_changed", "leaderboard.updated"].includes(event.name)) {
+              if (event.name === "presence.updated") {
+                const delta = Number(event.payload?.participant_delta || 0);
+                if (delta > 0) {
+                  setSnapshot((current) => {
+                    if (!current) return current;
+                    const next = { ...current, participant_count: Number(current.participant_count || 0) + delta };
+                    snapshotRef.current = next;
+                    return next;
+                  });
+                }
+              } else if (event.name === "answer.stats") {
+                setSnapshot((current) => {
+                  if (!current) return current;
+                  const next = { ...current, question_stats: event.payload };
+                  snapshotRef.current = next;
+                  return next;
+                });
+              } else if (["session.created", "session.state_changed", "leaderboard.updated"].includes(event.name)) {
                 void refreshAuthoritative().catch((error) => setConnectionError(error.message));
               }
             },
@@ -201,7 +231,8 @@ export const LiveSessionProvider = ({ children, role = "manager" }) => {
           if (controller.signal.aborted) return;
           setIsConnected(false);
           setConnectionError(error.message);
-          await delay(retry, controller.signal);
+          if (error instanceof LiveAPIError && [401, 404].includes(error.status)) return;
+          await delay(Math.round(retry * (0.75 + Math.random() * 0.5)), controller.signal);
           retry = Math.min(retry * 2, 10_000);
           if (controller.signal.aborted) return;
           try {
@@ -220,8 +251,14 @@ export const LiveSessionProvider = ({ children, role = "manager" }) => {
     const id = sessionIdRef.current;
     const current = snapshotRef.current;
     if (!id || current?.role !== "manager") return false;
+    const key = `${id}:${current.session.state_version}:${action}:${slide?.slide_id || ""}`;
+    let requestId = pendingActionIdsRef.current.get(key);
+    if (!requestId) {
+      requestId = createRequestId();
+      pendingActionIdsRef.current.set(key, requestId);
+    }
     const result = await applyLiveAction(id, {
-      request_id: createRequestId(),
+      request_id: requestId,
       expected_state_version: current.session.state_version,
       action,
       ...(slide?.slide_id ? { slide_id: String(slide.slide_id) } : {}),
@@ -230,6 +267,7 @@ export const LiveSessionProvider = ({ children, role = "manager" }) => {
     const next = { ...current, session: result };
     snapshotRef.current = next;
     setSnapshot(next);
+    pendingActionIdsRef.current.delete(key);
     return true;
   }, []);
 

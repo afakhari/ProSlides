@@ -19,6 +19,7 @@ export interface ParticipantWithScore {
   display_name: string;
   avatar?: string;
   score: number;
+  rank?: number;
 }
 
 export interface ParticipantSnapshot {
@@ -28,6 +29,7 @@ export interface ParticipantSnapshot {
   participant: ParticipantWithScore;
   participant_count: number;
   last_event_id: number;
+  question_stats?: QuestionStats;
 }
 
 export interface ManagerSnapshot {
@@ -36,6 +38,13 @@ export interface ManagerSnapshot {
   active_slide?: Record<string, unknown>;
   participant_count: number;
   last_event_id: number;
+  question_stats?: QuestionStats;
+}
+
+export interface QuestionStats {
+  question_slide_id: string;
+  response_count: number;
+  option_counts: Record<string, number>;
 }
 
 export type LiveSnapshot = ParticipantSnapshot | ManagerSnapshot;

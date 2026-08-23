@@ -17,9 +17,14 @@ type Config struct {
 	HTTPAddr                string
 	LogLevel                slog.Level
 	DatabaseURL             string
+	DatabasePoolMaxConns    int
+	DatabasePoolMinConns    int
+	DatabaseConnMaxLifetime time.Duration
+	DatabaseConnMaxIdleTime time.Duration
 	RedisURL                string
 	DependencyCheckTimeout  time.Duration
 	MigrationTimeout        time.Duration
+	LiveRequestTimeout      time.Duration
 	SessionTTL              time.Duration
 	AuthRequireVerification bool
 	EmailVerificationTTL    time.Duration
@@ -122,6 +127,26 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	cfg.LiveRequestTimeout, err = positiveDuration("LIVE_REQUEST_TIMEOUT", "10s")
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.DatabasePoolMaxConns, err = positiveInt("DATABASE_POOL_MAX_CONNS", 50)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.DatabasePoolMinConns, err = nonnegativeInt("DATABASE_POOL_MIN_CONNS", 5)
+	if err != nil || cfg.DatabasePoolMinConns > cfg.DatabasePoolMaxConns {
+		return Config{}, fmt.Errorf("DATABASE_POOL_MIN_CONNS must be non-negative and no greater than DATABASE_POOL_MAX_CONNS")
+	}
+	cfg.DatabaseConnMaxLifetime, err = positiveDuration("DATABASE_CONN_MAX_LIFETIME", "30m")
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.DatabaseConnMaxIdleTime, err = positiveDuration("DATABASE_CONN_MAX_IDLE_TIME", "5m")
+	if err != nil {
+		return Config{}, err
+	}
 
 	level, err := parseLogLevel(valueOrDefault("LOG_LEVEL", "INFO"))
 	if err != nil {
@@ -168,6 +193,18 @@ func positiveInt(key string, fallback int) (int, error) {
 	value, err := strconv.Atoi(raw)
 	if err != nil || value <= 0 {
 		return 0, fmt.Errorf("%s must be a positive integer", key)
+	}
+	return value, nil
+}
+
+func nonnegativeInt(key string, fallback int) (int, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer", key)
 	}
 	return value, nil
 }

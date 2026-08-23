@@ -16,6 +16,11 @@ cookies, participant credentials, or provider tokens.
 | `REDIS_URL` | required | Redis connection URL; required for readiness and distributed identity limits. |
 | `DEPENDENCY_CHECK_TIMEOUT` | `2s` | Positive Go duration bounding each readiness ping. |
 | `MIGRATION_TIMEOUT` | `2m` | Positive duration bounding advisory-lock wait and startup migrations. |
+| `LIVE_REQUEST_TIMEOUT` | `10s` | Positive deadline for non-streaming live requests; SSE is exempt. |
+| `DATABASE_POOL_MAX_CONNS` | `50` | Maximum PostgreSQL connections per API replica; size against the database connection budget. |
+| `DATABASE_POOL_MIN_CONNS` | `5` | Warm connections per replica; non-negative and no greater than max. |
+| `DATABASE_CONN_MAX_LIFETIME` | `30m` | Maximum PostgreSQL connection lifetime. |
+| `DATABASE_CONN_MAX_IDLE_TIME` | `5m` | Maximum idle time before a pooled connection is retired. |
 | `SESSION_TTL` | `168h` | Positive Go duration for account sessions. |
 | `AUTH_REQUIRE_EMAIL_VERIFICATION` | `false` | When true, registration requires verified email before login. |
 | `EMAIL_VERIFICATION_TTL` | `10m` | Positive OTP lifetime. |
@@ -94,10 +99,19 @@ credentials.
 - `GET /healthz` is process-only and does not prove dependencies.
 - `GET /readyz` returns 200 only when both PostgreSQL and Redis respond within
   `DEPENDENCY_CHECK_TIMEOUT`; responses expose only safe status names.
+- API startup waits until pgx has established at least
+  `DATABASE_POOL_MIN_CONNS` connections before serving, so readiness never
+  advertises an unwarmed configured minimum or opens duplicate warm-up
+  connections. Size `DEPENDENCY_CHECK_TIMEOUT` to cover those handshakes.
 - PostgreSQL is authoritative for sessions, content, answers, scores, commands,
   and replay events.
-- Redis identity limits fail open on Redis errors to preserve authentication
-  availability, while readiness still reports the dependency outage.
+- Redis identity and live limits fail open on Redis errors so Redis never
+  becomes the durable command ledger; readiness still reports the outage.
+- `GET /metrics` is available on the private API ingress in Prometheus text
+  format with bounded method/route/status labels plus in-flight, heap,
+  goroutine, PostgreSQL pool/query duration and outcome, live-answer, SSE/broker,
+  slow-subscriber, database-failure, and event-lag metrics. Do not expose it
+  through the public web ingress.
 - Production TLS terminates at the trusted ingress. The API emits Secure cookies
   when `APP_ENV=production`; preserve forwarded-origin semantics at the proxy.
 

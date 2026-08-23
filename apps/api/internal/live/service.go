@@ -7,12 +7,24 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 type Service struct {
-	store   Store
-	scoring ScoringPolicy
+	store              Store
+	scoring            ScoringPolicy
+	answerAccepted     atomic.Uint64
+	answerDuplicate    atomic.Uint64
+	answerConflict     atomic.Uint64
+	answerInvalid      atomic.Uint64
+	answerUnauthorized atomic.Uint64
+	answerInternal     atomic.Uint64
+	answerNanos        atomic.Uint64
 }
 
 func NewService(store Store, scoring ScoringPolicy) *Service {
@@ -20,7 +32,7 @@ func NewService(store Store, scoring ScoringPolicy) *Service {
 }
 
 func (s *Service) CreateSession(c context.Context, host, presentation, request string) (Session, bool, error) {
-	if host == "" || presentation == "" || request == "" {
+	if !validUUID(host) || !validUUID(presentation) || !validUUID(request) {
 		return Session{}, false, ErrInvalid
 	}
 	code, e := joinCode()
@@ -31,26 +43,26 @@ func (s *Service) CreateSession(c context.Context, host, presentation, request s
 }
 func (s *Service) ResolveSession(c context.Context, code string) (SessionLocator, error) {
 	code = strings.ToUpper(strings.TrimSpace(code))
-	if code == "" || len(code) > 32 {
+	if len(code) < 5 || len(code) > 12 {
 		return SessionLocator{}, ErrInvalid
 	}
 	return s.store.ResolveSession(c, code)
 }
 func (s *Service) Join(c context.Context, session, request, name, avatar string) (Participant, bool, error) {
 	name = strings.TrimSpace(name)
-	if session == "" || request == "" || name == "" || len(name) > 100 || len(avatar) > 100 {
+	if !validUUID(session) || !validUUID(request) || name == "" || len([]rune(name)) > 100 || len([]rune(avatar)) > 100 {
 		return Participant{}, false, ErrInvalid
 	}
 	return s.store.Join(c, session, request, name, avatar, tokenHash(request))
 }
 func (s *Service) Action(c context.Context, session, host, request string, version int64, action, slide string, duration int) (Session, bool, error) {
-	if session == "" || host == "" || request == "" || version < 1 {
+	if !validUUID(session) || !validUUID(host) || !validUUID(request) || version < 1 || (slide != "" && !validUUID(slide)) {
 		return Session{}, false, ErrInvalid
 	}
 	return s.store.ApplyAction(c, session, host, request, version, action, slide, duration)
 }
 func (s *Service) Submit(c context.Context, session, participantToken, request, slide string, selected []int) (AnswerResult, error) {
-	if session == "" || participantToken == "" || request == "" || slide == "" || len(selected) == 0 {
+	if !validUUID(session) || !validUUID(participantToken) || !validUUID(request) || !validUUID(slide) || len(selected) == 0 || len(selected) > 100 {
 		return AnswerResult{}, ErrInvalid
 	}
 	for _, v := range selected {
@@ -58,22 +70,39 @@ func (s *Service) Submit(c context.Context, session, participantToken, request, 
 			return AnswerResult{}, ErrInvalid
 		}
 	}
-	return s.store.SubmitAnswer(c, session, tokenHash(participantToken), request, slide, selected, s.scoring)
+	started := time.Now()
+	result, err := s.store.SubmitAnswer(c, session, tokenHash(participantToken), request, slide, selected, s.scoring)
+	s.answerNanos.Add(uint64(time.Since(started)))
+	switch {
+	case err == nil && result.Duplicate:
+		s.answerDuplicate.Add(1)
+	case err == nil:
+		s.answerAccepted.Add(1)
+	case errors.Is(err, ErrConflict), errors.Is(err, ErrInvalidTransition):
+		s.answerConflict.Add(1)
+	case errors.Is(err, ErrInvalid):
+		s.answerInvalid.Add(1)
+	case errors.Is(err, ErrUnauthorized):
+		s.answerUnauthorized.Add(1)
+	default:
+		s.answerInternal.Add(1)
+	}
+	return result, err
 }
 func (s *Service) ParticipantSnapshot(c context.Context, session, participantToken string) (ParticipantSnapshot, error) {
-	if session == "" || participantToken == "" {
+	if !validUUID(session) || !validUUID(participantToken) {
 		return ParticipantSnapshot{}, ErrUnauthorized
 	}
 	return s.store.ParticipantSnapshot(c, session, tokenHash(participantToken))
 }
 func (s *Service) ManagerSnapshot(c context.Context, session, manager string) (ManagerSnapshot, error) {
-	if session == "" || manager == "" {
+	if !validUUID(session) || !validUUID(manager) {
 		return ManagerSnapshot{}, ErrUnauthorized
 	}
 	return s.store.ManagerSnapshot(c, session, manager)
 }
 func (s *Service) Roster(c context.Context, session, manager, order string, limit int, encodedCursor string) (RosterPage, error) {
-	if session == "" || manager == "" || limit < 1 || limit > 100 || (order != "joined" && order != "score") {
+	if !validUUID(session) || !validUUID(manager) || limit < 1 || limit > 100 || (order != "joined" && order != "score") {
 		return RosterPage{}, ErrInvalid
 	}
 	query := RosterQuery{Order: order, Limit: limit}
@@ -100,6 +129,9 @@ func (s *Service) Events(c context.Context, session string, after int64) ([]Even
 	return s.store.Events(c, session, after, 200)
 }
 func (s *Service) AuthorizeViewer(c context.Context, session, manager, participantToken string) error {
+	if !validUUID(session) || (manager != "" && !validUUID(manager)) || (participantToken != "" && !validUUID(participantToken)) {
+		return ErrUnauthorized
+	}
 	var hash []byte
 	if participantToken != "" {
 		hash = tokenHash(participantToken)
@@ -113,4 +145,31 @@ func joinCode() (string, error) {
 		return "", e
 	}
 	return strings.ToUpper(hex.EncodeToString(b)), nil
+}
+
+func (s *Service) WritePrometheus(w io.Writer) {
+	accepted := s.answerAccepted.Load()
+	duplicate := s.answerDuplicate.Load()
+	conflict := s.answerConflict.Load()
+	invalid := s.answerInvalid.Load()
+	unauthorized := s.answerUnauthorized.Load()
+	internal := s.answerInternal.Load()
+	fmt.Fprintln(w, "# TYPE proslides_live_answers_total counter")
+	for outcome, value := range map[string]uint64{"accepted": accepted, "duplicate": duplicate, "conflict": conflict, "invalid": invalid, "unauthorized": unauthorized, "internal": internal} {
+		fmt.Fprintf(w, "proslides_live_answers_total{outcome=%q} %d\n", outcome, value)
+	}
+	total := accepted + duplicate + conflict + invalid + unauthorized + internal
+	fmt.Fprintln(w, "# TYPE proslides_live_answer_duration_seconds_sum counter")
+	fmt.Fprintf(w, "proslides_live_answer_duration_seconds_sum %.9f\n", float64(s.answerNanos.Load())/float64(time.Second))
+	fmt.Fprintln(w, "# TYPE proslides_live_answer_duration_seconds_count counter")
+	fmt.Fprintf(w, "proslides_live_answer_duration_seconds_count %d\n", total)
+}
+
+func validUUID(value string) bool {
+	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
+		return false
+	}
+	compact := strings.ReplaceAll(value, "-", "")
+	decoded, err := hex.DecodeString(compact)
+	return err == nil && len(decoded) == 16
 }

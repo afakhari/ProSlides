@@ -19,10 +19,10 @@ Browser (manager/player)
   |-- HTTPS command/query --> Load balancer --> Go API instances
   |-- HTTPS SSE stream -----> Load balancer --> Go API instances
                                            |-- PostgreSQL (truth + event ledger)
-                                           `-- Redis (identity rate limits now;
+                                           `-- Redis (identity/live rate limits now;
                                                        presence/fan-out optional later)
 Object storage/CDN <---------------- media module (future)
-Telemetry backend <---------------- structured logs/metrics/traces (future)
+Telemetry backend <---------------- bounded Prometheus metrics now; traces later
 ```
 
 No sticky session is required for correctness. Session cookies and participant
@@ -155,6 +155,7 @@ Redis loss must degrade latency/presence, never lose a durable event or answer.
 | SSE disconnect | exponential reconnect, snapshot, resume from `last_event_id` |
 | slow SSE client | disconnect; bounded server memory; client recovers |
 | API process loss | committed PostgreSQL state survives; client reconnects elsewhere |
+| API container address change | web Nginx re-resolves Docker DNS; transient commands retry with the same request ID |
 | Redis loss | readiness fails; durable commands continue and identity limits fail open |
 | PostgreSQL unavailable | readiness fails and durable mutations fail closed |
 
@@ -179,9 +180,8 @@ Redis loss must degrade latency/presence, never lose a durable event or answer.
   question closes.
 - Redis coordinates fixed-window limits for register, login, verification,
   Google login, and password reset while hashing the client identifier in keys.
-  Identity limits fail open during Redis failure so authentication remains
-  available while readiness reports the outage. Join/answer limits are still
-  required before public exposure.
+  Identity and live limits fail open during Redis failure so durable commands
+  remain available while readiness reports the outage.
 
 ## Observability and operations required before production
 
@@ -202,12 +202,15 @@ addresses only from the explicitly configured application subnet.
 
 ## Known capacity gaps (truth, not aspirations)
 
-1. Join/answer rate limiting, ephemeral presence TTLs, and Redis wake-up fan-out
-   are not implemented; identity rate limiting is implemented.
-2. Metrics/tracing are absent. Reference same-origin and TLS/SSE proxy configs
-   exist, but the real certificate/ingress still requires environment validation.
-3. Event retention/compaction and PostgreSQL operational tuning are undefined.
-4. No k6 1k/5k/10k evidence exists yet; therefore 10k is a target, not a claim.
+1. Ephemeral presence TTLs and Redis wake-up fan-out are not implemented;
+   bounded identity/live rate limiting is implemented.
+2. Bounded HTTP/runtime/pool/query/SSE/broker/answer/event-lag metrics exist;
+   continuous lock sampling and sampled cross-component traces remain. Real
+   ingress validation is pending.
+3. Event retention/compaction and measured PostgreSQL tuning are undefined;
+   pool size/lifetime controls now exist.
+4. Local 100 and repeatable 1k protocol evidence exists, but no production-like
+   1k or any 5k/10k gate exists; therefore 10k is a target, not a claim.
 
 The ordered capacity work and pass/fail thresholds are in
 `docs/capacity-plan.md`. Deployment inputs and migration status are recorded in
