@@ -32,9 +32,10 @@ not complete. Never describe a design target as benchmark evidence.
 - High-load improvements in this stage: one event-ledger poller per active
   session/API process, bounded subscriber buffers, slow-client disconnect and
   replay, presence compaction, snapshot cursor, and indexed participant scores.
-- Deployment foundation: full-stack local Compose, production API/web images,
-  same-origin Nginx with SSE buffering disabled, health checks, a loopback-bound
-  production Compose reference, trusted-proxy-aware limits, serialized
+- Deployment foundation: full-stack local Compose with a LAN-accessible web-only
+  ingress for mobile testing, production API/web images, same-origin Nginx with
+  SSE buffering disabled, health checks, a loopback-bound production Compose
+  reference, trusted-proxy-aware limits, serialized
   transactional startup migrations, and local/deploy/operations runbooks.
 - Not implemented: production SMTP/Google secret provisioning, telemetry, Redis
   wake-up fan-out/presence TTL, join/answer rate limiting, media object storage,
@@ -149,6 +150,18 @@ dashboard/editor Share UI persists the value and generates the direct
 OpenAPI parsing, both image builds, and the preserved-volume Compose integration
 matrix passed, including active-code replacement and uniqueness. Browser E2E
 was not run for this change.
+
+Local mobile-access configuration (2026-08-23): repository Compose and the Vite
+development server bind the web ingress to all local interfaces by default, so
+trusted Wi-Fi/hotspot devices can use the computer's IPv4 address. API,
+PostgreSQL, and Redis host ports remain loopback-only, and `WEB_BIND_ADDR` can
+restore a loopback-only web bind. The production Compose reference remains
+loopback-bound behind its ingress. Compose configuration resolved the intended
+bind boundaries, the production web build passed, and a temporary Vite server
+advertised the host LAN addresses and returned HTTP 200. A real four-service
+Compose run then reported every service healthy; web returned HTTP 200 through
+both loopback and `192.168.100.10:5173`, and API readiness passed. Ordinary
+`docker compose down` preserved the existing data volumes afterward.
 
 ## Installed Codex workflow prerequisites
 

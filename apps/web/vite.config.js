@@ -10,6 +10,7 @@ const __dirname = dirname(__filename);
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: "0.0.0.0",
     proxy: {
       "/api/v1": "http://127.0.0.1:8080",
     },

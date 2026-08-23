@@ -22,9 +22,17 @@ Invoke-RestMethod http://localhost:8080/readyz
 Invoke-WebRequest -UseBasicParsing http://localhost:5173/web-healthz
 ```
 
-Open `http://localhost:5173`. Requests under `/api/v1` are sent through the
-same-origin Nginx proxy to the Go API. Direct API access remains available at
-`http://localhost:8080` for diagnostics.
+Open `http://localhost:5173`. The web container listens on all local network
+interfaces by default, so a phone connected to the same trusted Wi-Fi or
+hotspot can open `http://<computer-ipv4>:5173`. Find that address with
+`ipconfig`; allow inbound TCP port `5173` for Private networks in Windows
+Firewall if prompted. Requests under `/api/v1` are sent through the same-origin
+Nginx proxy to the Go API. The API, PostgreSQL, and Redis remain loopback-only;
+direct API access is available at `http://localhost:8080` for diagnostics.
+
+Set `WEB_BIND_ADDR=127.0.0.1` before running Compose when network access is not
+wanted. When SMTP-backed reset links are exercised from another device, also
+set `PUBLIC_WEB_URL` to the reachable web origin instead of `localhost`.
 
 The example configuration disables external email and Google login. Regular
 register/login works, while password reset and Google login return a safe 503
@@ -63,9 +71,10 @@ npm run dev
 Pop-Location
 ```
 
-Vite serves the UI and proxies `/api/v1` to `127.0.0.1:8080`. Override values
-only in an ignored `apps/web/.env.local`; browser-prefixed `VITE_*` values are
-public and must never contain secrets.
+Vite serves the UI on all local network interfaces and proxies `/api/v1` to
+`127.0.0.1:8080`, so the same `http://<computer-ipv4>:5173` address works for
+hot reload. Override values only in an ignored `apps/web/.env.local`;
+browser-prefixed `VITE_*` values are public and must never contain secrets.
 
 ## Verification
 
@@ -103,4 +112,5 @@ Pop-Location
 | `/readyz` is 503 | inspect `docker compose ps` and safe API logs; both PostgreSQL and Redis are required |
 | reset/Google returns 503 | configure the matching provider variables; this is expected with local defaults |
 | port already allocated | set `API_PORT`, `WEB_PORT`, `POSTGRES_PORT`, or `REDIS_PORT`; keep host-mode URLs consistent |
+| phone cannot open the site | confirm both devices share a network, use the computer's active IPv4 address rather than `localhost`, and allow inbound TCP `5173` on Private networks |
 | SSE updates are delayed behind another proxy | disable response buffering and use a read timeout longer than the session |

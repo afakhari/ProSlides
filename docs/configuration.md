@@ -71,7 +71,8 @@ client secret.
 | Variable | Default | Purpose |
 |---|---|---|
 | `API_PORT` | `8080` | Loopback host port for direct local API diagnostics. |
-| `WEB_PORT` | `5173` | Loopback host port for the complete local application. |
+| `WEB_BIND_ADDR` | `0.0.0.0` | Local web bind address; permits trusted LAN/hotspot testing. Set `127.0.0.1` to restrict access to the computer. |
+| `WEB_PORT` | `5173` | Host port for the complete local application. |
 | `POSTGRES_DB` | `proslides` | Local Compose database name. |
 | `POSTGRES_USER` | `proslides` | Local Compose database user. |
 | `POSTGRES_PASSWORD` | `proslides` | Local-only password; if changed, update `DATABASE_URL` too. |
@@ -83,8 +84,10 @@ client secret.
 | `APP_SUBNET` | `172.30.0.0/24` | Isolated reference subnet and trusted web-proxy range. |
 
 The repository-root Compose interpolates these values and passes all SMTP
-credentials through to the API. Its PostgreSQL/Redis defaults are local only
-and must not be reused as production credentials.
+credentials through to the API. Only the web ingress is LAN-accessible by
+default; the API, PostgreSQL, and Redis host ports remain loopback-bound. The
+PostgreSQL/Redis defaults are local only and must not be reused as production
+credentials.
 
 ## Dependency and failure behavior
 
