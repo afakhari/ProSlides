@@ -11,16 +11,19 @@ var (
 	ErrNotFound        = errors.New("presentation not found")
 	ErrInvalidPosition = errors.New("invalid slide position")
 	ErrSlideHasResults = errors.New("slide has live results")
+	ErrEditConflict    = errors.New("resource changed since it was loaded")
 )
 
 type Slide struct {
 	ID       string          `json:"id"`
+	Revision int64           `json:"revision"`
 	Position int             `json:"position"`
 	Kind     string          `json:"kind"`
 	Content  json.RawMessage `json:"content"`
 }
 type Presentation struct {
 	ID        string          `json:"id"`
+	Revision  int64           `json:"revision"`
 	Title     string          `json:"title"`
 	Settings  json.RawMessage `json:"settings"`
 	CreatedAt time.Time       `json:"created_at"`
@@ -29,6 +32,7 @@ type Presentation struct {
 }
 type PresentationSummary struct {
 	ID               string          `json:"id"`
+	Revision         int64           `json:"revision"`
 	Title            string          `json:"title"`
 	Settings         json.RawMessage `json:"settings"`
 	SlideCount       int             `json:"slide_count"`
@@ -37,8 +41,9 @@ type PresentationSummary struct {
 	UpdatedAt        time.Time       `json:"updated_at"`
 }
 type PresentationPatch struct {
-	Title    *string
-	Settings json.RawMessage
+	Title            *string
+	Settings         json.RawMessage
+	ExpectedRevision *int64
 }
 type SessionLocator struct {
 	SessionID      string `json:"session_id"`
@@ -90,8 +95,8 @@ type Store interface {
 	LatestSession(context.Context, string, string) (SessionLocator, error)
 	DeleteResults(context.Context, string, string) error
 	QuestionResults(context.Context, string, string, string, string, QuestionResultsQuery) (QuestionResultsPage, error)
-	CreateSlide(context.Context, string, string, int, string, json.RawMessage) (Slide, error)
-	ReplaceSlide(context.Context, string, string, string, int, string, json.RawMessage) (Slide, error)
-	DeleteSlide(context.Context, string, string, string) error
-	ReorderSlides(context.Context, string, string, []string) error
+	CreateSlide(context.Context, string, string, int, string, json.RawMessage, *int64) (Slide, error)
+	ReplaceSlide(context.Context, string, string, string, int, string, json.RawMessage, *int64) (Slide, error)
+	DeleteSlide(context.Context, string, string, string, *int64) error
+	ReorderSlides(context.Context, string, string, []string, *int64) error
 }

@@ -16,7 +16,7 @@ type PostgresStore struct{ pool *pgxpool.Pool }
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore { return &PostgresStore{pool: pool} }
 
 func (s *PostgresStore) ListOwned(c context.Context, owner string) ([]PresentationSummary, error) {
-	rows, err := s.pool.Query(c, `SELECT p.id::text,p.title,p.settings::text,
+	rows, err := s.pool.Query(c, `SELECT p.id::text,p.revision,p.title,p.settings::text,
 		(SELECT count(*) FROM slides sl WHERE sl.presentation_id=p.id),
 		(SELECT count(*) FROM participants pa JOIN live_sessions ls ON ls.id=pa.session_id WHERE ls.presentation_id=p.id),
 		p.created_at,p.updated_at FROM presentations p WHERE p.owner_id=$1
@@ -28,7 +28,7 @@ func (s *PostgresStore) ListOwned(c context.Context, owner string) ([]Presentati
 	items := make([]PresentationSummary, 0)
 	for rows.Next() {
 		var item PresentationSummary
-		if err = rows.Scan(&item.ID, &item.Title, &item.Settings, &item.SlideCount, &item.ParticipantCount, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err = rows.Scan(&item.ID, &item.Revision, &item.Title, &item.Settings, &item.SlideCount, &item.ParticipantCount, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -41,8 +41,8 @@ func (s *PostgresStore) Create(c context.Context, owner, title string, settings 
 		settings = json.RawMessage(`{}`)
 	}
 	var p Presentation
-	err := s.pool.QueryRow(c, `INSERT INTO presentations(owner_id,title,settings) VALUES($1,$2,$3) RETURNING id::text,title,settings::text,created_at,updated_at`, owner, title, settings).
-		Scan(&p.ID, &p.Title, &p.Settings, &p.CreatedAt, &p.UpdatedAt)
+	err := s.pool.QueryRow(c, `INSERT INTO presentations(owner_id,title,settings) VALUES($1,$2,$3) RETURNING id::text,revision,title,settings::text,created_at,updated_at`, owner, title, settings).
+		Scan(&p.ID, &p.Revision, &p.Title, &p.Settings, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		return Presentation{}, err
 	}
@@ -52,9 +52,9 @@ func (s *PostgresStore) Create(c context.Context, owner, title string, settings 
 
 func (s *PostgresStore) Update(c context.Context, id, owner string, patch PresentationPatch) (Presentation, error) {
 	var ignored string
-	err := s.pool.QueryRow(c, `UPDATE presentations SET title=COALESCE($3,title),settings=COALESCE($4,settings),updated_at=now() WHERE id=$1 AND owner_id=$2 RETURNING id::text`, id, owner, patch.Title, nullableJSON(patch.Settings)).Scan(&ignored)
+	err := s.pool.QueryRow(c, `UPDATE presentations SET title=COALESCE($3,title),settings=CASE WHEN $4::jsonb IS NULL THEN settings ELSE settings || $4::jsonb END,revision=revision+1,updated_at=now() WHERE id=$1 AND owner_id=$2 AND ($5::bigint IS NULL OR revision=$5) RETURNING id::text`, id, owner, patch.Title, nullableJSON(patch.Settings), patch.ExpectedRevision).Scan(&ignored)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Presentation{}, ErrNotFound
+		return Presentation{}, s.revisionMiss(c, id, owner)
 	}
 	if err != nil {
 		return Presentation{}, err
@@ -232,17 +232,21 @@ func (s *PostgresStore) QuestionResults(c context.Context, presentationID, sessi
 	return page, nil
 }
 
-func (s *PostgresStore) CreateSlide(c context.Context, presentationID, owner string, position int, kind string, content json.RawMessage) (Slide, error) {
+func (s *PostgresStore) CreateSlide(c context.Context, presentationID, owner string, position int, kind string, content json.RawMessage, expectedRevision *int64) (Slide, error) {
 	tx, err := s.pool.BeginTx(c, pgx.TxOptions{})
 	if err != nil {
 		return Slide{}, err
 	}
 	defer tx.Rollback(c) //nolint:errcheck
 	var lockedID string
-	if err = tx.QueryRow(c, `SELECT id::text FROM presentations WHERE id=$1 AND owner_id=$2 FOR UPDATE`, presentationID, owner).Scan(&lockedID); errors.Is(err, pgx.ErrNoRows) {
+	var presentationRevision int64
+	if err = tx.QueryRow(c, `SELECT id::text,revision FROM presentations WHERE id=$1 AND owner_id=$2 FOR UPDATE`, presentationID, owner).Scan(&lockedID, &presentationRevision); errors.Is(err, pgx.ErrNoRows) {
 		return Slide{}, ErrNotFound
 	} else if err != nil {
 		return Slide{}, err
+	}
+	if expectedRevision != nil && presentationRevision != *expectedRevision {
+		return Slide{}, ErrEditConflict
 	}
 	var count int
 	if err = tx.QueryRow(c, `SELECT count(*) FROM slides WHERE presentation_id=$1`, presentationID).Scan(&count); err != nil {
@@ -255,13 +259,13 @@ func (s *PostgresStore) CreateSlide(c context.Context, presentationID, owner str
 		return Slide{}, err
 	}
 	var slide Slide
-	if err = tx.QueryRow(c, `INSERT INTO slides(presentation_id,position,kind,content) VALUES($1,$2,$3,$4) RETURNING id::text,position,kind,content::text`, presentationID, position, kind, content).Scan(&slide.ID, &slide.Position, &slide.Kind, &slide.Content); err != nil {
+	if err = tx.QueryRow(c, `INSERT INTO slides(presentation_id,position,kind,content) VALUES($1,$2,$3,$4) RETURNING id::text,revision,position,kind,content::text`, presentationID, position, kind, content).Scan(&slide.ID, &slide.Revision, &slide.Position, &slide.Kind, &slide.Content); err != nil {
 		return Slide{}, err
 	}
-	if _, err = tx.Exec(c, `UPDATE slides SET position=position-999999 WHERE presentation_id=$1 AND position>=1000000`, presentationID); err != nil {
+	if _, err = tx.Exec(c, `UPDATE slides SET position=position-999999,revision=revision+1,updated_at=now() WHERE presentation_id=$1 AND position>=1000000`, presentationID); err != nil {
 		return Slide{}, err
 	}
-	if _, err = tx.Exec(c, `UPDATE presentations SET updated_at=now() WHERE id=$1`, presentationID); err != nil {
+	if _, err = tx.Exec(c, `UPDATE presentations SET revision=revision+1,updated_at=now() WHERE id=$1`, presentationID); err != nil {
 		return Slide{}, err
 	}
 	if err = tx.Commit(c); err != nil {
@@ -270,7 +274,7 @@ func (s *PostgresStore) CreateSlide(c context.Context, presentationID, owner str
 	return slide, nil
 }
 
-func (s *PostgresStore) ReplaceSlide(c context.Context, presentationID, slideID, owner string, position int, kind string, content json.RawMessage) (Slide, error) {
+func (s *PostgresStore) ReplaceSlide(c context.Context, presentationID, slideID, owner string, position int, kind string, content json.RawMessage, expectedRevision *int64) (Slide, error) {
 	tx, err := s.pool.BeginTx(c, pgx.TxOptions{})
 	if err != nil {
 		return Slide{}, err
@@ -282,22 +286,28 @@ func (s *PostgresStore) ReplaceSlide(c context.Context, presentationID, slideID,
 	} else if err != nil {
 		return Slide{}, err
 	}
-	rows, err := tx.Query(c, `SELECT id::text FROM slides WHERE presentation_id=$1 ORDER BY position FOR UPDATE`, presentationID)
+	rows, err := tx.Query(c, `SELECT id::text,revision,position FROM slides WHERE presentation_id=$1 ORDER BY position FOR UPDATE`, presentationID)
 	if err != nil {
 		return Slide{}, err
 	}
 	ids := []string{}
+	originalPositions := make(map[string]int)
 	found := false
+	var currentRevision int64
 	for rows.Next() {
 		var id string
-		if err = rows.Scan(&id); err != nil {
+		var revision int64
+		var originalPosition int
+		if err = rows.Scan(&id, &revision, &originalPosition); err != nil {
 			rows.Close()
 			return Slide{}, err
 		}
+		originalPositions[id] = originalPosition
 		if id != slideID {
 			ids = append(ids, id)
 		} else {
 			found = true
+			currentRevision = revision
 		}
 	}
 	err = rows.Err()
@@ -307,6 +317,9 @@ func (s *PostgresStore) ReplaceSlide(c context.Context, presentationID, slideID,
 	}
 	if !found {
 		return Slide{}, ErrNotFound
+	}
+	if expectedRevision != nil && currentRevision != *expectedRevision {
+		return Slide{}, ErrEditConflict
 	}
 	var changesAnsweredQuestion bool
 	if err = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM answers WHERE question_slide_id=$1) AND EXISTS(SELECT 1 FROM slides WHERE id=$1 AND (kind<>$2 OR content<>$3::jsonb))`, slideID, kind, content).Scan(&changesAnsweredQuestion); err != nil {
@@ -324,38 +337,45 @@ func (s *PostgresStore) ReplaceSlide(c context.Context, presentationID, slideID,
 	if _, err = tx.Exec(c, `UPDATE slides SET position=position+1000000 WHERE presentation_id=$1`, presentationID); err != nil {
 		return Slide{}, err
 	}
+	var savedRevision int64
 	for index, id := range ordered {
 		if id == slideID {
-			_, err = tx.Exec(c, `UPDATE slides SET position=$2,kind=$3,content=$4,updated_at=now() WHERE id=$1`, id, index, kind, content)
+			err = tx.QueryRow(c, `UPDATE slides SET position=$2,kind=$3,content=$4,revision=revision+1,updated_at=now() WHERE id=$1 RETURNING revision`, id, index, kind, content).Scan(&savedRevision)
+		} else if originalPositions[id] != index {
+			_, err = tx.Exec(c, `UPDATE slides SET position=$2,revision=revision+1,updated_at=now() WHERE id=$1`, id, index)
 		} else {
-			_, err = tx.Exec(c, `UPDATE slides SET position=$2,updated_at=now() WHERE id=$1`, id, index)
+			_, err = tx.Exec(c, `UPDATE slides SET position=$2 WHERE id=$1`, id, index)
 		}
 		if err != nil {
 			return Slide{}, err
 		}
 	}
-	if _, err = tx.Exec(c, `UPDATE presentations SET updated_at=now() WHERE id=$1`, presentationID); err != nil {
+	if _, err = tx.Exec(c, `UPDATE presentations SET revision=revision+1,updated_at=now() WHERE id=$1`, presentationID); err != nil {
 		return Slide{}, err
 	}
 	if err = tx.Commit(c); err != nil {
 		return Slide{}, err
 	}
-	return Slide{ID: slideID, Position: position, Kind: kind, Content: content}, nil
+	return Slide{ID: slideID, Revision: savedRevision, Position: position, Kind: kind, Content: content}, nil
 }
 
-func (s *PostgresStore) DeleteSlide(c context.Context, presentationID, slideID, owner string) error {
+func (s *PostgresStore) DeleteSlide(c context.Context, presentationID, slideID, owner string, expectedRevision *int64) error {
 	tx, err := s.pool.BeginTx(c, pgx.TxOptions{})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(c) //nolint:errcheck
 	var position int
-	err = tx.QueryRow(c, `SELECT sl.position FROM slides sl JOIN presentations p ON p.id=sl.presentation_id WHERE sl.id=$2 AND sl.presentation_id=$1 AND p.owner_id=$3 FOR UPDATE OF sl`, presentationID, slideID, owner).Scan(&position)
+	var revision int64
+	err = tx.QueryRow(c, `SELECT sl.position,sl.revision FROM slides sl JOIN presentations p ON p.id=sl.presentation_id WHERE sl.id=$2 AND sl.presentation_id=$1 AND p.owner_id=$3 FOR UPDATE OF sl`, presentationID, slideID, owner).Scan(&position, &revision)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
 	if err != nil {
 		return err
+	}
+	if expectedRevision != nil && revision != *expectedRevision {
+		return ErrEditConflict
 	}
 	var hasResults bool
 	if err = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM answers WHERE question_slide_id=$1)`, slideID).Scan(&hasResults); err != nil {
@@ -370,27 +390,29 @@ func (s *PostgresStore) DeleteSlide(c context.Context, presentationID, slideID, 
 	if _, err = tx.Exec(c, `UPDATE slides SET position=position+1000000 WHERE presentation_id=$1 AND position>$2`, presentationID, position); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(c, `UPDATE slides SET position=position-1000001 WHERE presentation_id=$1 AND position>1000000`, presentationID); err != nil {
+	if _, err = tx.Exec(c, `UPDATE slides SET position=position-1000001,revision=revision+1,updated_at=now() WHERE presentation_id=$1 AND position>1000000`, presentationID); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(c, `UPDATE presentations SET updated_at=now() WHERE id=$1`, presentationID); err != nil {
+	if _, err = tx.Exec(c, `UPDATE presentations SET revision=revision+1,updated_at=now() WHERE id=$1`, presentationID); err != nil {
 		return err
 	}
 	return tx.Commit(c)
 }
 
-func (s *PostgresStore) ReorderSlides(c context.Context, presentationID, owner string, ids []string) error {
+func (s *PostgresStore) ReorderSlides(c context.Context, presentationID, owner string, ids []string, expectedRevision *int64) error {
 	tx, err := s.pool.BeginTx(c, pgx.TxOptions{})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(c) //nolint:errcheck
-	var owned bool
-	if err = tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM presentations WHERE id=$1 AND owner_id=$2)`, presentationID, owner).Scan(&owned); err != nil {
+	var presentationRevision int64
+	if err = tx.QueryRow(c, `SELECT revision FROM presentations WHERE id=$1 AND owner_id=$2 FOR UPDATE`, presentationID, owner).Scan(&presentationRevision); errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	} else if err != nil {
 		return err
 	}
-	if !owned {
-		return ErrNotFound
+	if expectedRevision != nil && presentationRevision != *expectedRevision {
+		return ErrEditConflict
 	}
 	var count int
 	if err = tx.QueryRow(c, `SELECT count(*) FROM slides WHERE presentation_id=$1`, presentationID).Scan(&count); err != nil {
@@ -403,7 +425,7 @@ func (s *PostgresStore) ReorderSlides(c context.Context, presentationID, owner s
 		return err
 	}
 	for position, id := range ids {
-		tag, updateErr := tx.Exec(c, `UPDATE slides SET position=$4,updated_at=now() FROM presentations p WHERE slides.id=$2 AND slides.presentation_id=$1 AND p.id=slides.presentation_id AND p.owner_id=$3`, presentationID, id, owner, position)
+		tag, updateErr := tx.Exec(c, `UPDATE slides SET position=$4,revision=slides.revision+1,updated_at=now() FROM presentations p WHERE slides.id=$2 AND slides.presentation_id=$1 AND p.id=slides.presentation_id AND p.owner_id=$3`, presentationID, id, owner, position)
 		if updateErr != nil {
 			return updateErr
 		}
@@ -411,7 +433,7 @@ func (s *PostgresStore) ReorderSlides(c context.Context, presentationID, owner s
 			return ErrNotFound
 		}
 	}
-	if _, err = tx.Exec(c, `UPDATE presentations SET updated_at=now() WHERE id=$1`, presentationID); err != nil {
+	if _, err = tx.Exec(c, `UPDATE presentations SET revision=revision+1,updated_at=now() WHERE id=$1`, presentationID); err != nil {
 		return err
 	}
 	return tx.Commit(c)
@@ -419,13 +441,13 @@ func (s *PostgresStore) ReorderSlides(c context.Context, presentationID, owner s
 
 func (s *PostgresStore) FindOwned(c context.Context, id, owner string) (Presentation, error) {
 	var p Presentation
-	if err := s.pool.QueryRow(c, `SELECT id::text,title,settings::text,created_at,updated_at FROM presentations WHERE id=$1 AND owner_id=$2`, id, owner).Scan(&p.ID, &p.Title, &p.Settings, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := s.pool.QueryRow(c, `SELECT id::text,revision,title,settings::text,created_at,updated_at FROM presentations WHERE id=$1 AND owner_id=$2`, id, owner).Scan(&p.ID, &p.Revision, &p.Title, &p.Settings, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Presentation{}, ErrNotFound
 		}
 		return Presentation{}, fmt.Errorf("find presentation: %w", err)
 	}
-	rows, err := s.pool.Query(c, `SELECT id::text,position,kind,content::text FROM slides WHERE presentation_id=$1 ORDER BY position`, id)
+	rows, err := s.pool.Query(c, `SELECT id::text,revision,position,kind,content::text FROM slides WHERE presentation_id=$1 ORDER BY position`, id)
 	if err != nil {
 		return Presentation{}, err
 	}
@@ -433,10 +455,21 @@ func (s *PostgresStore) FindOwned(c context.Context, id, owner string) (Presenta
 	p.Slides = make([]Slide, 0)
 	for rows.Next() {
 		var slide Slide
-		if err = rows.Scan(&slide.ID, &slide.Position, &slide.Kind, &slide.Content); err != nil {
+		if err = rows.Scan(&slide.ID, &slide.Revision, &slide.Position, &slide.Kind, &slide.Content); err != nil {
 			return Presentation{}, err
 		}
 		p.Slides = append(p.Slides, slide)
 	}
 	return p, rows.Err()
+}
+
+func (s *PostgresStore) revisionMiss(c context.Context, id, owner string) error {
+	var exists bool
+	if err := s.pool.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM presentations WHERE id=$1 AND owner_id=$2)`, id, owner).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return ErrNotFound
+	}
+	return ErrEditConflict
 }

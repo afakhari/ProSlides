@@ -155,7 +155,11 @@ func (h *HTTP) update(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, err := h.store.Update(r.Context(), r.PathValue("presentationId"), user.ID, PresentationPatch{Title: body.Title, Settings: body.Settings})
+	expected, ok := decodeExpectedRevision(w, r)
+	if !ok {
+		return
+	}
+	p, err := h.store.Update(r.Context(), r.PathValue("presentationId"), user.ID, PresentationPatch{Title: body.Title, Settings: body.Settings, ExpectedRevision: expected})
 	if handleStoreError(w, err) {
 		return
 	}
@@ -260,7 +264,7 @@ type slideInput struct {
 func decodeSlideInput(w http.ResponseWriter, r *http.Request) (slideInput, bool) {
 	var body slideInput
 	r.Body = http.MaxBytesReader(w, r.Body, maxContentBytes)
-	if json.NewDecoder(r.Body).Decode(&body) != nil || body.Position < 0 || len(body.Kind) == 0 || len(body.Kind) > 100 || !validJSONObject(body.Content) {
+	if json.NewDecoder(r.Body).Decode(&body) != nil || body.Position < 0 || validateSlideContent(body.Kind, body.Content) != nil {
 		errJSON(w, 400, "invalid_request")
 		return body, false
 	}
@@ -276,7 +280,11 @@ func (h *HTTP) createSlide(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	slide, err := h.store.CreateSlide(r.Context(), r.PathValue("presentationId"), user.ID, body.Position, body.Kind, body.Content)
+	expected, ok := decodeExpectedRevision(w, r)
+	if !ok {
+		return
+	}
+	slide, err := h.store.CreateSlide(r.Context(), r.PathValue("presentationId"), user.ID, body.Position, body.Kind, body.Content, expected)
 	if handleStoreError(w, err) {
 		return
 	}
@@ -292,7 +300,11 @@ func (h *HTTP) replaceSlide(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	slide, err := h.store.ReplaceSlide(r.Context(), r.PathValue("presentationId"), r.PathValue("slideId"), user.ID, body.Position, body.Kind, body.Content)
+	expected, ok := decodeExpectedRevision(w, r)
+	if !ok {
+		return
+	}
+	slide, err := h.store.ReplaceSlide(r.Context(), r.PathValue("presentationId"), r.PathValue("slideId"), user.ID, body.Position, body.Kind, body.Content, expected)
 	if handleStoreError(w, err) {
 		return
 	}
@@ -304,7 +316,11 @@ func (h *HTTP) deleteSlide(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if handleStoreError(w, h.store.DeleteSlide(r.Context(), r.PathValue("presentationId"), r.PathValue("slideId"), user.ID)) {
+	expected, ok := decodeExpectedRevision(w, r)
+	if !ok {
+		return
+	}
+	if handleStoreError(w, h.store.DeleteSlide(r.Context(), r.PathValue("presentationId"), r.PathValue("slideId"), user.ID, expected)) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -323,7 +339,11 @@ func (h *HTTP) reorderSlides(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, 400, "invalid_request")
 		return
 	}
-	if handleStoreError(w, h.store.ReorderSlides(r.Context(), r.PathValue("presentationId"), user.ID, body.SlideIDs)) {
+	expected, ok := decodeExpectedRevision(w, r)
+	if !ok {
+		return
+	}
+	if handleStoreError(w, h.store.ReorderSlides(r.Context(), r.PathValue("presentationId"), user.ID, body.SlideIDs, expected)) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -369,12 +389,12 @@ func (h *HTTP) createQuestion(w http.ResponseWriter, r *http.Request) {
 			correct++
 		}
 	}
-	if body.Position < 0 || strings.TrimSpace(body.Text) == "" || len(body.Options) < 2 || (body.QuestionType != "single" && body.QuestionType != "multiple") || body.QuestionTime < 1 || body.QuestionTime > 86400 || body.MinPoint < 0 || body.MaxPoint < body.MinPoint || correct == 0 || (body.QuestionType == "single" && correct != 1) {
+	if body.Position < 0 || strings.TrimSpace(body.Text) == "" || len(body.Options) < 2 || len(body.Options) > 100 || (body.QuestionType != "single" && body.QuestionType != "multiple") || body.QuestionTime < 1 || body.QuestionTime > 86400 || body.MinPoint < 0 || body.MaxPoint < body.MinPoint || correct == 0 || (body.QuestionType == "single" && (correct != 1 || body.Partial)) {
 		errJSON(w, 400, "invalid_request")
 		return
 	}
 	content, _ := json.Marshal(map[string]any{"text": strings.TrimSpace(body.Text), "question_type": body.QuestionType, "question_time": body.QuestionTime, "max_point": body.MaxPoint, "min_point": body.MinPoint, "faster_answers_more_points": body.Faster, "partial_scoring": body.Partial, "options": body.Options})
-	slide, err := h.store.CreateSlide(r.Context(), r.PathValue("presentationId"), user.ID, body.Position, "question", content)
+	slide, err := h.store.CreateSlide(r.Context(), r.PathValue("presentationId"), user.ID, body.Position, "question", content, nil)
 	if handleStoreError(w, err) {
 		return
 	}
@@ -384,6 +404,19 @@ func (h *HTTP) createQuestion(w http.ResponseWriter, r *http.Request) {
 func validJSONObject(raw json.RawMessage) bool {
 	var value map[string]any
 	return len(raw) > 0 && json.Unmarshal(raw, &value) == nil && value != nil
+}
+func decodeExpectedRevision(w http.ResponseWriter, r *http.Request) (*int64, bool) {
+	raw := strings.TrimSpace(r.Header.Get("If-Match"))
+	if raw == "" {
+		return nil, true
+	}
+	raw = strings.Trim(raw, `"`)
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 1 {
+		errJSON(w, http.StatusBadRequest, "invalid_revision")
+		return nil, false
+	}
+	return &value, true
 }
 func hasEmptyOrDuplicate(ids []string) bool {
 	seen := map[string]struct{}{}
@@ -408,6 +441,8 @@ func handleStoreError(w http.ResponseWriter, err error) bool {
 		errJSON(w, 400, "invalid_position")
 	} else if errors.Is(err, ErrSlideHasResults) {
 		errJSON(w, 409, "slide_has_results")
+	} else if errors.Is(err, ErrEditConflict) {
+		errJSON(w, 409, "edit_conflict")
 	} else {
 		errJSON(w, 500, "internal_error")
 	}

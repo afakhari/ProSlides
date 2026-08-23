@@ -1,6 +1,6 @@
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { GripVertical, Trash2, Trophy } from "lucide-react";
-import { quizService } from "../../../services/quizService";
+import { quizService } from "../../../services/quizService.ts";
 import { useState, useEffect, useMemo } from "react";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 
@@ -13,7 +13,7 @@ const buildDisplaySlides = (slidesData) => {
 
     if (slide.slide_type === 1 && slide.show_leaderboard_after) {
       result.push({
-        slide_id: slide.slide_id,
+        slide_id: `leaderboard:${slide.slide_id}`,
         slide_type: 3,
         order: slide.order,
         show_leaderboard_after: false,
@@ -41,9 +41,9 @@ export default function SlidesPanel({
   idKey = "slide_id",
   getSlideTitle,
   quizId,
+  presentationRevision,
   quizBackground = "#ffffff",
   quizBackgroundImage = "",
-  onLeaderboardDeleted,
   onSlidesReordered,
   onRefresh,
   onNotify
@@ -120,14 +120,16 @@ export default function SlidesPanel({
     
     try {
       const slideIds = newSlides.map((slide) => slide[idKey]);
-      await quizService.reorderSlides(quizId, slideIds);
+      await quizService.reorderSlides(quizId, slideIds, presentationRevision);
       if (onSlidesReordered) {
         onSlidesReordered(newSlides);
       }
+      if (onRefresh) await onRefresh();
     } catch (error) {
       console.error("Failed to update slide order:", error);
       notify("Failed to reorder slide.", "error");
       setLocalSlides(previousSlides);
+      if (error.response?.status === 409 && onRefresh) await onRefresh();
     } finally {
       setIsReordering(false);
     }
@@ -156,20 +158,13 @@ export default function SlidesPanel({
       if (!slideToDelete) return;
 
       if (slideType === 3) {
-        if (onLeaderboardDeleted) {
-          await onLeaderboardDeleted(slideId);
-        }
-
         // ??? ??? ??????? ?????
         const questionSlide = localSlides.find(
-          (s) => s.slide_type === 1 && s.order === slideToDelete.order
+          (s) => s.slide_type === 1 && s[idKey] === slideToDelete.sourceSlideId
         );
 
         if (questionSlide) {
-          await quizService.deleteLeaderboardSlide(
-            quizId,
-            questionSlide[idKey]
-          );
+          await quizService.deleteLeaderboardSlide(quizId, questionSlide);
         } else {
           await deleteSlide(slideId);
         }
@@ -226,7 +221,7 @@ export default function SlidesPanel({
   // ???? ???? ??? ?????? - ???? ???? ?? ????
   const handleSlideClick = (slide) => {
     // ????? slide_id ?? ?? ???? ??? ???????
-    setActiveSlideId(slide[idKey]);
+    setActiveSlideId(slide.isSynthetic ? slide.sourceSlideId : slide[idKey]);
     // ? slide_type ?????? ???? ?? ?? ????? ???????
     setActiveSlideType(slide.slide_type);
     setActiveSlideTypeParent(slide.slide_type);
@@ -234,8 +229,8 @@ export default function SlidesPanel({
 
   // ???? ???? ????? ????? ??? ?????? ???? ?????? ??? ???
   const isSlideActive = (slide) => {
-    // ??? ????? ?? ?? ??? slide_id ?????? ????
-    if (slide[idKey] !== activeSlideId) {
+    const selectedId = slide.isSynthetic ? slide.sourceSlideId : slide[idKey];
+    if (selectedId !== activeSlideId) {
       return false;
     }
     
@@ -254,6 +249,9 @@ export default function SlidesPanel({
   const getQuestionType = (slide) => {
     if (slide.slide_type === 3) {
       return "Leaderboard";
+    }
+    if (slide.slide_type === 2) {
+      return "Content";
     }
     
     if (slide.slide_type === 1 && slide.question) {

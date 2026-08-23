@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/confirm-dialog";
 import { ErrorModal } from "../pages/quiz/manager/ErrorModal";
-import { quizService } from "../services/quizService";
+import { quizService } from "../services/quizService.ts";
 import {
   Search,
   MoreVertical,
@@ -20,6 +20,7 @@ import {
 import ShareMenu from "./ShareMenu";
 import { apiFetch } from "../utils/apiFetch";
 import { clearAuthStorage } from "../utils/auth";
+import { getPresentationValidationError } from "../pages/quiz/manager/questionValidation";
 
 const safeTimestamp = (value) => {
   const time = Date.parse(value);
@@ -69,6 +70,7 @@ export default function QuizManager({ onNewPresentation }) {
         const createdAt = safeTimestamp(quiz.created_at);
         return {
           id: quiz.id,
+          revision: Number(quiz.revision || 1),
           name: quiz.title,
           accessCode: "",
           slides: quiz.slide_count,
@@ -266,7 +268,11 @@ export default function QuizManager({ onNewPresentation }) {
   // Rename a quiz via API
   const renameQuiz = async (quizId, newName) => {
     try {
-      await quizService.updateQuiz(quizId, { title: newName.trim() });
+      const currentQuiz = quizzes.find((quiz) => quiz.id === quizId);
+      const updated = await quizService.updateQuiz(quizId, {
+        title: newName.trim(),
+        revision: currentQuiz?.revision,
+      });
 
       // Update local state on success
       const now = Date.now();
@@ -276,6 +282,7 @@ export default function QuizManager({ onNewPresentation }) {
             ? {
                 ...q,
                 name: newName.trim(),
+                revision: updated.revision,
                 updatedAt: now,
                 lastUpdated: formatDate(now),
               }
@@ -285,7 +292,12 @@ export default function QuizManager({ onNewPresentation }) {
       return true;
     } catch (err) {
       console.error("Error renaming quiz:", err);
-      setError(err.message);
+      if (err.response?.status === 409 && err.response?.data?.error === "edit_conflict") {
+        await fetchQuizzes();
+        setError("This presentation changed elsewhere. The latest version has been loaded.");
+      } else {
+        setError(err.message);
+      }
       return false;
     }
   };
@@ -420,6 +432,7 @@ export default function QuizManager({ onNewPresentation }) {
       const now = Date.now();
       const newQuiz = {
         id: duplicatedQuizData.id,
+        revision: Number(duplicatedQuizData.revision || 1),
         name: duplicatedQuizData.title,
         accessCode: "",
         slides: duplicatedQuizData.slides?.length ?? quiz.slides,
@@ -456,26 +469,9 @@ export default function QuizManager({ onNewPresentation }) {
         return;
       }
 
-      const allQuestionSlidesHaveQuestions = quiz.slides.every((slide) => {
-        if (slide.slide_type !== 1) {
-          return true;
-        }
-        return (
-          slide.question &&
-          typeof slide.question === "object" &&
-          slide.question !== null &&
-          Object.keys(slide.question).length > 0 &&
-          Array.isArray(slide.question.options) &&
-          slide.question.options.length >= 2 &&
-          slide.question.options.every((option) => String(option.text || option.option_text || "").trim()) &&
-          slide.question.options.some((option) => option.is_correct) &&
-          (slide.question.question_type !== "single" ||
-            slide.question.options.filter((option) => option.is_correct).length === 1)
-        );
-      });
-
-      if (!allQuestionSlidesHaveQuestions) {
-        setErrorForModal("All question slides must have one question.");
+      const validationError = getPresentationValidationError(quiz);
+      if (validationError) {
+        setErrorForModal(validationError);
         setErrorModalOpen(true);
         return;
       }

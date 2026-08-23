@@ -201,10 +201,12 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     patch:
       operationId: updatePresentation
-      summary: Update an owned presentation's title or visual settings.
+      summary: Atomically update an owned presentation's title or visual settings.
+      description: Settings are merged by key. Clients should send the last observed revision in If-Match; a stale revision returns 409 without overwriting newer edits.
       parameters:
         - $ref: '#/components/parameters/PresentationId'
         - $ref: '#/components/parameters/CSRFToken'
+        - $ref: '#/components/parameters/RevisionMatch'
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/UpdatePresentationRequest' } } }
@@ -214,6 +216,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/EditConflict' }
     delete:
       operationId: deletePresentation
       summary: Permanently delete an owned presentation and its dependent data.
@@ -317,6 +320,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PresentationId'
         - $ref: '#/components/parameters/CSRFToken'
+        - $ref: '#/components/parameters/RevisionMatch'
       requestBody:
         required: true
         content:
@@ -332,6 +336,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/EditConflict' }
   /api/v1/presentations/{presentationId}/slides/reorder:
     post:
       operationId: reorderSlides
@@ -339,6 +344,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PresentationId'
         - $ref: '#/components/parameters/CSRFToken'
+        - $ref: '#/components/parameters/RevisionMatch'
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/ReorderSlidesRequest' } } }
@@ -348,6 +354,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CSRFError' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/EditConflict' }
   /api/v1/presentations/{presentationId}/slides/{slideId}:
     put:
       operationId: replaceSlide
@@ -357,6 +364,7 @@ paths:
         - $ref: '#/components/parameters/PresentationId'
         - { name: slideId, in: path, required: true, schema: { type: string, format: uuid } }
         - $ref: '#/components/parameters/CSRFToken'
+        - $ref: '#/components/parameters/RevisionMatch'
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/CreateSlideRequest' } } }
@@ -374,6 +382,7 @@ paths:
         - $ref: '#/components/parameters/PresentationId'
         - { name: slideId, in: path, required: true, schema: { type: string, format: uuid } }
         - $ref: '#/components/parameters/CSRFToken'
+        - $ref: '#/components/parameters/RevisionMatch'
       responses:
         '204': { description: Slide deleted. }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -590,6 +599,12 @@ components:
       schema:
         type: string
         format: uuid
+    RevisionMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: Last observed positive integer revision. When supplied, a stale value returns 409 rather than overwriting a newer edit.
+      schema: { type: integer, format: int64, minimum: 1 }
   schemas:
     RegisterRequest:
       type: object
@@ -668,9 +683,10 @@ components:
         is_active: { type: boolean }
     Presentation:
       type: object
-      required: [id, title, settings, created_at, updated_at, slides]
+      required: [id, revision, title, settings, created_at, updated_at, slides]
       properties:
         id: { type: string, format: uuid }
+        revision: { type: integer, format: int64, minimum: 1 }
         title: { type: string, minLength: 1, maxLength: 500 }
         settings: { type: object, additionalProperties: true }
         created_at: { type: string, format: date-time }
@@ -680,9 +696,10 @@ components:
           items: { $ref: '#/components/schemas/Slide' }
     PresentationSummary:
       type: object
-      required: [id, title, settings, slide_count, participant_count, created_at, updated_at]
+      required: [id, revision, title, settings, slide_count, participant_count, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
+        revision: { type: integer, format: int64, minimum: 1 }
         title: { type: string }
         settings: { type: object, additionalProperties: true }
         slide_count: { type: integer, minimum: 0 }
@@ -706,8 +723,8 @@ components:
       required: [position, kind, content]
       properties:
         position: { type: integer, minimum: 0 }
-        kind: { type: string, minLength: 1, maxLength: 100 }
-        content: { type: object, additionalProperties: true }
+        kind: { type: string, enum: [question_draft, question, content, leaderboard] }
+        content: { $ref: '#/components/schemas/EditableSlideContent' }
     ReorderSlidesRequest:
       type: object
       required: [slide_ids]
@@ -741,6 +758,62 @@ components:
             properties:
               text: { type: string, minLength: 1 }
               is_correct: { type: boolean }
+    EditableSlideContent:
+      description: Content is validated against the accompanying slide kind. Unknown fields are rejected by the API.
+      anyOf:
+        - $ref: '#/components/schemas/QuestionDraftContent'
+        - $ref: '#/components/schemas/QuestionContent'
+        - $ref: '#/components/schemas/ContentSlideContent'
+        - $ref: '#/components/schemas/LeaderboardContent'
+    QuestionDraftContent:
+      type: object
+      additionalProperties: false
+      properties:
+        show_leaderboard_after: { type: boolean, default: false }
+    QuestionContent:
+      type: object
+      additionalProperties: false
+      required: [text, question_type, question_time, min_point, max_point, faster_answers_more_points, partial_scoring, show_leaderboard_after, options]
+      properties:
+        title: { type: string, maxLength: 500 }
+        text: { type: string, minLength: 1, maxLength: 10000 }
+        question_type: { type: string, enum: [single, multiple] }
+        question_time: { type: integer, minimum: 1, maximum: 86400 }
+        min_point: { type: integer, minimum: 0 }
+        max_point: { type: integer, minimum: 1 }
+        image_url: { type: string, maxLength: 4096 }
+        faster_answers_more_points: { type: boolean }
+        partial_scoring: { type: boolean }
+        show_leaderboard_after: { type: boolean }
+        options:
+          type: array
+          minItems: 2
+          maxItems: 100
+          items: { $ref: '#/components/schemas/QuestionOptionDefinition' }
+    QuestionOptionDefinition:
+      type: object
+      additionalProperties: false
+      required: [id, text, is_correct, image_url, order]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 128 }
+        text: { type: string, minLength: 1, maxLength: 2000 }
+        is_correct: { type: boolean }
+        image_url: { type: string, maxLength: 4096 }
+        order: { type: integer, minimum: 1 }
+    ContentSlideContent:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: At least one of title, text, or image_url must be non-empty.
+      properties:
+        title: { type: string, maxLength: 500 }
+        text: { type: string, maxLength: 20000 }
+        image_url: { type: string, maxLength: 4096 }
+    LeaderboardContent:
+      type: object
+      additionalProperties: false
+      properties:
+        title: { type: string, maxLength: 500 }
     AnswerRequest:
       type: object
       required: [request_id, question_slide_id, selected_option_indexes]
@@ -962,9 +1035,10 @@ components:
         participant_count: { type: integer, minimum: 0 }
     Slide:
       type: object
-      required: [id, position, kind, content]
+      required: [id, revision, position, kind, content]
       properties:
         id: { type: string, format: uuid }
+        revision: { type: integer, format: int64, minimum: 1 }
         position: { type: integer, minimum: 0 }
         kind: { type: string, minLength: 1, maxLength: 100 }
         content:
@@ -1026,6 +1100,11 @@ components:
       description: The bounded authentication request budget was exceeded.
       headers:
         Retry-After: { schema: { type: integer, minimum: 1 } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    EditConflict:
+      description: The resource changed after the client loaded it; reload the latest representation before retrying.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

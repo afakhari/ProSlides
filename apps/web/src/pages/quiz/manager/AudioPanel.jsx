@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Music, Trash2, Play, Pause, Save } from "lucide-react";
-import { quizService } from "../../../services/quizService";
+import { quizService } from "../../../services/quizService.ts";
 import { ErrorModal } from "./ErrorModal";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 
@@ -11,6 +11,7 @@ export default function AudioPanel({
   updateQuiz,
   setAudioSaveNotice,
   onDirtyChange,
+  onConflict,
 }) {
 
   const audioRef = useRef(null);
@@ -155,7 +156,7 @@ export default function AudioPanel({
 
     try {
       // Send a request to the back end to update the music
-      const updatedQuiz = await quizService.updateQuizMusic(quiz.quiz_id, localAudio);
+      const updatedQuiz = await quizService.updateQuizMusic(quiz.quiz_id, localAudio, quiz.revision);
       
       // Updating the quiz in the parent component(EditorPage)
       if (updateQuiz) {
@@ -178,8 +179,13 @@ export default function AudioPanel({
         onDirtyChange(false);
       }
       
-    } catch {
-      setErrorForModal("Failed to save changes. Please try again.");
+    } catch (saveError) {
+      if (saveError.response?.status === 409 && saveError.response?.data?.error === "edit_conflict") {
+        if (onConflict) await onConflict();
+        setErrorForModal("This presentation changed elsewhere. The latest version has been loaded.");
+      } else {
+        setErrorForModal("Failed to save changes. Please try again.");
+      }
       setErrorModalOpen(true);
       setSaving(false);
     }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { quizService } from "../services/quizService";
+import { quizService } from "../services/quizService.ts";
 import ShareMenu from "./ShareMenu";
 
 
@@ -8,8 +8,11 @@ export default function QuizHeader({
   accessCode = "ABC123",
   quizTitle = "", 
   quizId,
+  quizRevision,
   setNameSelectionNotice,
   onBack,
+  onQuizUpdated,
+  onConflict,
 }) {
 
   const navigate = useNavigate();
@@ -46,7 +49,8 @@ export default function QuizHeader({
 
     setIsUpdating(true);
     try {
-      await quizService.updateQuiz(quizId, { title: trimmedTitle });
+      const updatedQuiz = await quizService.updateQuiz(quizId, { title: trimmedTitle, revision: quizRevision });
+      if (onQuizUpdated) onQuizUpdated(updatedQuiz);
       if (setNameSelectionNotice) {
         setNameSelectionNotice("Quiz name changed successfully.");
         setTimeout(() => {
@@ -56,6 +60,11 @@ export default function QuizHeader({
         alert("Quiz name changed successfully.");
       }
     } catch (error) {
+      if (error.response?.status === 409 && error.response?.data?.error === "edit_conflict") {
+        if (onConflict) await onConflict();
+        alert("This presentation was changed elsewhere. The latest version has been loaded.");
+        return;
+      }
       // Return to previous name
       setNewQuizTitle(quizTitle || "");
 

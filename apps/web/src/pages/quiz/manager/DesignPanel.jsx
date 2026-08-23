@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Trash2, Save, Link } from "lucide-react";
-import { quizService } from "../../../services/quizService";
+import { quizService } from "../../../services/quizService.ts";
 import { ErrorModal } from "./ErrorModal";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 
@@ -11,6 +11,7 @@ export default function DesignPanel({
   onClose,
   setBackgroundSaveNotice,
   onDirtyChange,
+  onConflict,
 }) {
 
   const [activeTab, setActiveTab] = useState("color");
@@ -233,12 +234,13 @@ export default function DesignPanel({
       // Send a request to the back end to update the background
       const updatedQuiz = await quizService.updateQuizBackground(
         quiz.quiz_id,
-        updateData
+        updateData,
+        quiz.revision
       );
       
       // Updating the quiz in the parent component(EditorPage)
-      const mergedQuiz = { ...updatedQuiz, ...updateData };
-      updateQuiz(mergedQuiz);
+      const mergedQuiz = updatedQuiz;
+      updateQuiz(updatedQuiz);
       
       setOriginalQuiz({ ...mergedQuiz });
       
@@ -257,9 +259,14 @@ export default function DesignPanel({
         onDirtyChange(false);
       }
       
-    } catch {
+    } catch (saveError) {
       setSaving(false);
-      setErrorForModal("Failed to save changes. Please try again.");
+      if (saveError.response?.status === 409 && saveError.response?.data?.error === "edit_conflict") {
+        if (onConflict) await onConflict();
+        setErrorForModal("This presentation changed elsewhere. The latest version has been loaded.");
+      } else {
+        setErrorForModal("Failed to save changes. Please try again.");
+      }
       setErrorModalOpen(true);
     }
   };

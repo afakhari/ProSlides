@@ -115,23 +115,34 @@ try {
   Invoke-API -Method GET -Path "/api/v1/auth/me" -Client $loginClient -ExpectedStatus 200 | Out-Null
   $loginCSRF = $loginCookieJar.GetCookies($apiBaseUrl)["proslides_csrf"].Value
   $created = Invoke-API -Method POST -Path "/api/v1/presentations" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ title = "Created through API" } | ConvertTo-Json -Compress) -ExpectedStatus 201
-  $createdID = ($created.Content | ConvertFrom-Json).id
-  $contentResponse = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 0; kind = "content"; content = @{ text = "Created through API" } } | ConvertTo-Json -Compress) -ExpectedStatus 201
+  $createdInitial = $created.Content | ConvertFrom-Json
+  $createdID = $createdInitial.id
+  $contentResponse = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF; "If-Match" = [string]$createdInitial.revision } -Body (@{ position = 0; kind = "content"; content = @{ text = "Created through API" } } | ConvertTo-Json -Compress) -ExpectedStatus 201
   $contentID = ($contentResponse.Content | ConvertFrom-Json).id
   $questionResponse = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/questions" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 1; text = "Choose"; question_type = "multiple"; question_time = 30; max_point = 100; min_point = 0; partial_scoring = $true; faster_answers_more_points = $false; options = @(@{ text = "A"; is_correct = $true }, @{ text = "B"; is_correct = $true }, @{ text = "C"; is_correct = $false }) } | ConvertTo-Json -Compress -Depth 4) -ExpectedStatus 201
   $questionID = ($questionResponse.Content | ConvertFrom-Json).id
-  $insertedResponse = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 1; kind = "content"; content = @{ text = "Inserted between existing slides" } } | ConvertTo-Json -Compress) -ExpectedStatus 201
-  $insertedID = ($insertedResponse.Content | ConvertFrom-Json).id
+  $beforeInsert = (Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  $insertedResponse = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF; "If-Match" = [string]$beforeInsert.revision } -Body (@{ position = 1; kind = "content"; content = @{ text = "Inserted between existing slides" } } | ConvertTo-Json -Compress) -ExpectedStatus 201
+  $insertedPayload = $insertedResponse.Content | ConvertFrom-Json
+  $insertedID = $insertedPayload.id
   $afterInsert = (Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200).Content | ConvertFrom-Json
   if ($afterInsert.slides.Count -ne 3 -or $afterInsert.slides[1].id -ne $insertedID -or $afterInsert.slides[2].id -ne $questionID) { throw "Slide insertion did not shift occupied positions atomically" }
-  Invoke-API -Method DELETE -Path "/api/v1/presentations/$createdID/slides/$insertedID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -ExpectedStatus 204 | Out-Null
+  Invoke-API -Method DELETE -Path "/api/v1/presentations/$createdID/slides/$insertedID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF; "If-Match" = [string]$insertedPayload.revision } -ExpectedStatus 204 | Out-Null
 
-  $updated = Invoke-API -Method PATCH -Path "/api/v1/presentations/$createdID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ title = "Updated through API"; settings = @{ background_color = "#112233"; show_music = $true } } | ConvertTo-Json -Compress) -ExpectedStatus 200
+  $beforeMetadataUpdate = (Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  $updated = Invoke-API -Method PATCH -Path "/api/v1/presentations/$createdID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF; "If-Match" = [string]$beforeMetadataUpdate.revision } -Body (@{ title = "Updated through API"; settings = @{ background_color = "#112233"; show_music = $true } } | ConvertTo-Json -Compress) -ExpectedStatus 200
   $updatedPayload = $updated.Content | ConvertFrom-Json
   if ($updatedPayload.title -ne "Updated through API" -or $updatedPayload.settings.background_color -ne "#112233") { throw "Presentation metadata update was not persisted" }
-  Invoke-API -Method PUT -Path "/api/v1/presentations/$createdID/slides/$contentID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ position = 0; kind = "content"; content = @{ text = "Updated content"; image_url = "" } } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
-  Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides/reorder" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ slide_ids = @($questionID, $contentID) } | ConvertTo-Json -Compress) -ExpectedStatus 204 | Out-Null
-  Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides/reorder" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ slide_ids = @($contentID, $questionID) } | ConvertTo-Json -Compress) -ExpectedStatus 204 | Out-Null
+  Invoke-API -Method PATCH -Path "/api/v1/presentations/$createdID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF; "If-Match" = [string]$beforeMetadataUpdate.revision } -Body (@{ title = "Stale overwrite" } | ConvertTo-Json -Compress) -ExpectedStatus 409 | Out-Null
+  $afterStaleUpdate = (Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  if ($afterStaleUpdate.title -ne "Updated through API") { throw "Stale presentation edit overwrote the committed title" }
+  $beforeSlideUpdate = (Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  $contentBeforeUpdate = @($beforeSlideUpdate.slides | Where-Object { $_.id -eq $contentID })[0]
+  Invoke-API -Method PUT -Path "/api/v1/presentations/$createdID/slides/$contentID" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF; "If-Match" = [string]$contentBeforeUpdate.revision } -Body (@{ position = 0; kind = "content"; content = @{ text = "Updated content"; image_url = "" } } | ConvertTo-Json -Compress) -ExpectedStatus 200 | Out-Null
+  $beforeFirstReorder = (Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides/reorder" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF; "If-Match" = [string]$beforeFirstReorder.revision } -Body (@{ slide_ids = @($questionID, $contentID) } | ConvertTo-Json -Compress) -ExpectedStatus 204 | Out-Null
+  $beforeSecondReorder = (Invoke-API -Method GET -Path "/api/v1/presentations/$createdID" -Client $loginClient -ExpectedStatus 200).Content | ConvertFrom-Json
+  Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/slides/reorder" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF; "If-Match" = [string]$beforeSecondReorder.revision } -Body (@{ slide_ids = @($contentID, $questionID) } | ConvertTo-Json -Compress) -ExpectedStatus 204 | Out-Null
   $duplicate = Invoke-API -Method POST -Path "/api/v1/presentations/$createdID/duplicate" -Client $loginClient -Headers @{ "X-CSRF-Token" = $loginCSRF } -Body (@{ title = "Integration duplicate" } | ConvertTo-Json -Compress) -ExpectedStatus 201
   $duplicateID = ($duplicate.Content | ConvertFrom-Json).id
   $ownedList = Invoke-API -Method GET -Path "/api/v1/presentations" -Client $loginClient -ExpectedStatus 200

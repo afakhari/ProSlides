@@ -12,7 +12,7 @@ import {
   Loader2
 } from "lucide-react";
 
-import { quizService } from "../../../services/quizService"; 
+import { quizService } from "../../../services/quizService.ts";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 import { getQuestionValidationError } from "./questionValidation";
 
@@ -20,11 +20,11 @@ import { getQuestionValidationError } from "./questionValidation";
 export default function Sidebar({
   quizId,
   slide,
-  onSaveAndRefresh,
   onClose,
   onSlideUpdated,
   onDirtyChange,
-  onNotify
+  onNotify,
+  onConflict,
 }) {
   // State??? ?????? ???????
   const [localSlide, setLocalSlide] = useState(null);
@@ -273,6 +273,10 @@ export default function Sidebar({
 
   // ????? ???? ????? ????
   const handleAddOption = () => {
+    if (options.length >= 100) {
+      notify("A question can have at most 100 options.", "warning");
+      return;
+    }
     const newId = globalThis.crypto.randomUUID();
 
     const newOption = {
@@ -501,9 +505,6 @@ export default function Sidebar({
         }
 
 
-        if (onSaveAndRefresh) {
-          await onSaveAndRefresh();
-        }
       }
 
       // ???? ???
@@ -515,7 +516,15 @@ export default function Sidebar({
       onClose(true);
     } catch (error) {
       console.error("Error saving changes:", error);
-      notify("Failed to save changes. Please try again.", "error");
+      if (error.response?.status === 409 && error.response?.data?.error === "edit_conflict") {
+        if (onConflict) await onConflict();
+        notify("This question was changed elsewhere. The latest version has been loaded.", "warning");
+        onClose(true);
+      } else if (error.response?.status === 409 && error.response?.data?.error === "slide_has_results") {
+        notify("This question already has results. Reset the presentation results before editing it.", "warning");
+      } else {
+        notify("Failed to save changes. Please try again.", "error");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -974,12 +983,12 @@ export default function Sidebar({
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  min="0"
+                  min="1"
                   value={question.max_point ?? 0}
                   onChange={(e) =>
                     handleFieldChange(
                       "max_point",
-                      clampInteger(parseIntegerInput(e.target.value), 0)
+                      clampInteger(parseIntegerInput(e.target.value), 1)
                     )
                   }
                   className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"

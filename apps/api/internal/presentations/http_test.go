@@ -30,6 +30,7 @@ type fakeStore struct {
 	p     Presentation
 	err   error
 	owner string
+	expectedRevision *int64
 }
 
 func (f *fakeStore) FindOwned(_ context.Context, _ string, owner string) (Presentation, error) {
@@ -46,6 +47,7 @@ func (f *fakeStore) Create(_ context.Context, owner, title string, _ json.RawMes
 }
 func (f *fakeStore) Update(_ context.Context, _, owner string, patch PresentationPatch) (Presentation, error) {
 	f.owner = owner
+	f.expectedRevision = patch.ExpectedRevision
 	title := f.p.Title
 	if patch.Title != nil {
 		title = *patch.Title
@@ -69,19 +71,21 @@ func (f *fakeStore) QuestionResults(_ context.Context, _, sessionID, slideID, ow
 	f.owner = owner
 	return QuestionResultsPage{SessionID: sessionID, QuestionSlideID: slideID, Options: []QuestionOptionResult{}, Leaderboard: []QuestionLeaderboardEntry{}, Limit: query.Limit}, f.err
 }
-func (f *fakeStore) CreateSlide(_ context.Context, _ string, owner string, position int, kind string, content json.RawMessage) (Slide, error) {
+func (f *fakeStore) CreateSlide(_ context.Context, _ string, owner string, position int, kind string, content json.RawMessage, expected *int64) (Slide, error) {
 	f.owner = owner
+	f.expectedRevision = expected
 	return Slide{ID: "slide", Position: position, Kind: kind, Content: content}, f.err
 }
-func (f *fakeStore) ReplaceSlide(_ context.Context, _, _, owner string, position int, kind string, content json.RawMessage) (Slide, error) {
+func (f *fakeStore) ReplaceSlide(_ context.Context, _, _, owner string, position int, kind string, content json.RawMessage, expected *int64) (Slide, error) {
 	f.owner = owner
+	f.expectedRevision = expected
 	return Slide{ID: "slide", Position: position, Kind: kind, Content: content}, f.err
 }
-func (f *fakeStore) DeleteSlide(_ context.Context, _, _, owner string) error {
+func (f *fakeStore) DeleteSlide(_ context.Context, _, _, owner string, _ *int64) error {
 	f.owner = owner
 	return f.err
 }
-func (f *fakeStore) ReorderSlides(_ context.Context, _, owner string, _ []string) error {
+func (f *fakeStore) ReorderSlides(_ context.Context, _, owner string, _ []string, _ *int64) error {
 	f.owner = owner
 	return f.err
 }
@@ -163,19 +167,48 @@ func TestUpdatePresentationAndReplaceSlideAreOwnerScoped(t *testing.T) {
 	update := httptest.NewRequest(http.MethodPatch, "/api/v1/presentations/p", strings.NewReader(`{"title":"Renamed","settings":{"background_color":"#fff"}}`))
 	update.AddCookie(&http.Cookie{Name: "proslides_session", Value: "token"})
 	update.Header.Set("X-CSRF-Token", "csrf")
+	update.Header.Set("If-Match", "7")
 	updateResult := httptest.NewRecorder()
 	m.ServeHTTP(updateResult, update)
-	if updateResult.Code != http.StatusOK || store.owner != "owner" {
+	if updateResult.Code != http.StatusOK || store.owner != "owner" || store.expectedRevision == nil || *store.expectedRevision != 7 {
 		t.Fatalf("status=%d owner=%s", updateResult.Code, store.owner)
 	}
 
 	replace := httptest.NewRequest(http.MethodPut, "/api/v1/presentations/p/slides/s", strings.NewReader(`{"position":0,"kind":"content","content":{"text":"updated"}}`))
 	replace.AddCookie(&http.Cookie{Name: "proslides_session", Value: "token"})
 	replace.Header.Set("X-CSRF-Token", "csrf")
+	replace.Header.Set("If-Match", "3")
 	replaceResult := httptest.NewRecorder()
 	m.ServeHTTP(replaceResult, replace)
-	if replaceResult.Code != http.StatusOK || store.owner != "owner" {
+	if replaceResult.Code != http.StatusOK || store.owner != "owner" || store.expectedRevision == nil || *store.expectedRevision != 3 {
 		t.Fatalf("status=%d owner=%s", replaceResult.Code, store.owner)
+	}
+}
+
+func TestEditConflictAndInvalidRevisionHaveStableErrors(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		header   string
+		storeErr error
+		status   int
+		body     string
+	}{
+		{"stale", "4", ErrEditConflict, http.StatusConflict, `"edit_conflict"`},
+		{"malformed", "not-a-number", nil, http.StatusBadRequest, `"invalid_revision"`},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			m := http.NewServeMux()
+			NewHTTP(fakeSessions{}, &fakeStore{err: testCase.storeErr}).Register(m)
+			req := httptest.NewRequest(http.MethodPatch, "/api/v1/presentations/p", strings.NewReader(`{"title":"Renamed"}`))
+			req.AddCookie(&http.Cookie{Name: "proslides_session", Value: "token"})
+			req.Header.Set("X-CSRF-Token", "csrf")
+			req.Header.Set("If-Match", testCase.header)
+			result := httptest.NewRecorder()
+			m.ServeHTTP(result, req)
+			if result.Code != testCase.status || !strings.Contains(result.Body.String(), testCase.body) {
+				t.Fatalf("status=%d body=%s", result.Code, result.Body.String())
+			}
+		})
 	}
 }
 

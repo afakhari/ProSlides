@@ -8,8 +8,9 @@ import SlidesPanel from "./SlidesPanel";
 import RightToolbar from "./RightToolbar";
 import DesignPanel from "./DesignPanel";
 import AudioPanel from "./AudioPanel";
-import { quizService } from "../../../services/quizService";
-import { getQuestionValidationError } from "./questionValidation";
+import ContentSidebar from "./ContentSidebar";
+import { quizService } from "../../../services/quizService.ts";
+import { getPresentationValidationError } from "./questionValidation";
 import { UNSAVED_CHANGES_KEY } from "../../../utils/auth";
 import Waiting from "../../loading/LoadingPage";
 import { X } from "lucide-react";
@@ -22,9 +23,10 @@ export default function EditorPage() {
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [saveNotice, setSaveNotice] = useState(null);
+  const fetchSequenceRef = useRef(0);
 
   const fetchQuiz = useCallback(async () => {
+    const sequence = ++fetchSequenceRef.current;
     if (!quizId) {
       setError("There is no quiz.");
       setLoading(false);
@@ -33,38 +35,28 @@ export default function EditorPage() {
 
     try {
       const quizData = await quizService.getEditorQuiz(quizId);
+      if (sequence !== fetchSequenceRef.current) return;
       setQuiz(quizData);
       setError(null);
     } catch (err) {
+      if (sequence !== fetchSequenceRef.current) return;
       setError("Failed to load quiz");
       console.error(err);
     } finally {
-      setLoading(false);
+      if (sequence === fetchSequenceRef.current) setLoading(false);
     }
   }, [quizId]);
 
   useEffect(() => {
     fetchQuiz();
+    return () => {
+      fetchSequenceRef.current += 1;
+    };
   }, [fetchQuiz]);
 
   const updateQuiz = (updatedQuiz) => {
     setQuiz(updatedQuiz);
   };
-
-  const saveQuiz = async () => {
-    if (!quiz) return;
-    try {
-      await quizService.updateQuiz(quiz.quiz_id, quiz);
-      await fetchQuiz();
-      setSaveNotice("Quiz saved successfully.");
-      setTimeout(() => {
-        setSaveNotice(null);
-      }, 2500);
-    } catch (err) {
-      console.error("Failed to save quiz:", err);
-    }
-  };
-
 
   if (loading) {
     return <Waiting />;
@@ -78,27 +70,15 @@ export default function EditorPage() {
     );
   }
 
-  return (
-    <>
-      <QuestionEditor
-        quiz={quiz}
-        updateQuiz={updateQuiz}
-        saveQuiz={saveQuiz}
-        refreshQuiz={fetchQuiz}
-      />
-      {saveNotice && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg">
-          {saveNotice}
-        </div>
-      )}
-    </>
-  );
+  return <QuestionEditor quiz={quiz} updateQuiz={updateQuiz} refreshQuiz={fetchQuiz} />;
 }
 
 
-function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
+function QuestionEditor({ quiz, updateQuiz, refreshQuiz }) {
 
-  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+  const [activeSlideId, setActiveSlideId] = useState(
+    () => quiz.slides?.[0]?.slide_id || null
+  );
   const navigate = useNavigate();
   const [activeSlideType, setActiveSlideType] = useState(null);
   const [leaderboardPreviewData, setLeaderboardPreviewData] = useState({});
@@ -119,8 +99,8 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const [backgroundSaveNotice, setBackgroundSaveNotice] = useState(null);
   const hasUnsavedChanges = hasSidebarChanges || hasAudioChanges || hasDesignChanges;
 
-  const slides = quiz.slides || [];
-  const activeSlide = slides[activeSlideIndex] || null;
+  const slides = quiz.slides;
+  const activeSlide = slides.find((slide) => slide.slide_id === activeSlideId) || slides[0] || null;
   const activeLeaderboardEntries = activeSlide?.slide_id
     ? leaderboardPreviewData[activeSlide.slide_id] || []
     : [];
@@ -128,18 +108,8 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     if (hasUnsavedChanges) {
       return { ready: false, reason: "Save or discard your changes before presenting." };
     }
-    if (!slides.length) {
-      return { ready: false, reason: "Add at least one slide to present." };
-    }
-    const missingQuestion = slides.find(
-      (slide) => slide.slide_type === 1 && getQuestionValidationError(slide.question)
-    );
-    if (missingQuestion) {
-      return {
-        ready: false,
-        reason: "Complete all question slides before presenting.",
-      };
-    }
+    const validationError = getPresentationValidationError(quiz);
+    if (validationError) return { ready: false, reason: validationError };
     return { ready: true, reason: "Start presentation" };
   })();
 
@@ -180,6 +150,16 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (!slides.length) {
+      if (activeSlideId !== null) setActiveSlideId(null);
+      return;
+    }
+    if (!slides.some((slide) => slide.slide_id === activeSlideId)) {
+      setActiveSlideId(slides[0].slide_id);
+    }
+  }, [slides, activeSlideId]);
 
   useEffect(() => {
     if (!activeSlide) return;
@@ -283,19 +263,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   }, [activeSlideType, activeSlide?.slide_id, loadLeaderboardPreview]);
 
 
-  const handleSaveAndRefresh = async () => {
-    try {
-      await saveQuiz();
-      if (refreshQuiz) {
-        await refreshQuiz();
-      }
-      showNotice("Quiz saved.", "success");
-    } catch (error) {
-      console.error("Failed to save and refresh:", error);
-      showNotice("Failed to save quiz.", "error");
-    }
-  };
-
   const handleDeleteLeaderboardAndRefresh = async () => {
     try {
       if (refreshQuiz) {
@@ -309,18 +276,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
   // ????? ???? ?????? ?????
   const handleTabClick = (tabId) => {
-    if (tabId === "slides") {
-      setShowSlidesPanel((prev) => {
-        const next = !prev;
-        setShowSidebar(false);
-        setShowDesignPanel(false);
-        setShowAudioPanel(false);
-        setActiveTab(next ? tabId : null);
-        return next;
-      });
-      return;
-    }
-
     if (showSidebar && hasSidebarChanges) {
       const isTogglingSidebar = tabId === "content" && showSidebar;
       const isLeavingSidebar = tabId !== "content";
@@ -382,6 +337,17 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   };
 
   const proceedTabChange = (tabId) => {
+    if (tabId === "slides") {
+      setShowSlidesPanel((prev) => {
+        const next = !prev;
+        setShowSidebar(false);
+        setShowDesignPanel(false);
+        setShowAudioPanel(false);
+        setActiveTab(next ? tabId : null);
+        return next;
+      });
+      return;
+    }
     if (tabId === "audio") {
       setShowAudioPanel((prev) => {
         const next = !prev;
@@ -468,8 +434,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const proceedWithSlideChange = (id) => {
     const slide = slides.find((s) => s.slide_id === id);
     if (slide) {
-      const index = slides.indexOf(slide);
-      setActiveSlideIndex(index);
+      setActiveSlideId(slide.slide_id);
     }
   };
 
@@ -547,6 +512,8 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const getSlideTitle = (slide) => {
     if (slide.slide_type === 1 && slide.question) {
       return slide.question.text || "Question Slide";
+    } else if (slide.slide_type === 2) {
+      return slide.title || slide.content_text || "Content Slide";
     } else if (slide.slide_type === 3) {
       return slide.title || "Leaderboard";
     }
@@ -558,29 +525,35 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const addNewSlide = async () => {
     try {
       const newSlideData = {
+        slide_id: globalThis.crypto.randomUUID(),
+        revision: 1,
+        order: slides.length,
         slide_type: 1,
         // order: 1,
         show_leaderboard_after: false,
         title: "",
         content_text: "",
         content_image_url: "",
+        question: null,
       };
 
       // ????? ?? ???? ???? ????? ?????? ????
       const createdSlide = await quizService.createSlide(
         quiz.quiz_id,
-        newSlideData
+        newSlideData,
+        quiz.revision
       );
 
       // ??????????? quiz ?? ?????? ????
       const updatedSlides = [...slides, createdSlide];
       updateQuiz({
         ...quiz,
+        revision: quiz.revision + 1,
         slides: updatedSlides,
       });
 
       // ?????? ?????? ????
-      setActiveSlideIndex(updatedSlides.length - 1);
+      setActiveSlideId(createdSlide.slide_id);
     } catch (error) {
       console.error("Failed to create new slide:", error);
       showNotice("Failed to create new slide.", "error");
@@ -593,55 +566,19 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   const deleteSlide = async (slideId) => {
     try {
       // ??? ?? ????
-      await quizService.deleteSlide(quiz.quiz_id, slideId);
+      const deletedSlide = slides.find((slide) => slide.slide_id === slideId);
+      await quizService.deleteSlide(quiz.quiz_id, slideId, deletedSlide?.revision);
 
       // ??????????? state
       const slideIndex = slides.findIndex((s) => s.slide_id === slideId);
       const updatedSlides = slides.filter((s) => s.slide_id !== slideId);
 
-      updateQuiz({
-        ...quiz,
-        slides: updatedSlides,
-      });
-
-      // ????? ?????? ????
-      if (updatedSlides.length > 0) {
-        if (slideIndex >= updatedSlides.length) {
-          setActiveSlideIndex(updatedSlides.length - 1);
-        } else {
-          setActiveSlideIndex(slideIndex);
-        }
-      } else {
-        setActiveSlideIndex(0);
-      }
+      const nextSlide = updatedSlides[Math.min(slideIndex, updatedSlides.length - 1)] || null;
+      setActiveSlideId(nextSlide?.slide_id || null);
+      await refreshQuiz();
     } catch (error) {
       console.error("Failed to delete slide:", error);
       showNotice("Failed to delete slide.", "error");
-    }
-  };
-
-  // ??????????? ?????? ????
-  const updateActiveSlide = async (updatedSlide) => {
-    try {
-      // ????? ?? ????
-      const savedSlide = await quizService.updateSlide(
-        quiz.quiz_id,
-        updatedSlide.slide_id,
-        updatedSlide
-      );
-
-      // ??????????? state
-      const updatedSlides = slides.map((s) =>
-        s.slide_id === updatedSlide.slide_id ? savedSlide : s
-      );
-
-      updateQuiz({
-        ...quiz,
-        slides: updatedSlides,
-      });
-    } catch (error) {
-      console.error("Failed to update slide:", error);
-      showNotice("Failed to update slide.", "error");
     }
   };
 
@@ -676,15 +613,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     setShowTypeBox(true);
   };
 
-  const resolveQuestionForSlide = async (slideId, fallbackQuestion) => {
-    if (fallbackQuestion?.question_id) {
-      return fallbackQuestion;
-    }
-    const fetched = await quizService.getQuestion(quiz.quiz_id, slideId);
-    return fetched || fallbackQuestion;
-  };
-
-
   const applyQuestionTypeChange = async ({
     currentQuestion,
     questionType,
@@ -713,10 +641,22 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
           question_image: "",
           faster_answers_more_points: false,
           partial_scoring: false,
-          options: [],
+          options: [
+            { option_id: globalThis.crypto.randomUUID(), text: "Option 1", is_correct: true, image_url: "", order: 1 },
+            { option_id: globalThis.crypto.randomUUID(), text: "Option 2", is_correct: false, image_url: "", order: 2 },
+          ],
         };
       } else {
-        const existingOptions = currentQuestion.options || [];
+        const existingOptions = [...(currentQuestion.options || [])];
+        while (existingOptions.length < 2) {
+          existingOptions.push({
+            option_id: globalThis.crypto.randomUUID(),
+            text: `Option ${existingOptions.length + 1}`,
+            is_correct: existingOptions.length === 0,
+            image_url: "",
+            order: existingOptions.length + 1,
+          });
+        }
         const firstCorrectIndex = existingOptions.findIndex(
           (option) => option.is_correct
         );
@@ -729,6 +669,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
             }))
           : existingOptions.map((option, index) => ({
               ...option,
+              is_correct: firstCorrectIndex === -1 ? index === 0 : option.is_correct,
               order: index + 1,
             }));
 
@@ -754,6 +695,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
       updateQuiz({
         ...quiz,
+        revision: quiz.revision + 1,
         slides: updatedSlides,
       });
       setTypeSelectionNotice(
@@ -770,55 +712,12 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
     } catch (error) {
       console.error("Error changing question type:", error);
 
-      if (
-        error.response?.status === 400 &&
-        error.response?.data?.error === "This slide already has a question"
-      ) {
-        try {
-          const existingQuestion = await quizService.getQuestion(
-            quizId,
-            slideId
-          );
-          if (existingQuestion?.question_id) {
-            const refreshedQuestion = await quizService.updateQuestion(
-              quizId,
-              slideId,
-              { question_type: questionType }
-            );
-            const updatedSlide = {
-              ...activeSlide,
-              question: refreshedQuestion || existingQuestion,
-            };
-            const updatedSlides = slides.map((s) =>
-              s.slide_id === slideId ? updatedSlide : s
-            );
-            updateQuiz({
-              ...quiz,
-              slides: updatedSlides,
-            });
-            setTypeSelectionNotice(
-              `Question type updated to ${requestedMode === "single" ? "Single Choice" : "Multiple Choice"}.`
-            );
-            setTimeout(() => {
-              setTypeSelectionNotice(null);
-            }, 2500);
-            setShowTypeBox(false);
-            setShowSidebar(true);
-            setShowDesignPanel(false);
-            setShowAudioPanel(false);
-            setActiveTab("content");
-            return;
-          }
-        } catch (fetchError) {
-          console.error("Failed to recover question after conflict:", fetchError);
-        }
-        setTypeSelectionError(
-          "This slide already has a question. Try reopening the slide."
-        );
-        return;
-      }
-
-      if (error.response?.status === 400) {
+      if (error.response?.status === 409 && error.response?.data?.error === "edit_conflict") {
+        await refreshQuiz();
+        setTypeSelectionError("This question changed elsewhere. The latest version has been loaded.");
+      } else if (error.response?.status === 409 && error.response?.data?.error === "slide_has_results") {
+        setTypeSelectionError("This slide has live results. Reset the presentation results before changing its type.");
+      } else if (error.response?.status === 400) {
         const errorMsg = error.response.data;
         setTypeSelectionError(
           typeof errorMsg === "string"
@@ -834,22 +733,89 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
   };
 
   const handleSelectType = async (type) => {
-    if (!activeSlide || activeSlide.slide_type !== 1) return;
+    if (!activeSlide || ![1, 2].includes(activeSlide.slide_type)) return;
     if (isSelectingType) return;
 
+    const isContent = type === "Content Slide";
     const questionType = type === "Single Choice" ? "single" : "multiple";
     const quizId = quiz.quiz_id;
     const slideId = activeSlide.slide_id;
-    const requestedMode = type === "Single Choice" ? "single" : "multiple";
+    const requestedMode = isContent ? "content" : type === "Single Choice" ? "single" : "multiple";
     try {
       setIsSelectingType(true);
       setTypeSelectionError(null);
       setTypeSelectionMode(requestedMode);
 
-      const currentQuestion = await resolveQuestionForSlide(
-        slideId,
-        activeSlide.question
-      );
+      const applyContentTypeChange = async () => {
+        try {
+          setIsSelectingType(true);
+          const updatedSlide = await quizService.updateSlide(quizId, slideId, {
+            ...activeSlide,
+            slide_type: 2,
+            question: null,
+            title: activeSlide.title || "New content slide",
+            content_text: activeSlide.content_text || "",
+            content_image_url: activeSlide.content_image_url || "",
+            show_leaderboard_after: false,
+          });
+          handleSlideUpdated(updatedSlide);
+          setTypeSelectionNotice("Slide type set to Content.");
+          setShowTypeBox(false);
+          setShowSidebar(true);
+          setShowDesignPanel(false);
+          setShowAudioPanel(false);
+          setActiveTab("content");
+        } catch (error) {
+          if (error.response?.status === 409 && error.response?.data?.error === "edit_conflict") {
+            await refreshQuiz();
+            setTypeSelectionError("This slide changed elsewhere. The latest version has been loaded.");
+          } else if (error.response?.status === 409 && error.response?.data?.error === "slide_has_results") {
+            setTypeSelectionError("This slide has live results. Reset the presentation results before changing its type.");
+          } else {
+            setTypeSelectionError("We could not convert this slide. Please try again.");
+          }
+        } finally {
+          setIsSelectingType(false);
+        }
+      };
+
+      if (isContent) {
+        if (activeSlide.slide_type === 2) {
+          setShowTypeBox(false);
+          setShowSidebar(true);
+          setActiveTab("content");
+          return;
+        }
+        if (activeSlide.question) {
+          setIsSelectingType(false);
+          setConfirmDialog({
+            isOpen: true,
+            title: "Convert to a content slide?",
+            description: "The question and its answer options will be replaced with content. Continue?",
+            onConfirm: applyContentTypeChange,
+            confirmText: "Convert",
+            cancelText: "Cancel",
+          });
+          return;
+        }
+        await applyContentTypeChange();
+        return;
+      }
+
+      const currentQuestion = activeSlide.question;
+
+      if (activeSlide.slide_type === 2) {
+        setIsSelectingType(false);
+        setConfirmDialog({
+          isOpen: true,
+          title: "Convert to a question?",
+          description: "The content slide will be replaced with a new question. Continue?",
+          onConfirm: () => applyQuestionTypeChange({ currentQuestion: null, questionType, quizId, slideId, requestedMode }),
+          confirmText: "Convert",
+          cancelText: "Cancel",
+        });
+        return;
+      }
 
       if (currentQuestion?.question_type === questionType) {
         setTypeSelectionNotice(
@@ -914,13 +880,11 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
     updateQuiz({
       ...quiz,
+      revision: quiz.revision + 1,
       slides: updatedSlides,
     });
 
-    // ??????????? ?????? ????
-    setActiveSlideIndex(
-      updatedSlides.findIndex((s) => s.slide_id === updatedSlide.slide_id)
-    );
+    setActiveSlideId(updatedSlide.slide_id);
   };
 
   // Present
@@ -945,52 +909,6 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
 
 
-  const handleLeaderboardDeleted = async (leaderboardSlideId) => {
-    try {
-      
-      // ???? ???? ?????? ???????? ?? ??? ???
-      const leaderboardSlide = slides.find(s => 
-        s.slide_id === leaderboardSlideId && s.slide_type === 3
-      );
-      
-      if (!leaderboardSlide) {
-        return;
-      }
-
-      // ???? ???? ?????? ???? ?????
-      const questionSlide = slides.find(s => 
-        s.slide_type === 1 && s.order === leaderboardSlide.order
-      );
-
-      if (!questionSlide) {
-        return;
-      }
-
-      // ??? ??????????? state ???? - ???? ????? ?? ????
-      const updatedSlides = slides.map(slide => 
-        slide.slide_id === questionSlide.slide_id 
-          ? { ...slide, show_leaderboard_after: false }
-          : slide
-      );
-
-      // ??????????? state ????
-      updateQuiz({
-        ...quiz,
-        slides: updatedSlides
-      });
-
-      if (activeSlide?.slide_id === questionSlide.slide_id) {
-        activeSlide.show_leaderboard_after = false;
-      }
-
-      // ???? SlidesPanel
-      //setRefreshTrigger(prev => prev + 1);
-      
-    } catch (error) {
-      console.error("? Error updating UI after leaderboard deletion:", error);
-    }
-  };
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////
   return (
     <div className="h-full flex flex-col relative pt-14 pb-20 md:pb-0">
       {/* ----- Header -----*/}
@@ -998,8 +916,11 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         accessCode={quiz.access_code}
         quizTitle={quiz.title}
         quizId={quiz.quiz_id}
+        quizRevision={quiz.revision}
         setNameSelectionNotice={setNameSelectionNotice}
         onBack={handleExitPanel}
+        onQuizUpdated={updateQuiz}
+        onConflict={refreshQuiz}
       />
 
       {nameSelectionNotice && (
@@ -1025,21 +946,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                   ...quiz,
                   slides: updatedSlides,
                 });
-                if (activeSlide?.slide_id) {
-                  const nextIndex = updatedSlides.findIndex(
-                    (slide) => slide.slide_id === activeSlide.slide_id
-                  );
-                  if (nextIndex !== -1) {
-                    setActiveSlideIndex(nextIndex);
-                  }
-                }
               }}
               onRefresh={handleDeleteLeaderboardAndRefresh}
-              onLeaderboardDeleted={handleLeaderboardDeleted}
               idKey="slide_id"
               titleKey="slide_type"
             getSlideTitle={getSlideTitle}
             quizId={quiz.quiz_id}
+            presentationRevision={quiz.revision}
             quizBackground={quiz.background_color}
             quizBackgroundImage={quiz.background_image_url}
             onNotify={showNotice}
@@ -1062,12 +975,12 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
               Present
             </button>
 
-            {activeSlideType === 1 && (
+            {(activeSlideType === 1 || activeSlideType === 2) && (
               <button
                 onClick={handleTypeChangeClick}
                 className="absolute top-2 right-2 text-sm text-gray-500 hover:text-gray-700 z-10"
               >
-                Change Question Type
+                Change Slide Type
               </button>
             )}
 
@@ -1107,6 +1020,23 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                     />
                   </div>
                 </div>
+              ) : activeSlideType === 2 ? (
+                <div
+                  className="flex h-full w-full flex-col items-center justify-center gap-5 overflow-y-auto rounded-xl p-10 text-center"
+                  style={{
+                    color: quiz.text_color,
+                    backgroundColor: quiz.background_color,
+                    backgroundImage: quiz.background_image_url ? `url(${quiz.background_image_url})` : undefined,
+                    backgroundPosition: "center",
+                    backgroundSize: "cover",
+                  }}
+                >
+                  {activeSlide.content_image_url && (
+                    <img src={activeSlide.content_image_url} alt="" className="max-h-[45%] max-w-[80%] rounded-xl object-contain" />
+                  )}
+                  <h2 className="text-3xl font-bold">{activeSlide.title || "Content slide"}</h2>
+                  {activeSlide.content_text && <p className="max-w-3xl whitespace-pre-wrap text-lg">{activeSlide.content_text}</p>}
+                </div>
               ) : activeSlideType === 1 && activeSlide.question ? (
                 <div className="w-full h-full flex justify-center items-center">
                   <MiniResultsResultsOnly
@@ -1126,7 +1056,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                     onClick={handleTypeChangeClick}
                     className="bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 transition"
                   >
-                    Select Question Type
+                    Select Slide Type
                   </button>
                 </div>
               )
@@ -1145,10 +1075,10 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
 
                 <div className="absolute z-20 bg-white rounded-2xl shadow-2xl p-6 w-[400px] flex flex-col items-center space-y-4">
                   <h2 className="text-xl font-bold text-pink-700">
-                    Select Question Type
+                    Select Slide Type
                   </h2>
                   <p className="text-sm text-slate-500 text-center">
-                    Choose how many correct answers this question can have.
+                    Choose a question format or add an informational content slide.
                   </p>
                   {typeSelectionError && (
                     <div className="w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 text-center">
@@ -1156,14 +1086,15 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                     </div>
                   )}
 
-                  {["Single Choice", "Multiple Choice"].map((type) => {
+                  {["Single Choice", "Multiple Choice", "Content Slide"].map((type) => {
                     const isSingle = type === "Single Choice";
-                    const description = isSingle
+                    const isContent = type === "Content Slide";
+                    const description = isContent ? "Explain a topic without collecting an answer" : isSingle
                       ? "One correct answer"
                       : "Multiple correct answers";
                     const isBusy =
                       isSelectingType &&
-                      typeSelectionMode === (isSingle ? "single" : "multiple");
+                      typeSelectionMode === (isContent ? "content" : isSingle ? "single" : "multiple");
                     return (
                       <button
                         key={type}
@@ -1201,7 +1132,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
         </div>
 
         {/* ----- Right Panels ----- */}
-        {showSidebar && (activeSlideType === 1 || activeSlideType === 3) && (
+        {showSidebar && (activeSlideType === 1 || activeSlideType === 2 || activeSlideType === 3) && (
           <div
             className="bg-white rounded-xl shadow p-4 overflow-y-auto w-full md:h-full md:w-1/3 lg:w-1/4 md:static fixed inset-x-0 bottom-0 top-14 z-50"
             style={
@@ -1213,7 +1144,17 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                 : undefined
             }
           >
-            {activeSlideType === 3 ? (
+            {activeSlideType === 2 ? (
+              <ContentSidebar
+                quizId={quiz.quiz_id}
+                slide={activeSlide}
+                onClose={handleCloseSidebarPanel}
+                onDirtyChange={setHasSidebarChanges}
+                onSlideUpdated={handleSlideUpdated}
+                onConflict={refreshQuiz}
+                onNotify={showNotice}
+              />
+            ) : activeSlideType === 3 ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-4">
                 {/* ???? ???? ???? ???? */}
                 <div className="w-full flex justify-end mb-4">
@@ -1303,11 +1244,11 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                     <Sidebar
                       quizId={quiz.quiz_id}
                       slide={activeSlide}
-                      onSaveAndRefresh={handleSaveAndRefresh}
                       activeSlideType={activeSlideType}
                       onClose={handleCloseSidebarPanel}
                       onDirtyChange={setHasSidebarChanges}
                       onSlideUpdated={handleSlideUpdated}
+                      onConflict={refreshQuiz}
                       onNotify={showNotice}
                   />
                 );
@@ -1337,6 +1278,7 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                 onClose={handleCloseDesignPanel}
                 setBackgroundSaveNotice={setBackgroundSaveNotice}
                 onDirtyChange={setHasDesignChanges}
+                onConflict={refreshQuiz}
               />
             )}
           </div>
@@ -1363,12 +1305,12 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
             {activeSlide && (
               <AudioPanel
                 slide={activeSlide}
-                setSlide={updateActiveSlide}
                 onClose={handleCloseAudioPanel}
                 quiz={quiz}
                 updateQuiz={updateQuiz}
                 setAudioSaveNotice={setAudioSaveNotice}
                 onDirtyChange={setHasAudioChanges}
+                onConflict={refreshQuiz}
               />
             )}
           </div>
@@ -1423,21 +1365,13 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz, refreshQuiz }) {
                   ...quiz,
                   slides: updatedSlides,
                 });
-                if (activeSlide?.slide_id) {
-                  const nextIndex = updatedSlides.findIndex(
-                    (slide) => slide.slide_id === activeSlide.slide_id
-                  );
-                  if (nextIndex !== -1) {
-                    setActiveSlideIndex(nextIndex);
-                  }
-                }
               }}
               onRefresh={handleDeleteLeaderboardAndRefresh}
-              onLeaderboardDeleted={handleLeaderboardDeleted}
               idKey="slide_id"
               titleKey="slide_type"
               getSlideTitle={getSlideTitle}
               quizId={quiz.quiz_id}
+              presentationRevision={quiz.revision}
               quizBackground={quiz.background_color}
               quizBackgroundImage={quiz.background_image_url}
               onNotify={showNotice}

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Home, LogOut, Search, Trophy } from "lucide-react";
 import { apiFetch } from "../../utils/apiFetch";
 import { clearAuthStorage } from "../../utils/auth";
-import { quizService } from "../../services/quizService";
+import { quizService } from "../../services/quizService.ts";
 import { getRosterPage } from "../../live/liveApi";
 
 export default function SessionDetail() {

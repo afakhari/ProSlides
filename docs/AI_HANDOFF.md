@@ -18,7 +18,8 @@ not complete. Never describe a design target as benchmark evidence.
 - Overall migration estimate: about 85%; this is a roadmap estimate, not a
   code-coverage calculation.
 - Implemented: Go/Compose foundation, cookie identity, owner-scoped dashboard
-  and presentation/editor CRUD, settings, duplication/results management,
+  and presentation/editor CRUD, validated question/content definitions,
+  revision-aware conditional edits, typed editor mapping, settings, duplication/results management,
   hashed one-time password-reset tokens with SMTP delivery, optional hashed
   email OTP verification, signed Google ID-token verification, Redis-backed
   auth rate limits, content/question creation, live state
@@ -117,6 +118,23 @@ sessions, honest omission of unavailable score deltas, and shared save/present
 validation for question text/options/type/time/points. Go tests/vet, web
 lint/typecheck, 26 unit tests/build, the Compose integration matrix, and all
 three system-Chrome E2E flows passed.
+
+Quiz editor architecture verification (2026-08-23): migration `0013` adds
+monotonic revisions to presentations and slides. Editor mutations send the
+last observed revision through `If-Match`; stale writes return stable
+`edit_conflict` 409 responses, while omitted headers remain compatible with
+older clients. Presentation setting patches merge keys instead of replacing a
+stale full object. Generic slide create/replace now validates strict
+question-draft, question, content, and leaderboard definitions; question
+invariants are enforced by Go independently of the UI. The web editor uses a
+strict TypeScript domain/repository boundary, sends one request per save,
+selects slides by ID, preserves option IDs/order, provides content-slide
+editing and safe type conversion, gives derived leaderboard steps independent
+UI IDs, uses one validator for save and both Present entry points, and reloads
+on edit conflicts. Web lint/typecheck, 31 unit tests, production build, all Go
+tests/vet, both images, health/readiness, and the preserved-volume Compose
+integration matrix passed, including a recorded stale-write rejection. No
+browser was opened for this change.
 
 ## Installed Codex workflow prerequisites
 

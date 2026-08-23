@@ -78,6 +78,15 @@ covering responsive auth, registration/login/logout, presentation and slide
 creation, reports/history, and invalid join codes. Compose/browser smoke is
 functional evidence, not load evidence.
 
+The 2026-08-23 editor hardening adds strict Go validation for editable slide
+definitions, monotonic presentation/slide revisions with conditional
+`If-Match` writes, atomic settings-key merges, a TypeScript editor domain/API
+boundary, content-slide editing, stable ID-based selection, shared
+save/present validation, and conflict recovery. Web lint/typecheck, 31 unit
+tests, production build, Go tests/vet, API/web image builds, health/readiness,
+and the preserved-volume Compose matrix passed; the matrix explicitly rejects
+a stale metadata overwrite with 409. No browser run was used for this change.
+
 ## Remaining work, in order
 
 1. Provision production SMTP, Google, database, Redis, origin, and TLS secrets

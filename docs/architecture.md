@@ -62,6 +62,16 @@ publish a live-domain event. Domain policy does not import HTTP or Redis.
 5. A retry with the same `request_id` returns the original stored result and
    cannot double-apply a score.
 
+Presentation editing uses a separate optimistic-concurrency boundary. Every
+presentation and slide representation carries a positive monotonic `revision`.
+Editor mutations send the last observed value in `If-Match`; PostgreSQL checks
+it while holding the existing presentation/slide transaction locks and returns
+`409 edit_conflict` instead of silently overwriting a newer edit. Presentation
+setting patches merge supplied keys atomically. Question and content slide
+definitions are validated by the Go API even when a client bypasses the React
+editor. This editor revision is not the live session `state_version`; the two
+order different domains and must not be conflated.
+
 Answer transactions take a shared lock on the live-session row. Answers from
 different participants therefore remain concurrent, while a manager transition
 that closes the question waits for all already-admitted answers to commit. The
